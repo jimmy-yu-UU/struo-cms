@@ -149,9 +149,10 @@ version are left as they were, and the usual save-conflict banner is not shown.
 For an item that was created and then updated once, listing its revisions returns only metadata,
 no snapshot content, newest first:
 
+<!-- capture: ch9-list-revisions -->
 ```text
-$ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
+$ GET /api/items/article/01a2079c-92ba-755f-8900-59ac7908e3cc/revisions
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T08:53:51.527738Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T08:53:51.469786Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -302,26 +303,27 @@ and the version number; relations, junction rows and translations were never tou
 in the first place, so there is nothing left to restore.
 
 Here is a complete trash round-trip: trash it, find it with `?deleted=only`, then restore it (the
-list also narrows to this one row with `filter[id][_eq]`, because the development database still
-holds other trashed articles):
+list also narrows to this one row with `filter[id][_eq]`, so no other trashed article is listed
+with it):
 
+<!-- capture: ch9-trash-round-trip -->
 ```text
-$ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
+$ DELETE /api/items/article/01a2079c-92fc-7d5b-b6b7-57e89f4b83db
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?deleted=only&filter[id][_eq]=01a08c68-5909-7513-8a9c-906f1fc22943
-{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2079c-92fc-7d5b-b6b7-57e89f4b83db
+{"success":true,"data":[{"id":"01a2079c-92fc-7d5b-b6b7-57e89f4b83db","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:51.484809Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.484816Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
-$ POST /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943/restore
-{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
+$ POST /api/items/article/01a2079c-92fc-7d5b-b6b7-57e89f4b83db/restore
+{"success":true,"data":{"id":"01a2079c-92fc-7d5b-b6b7-57e89f4b83db","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:51.484809Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.484816Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 ```
 
-The `restore` response's version number moved from 7 to 8. `deletedAt` never appears in the
-projection at any point: trash state is only ever discoverable through `?deleted=`, never by
-reading the item itself.
+Trashing the item makes its version 1, and the `restore` response carries version 2.
+`deletedAt` never appears in the projection at any point: trash state is only ever discoverable
+through `?deleted=`, never by reading the item itself.
 
 ## The `deleted=` filter and permissions
 

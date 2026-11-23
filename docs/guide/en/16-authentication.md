@@ -246,20 +246,21 @@ are in [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
 Issue a token for `editor@example.com`, read once with it, revoke it, then read again:
 
+<!-- capture: ch16-token-flow -->
 ```text
-$ POST /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
-{"success":true,"data":{"token":"Lg9y_o7xrCFg2nGIQzeOPPluSndpdNQ-Hr9YtfNW7Pc"}}
+$ POST /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":4,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
+{"success":true,"data":[{"id":"01a2079c-7f48-70b5-918e-8342d5dfebc0","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.440681Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.440782Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
+$ DELETE /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
@@ -331,15 +332,16 @@ Every layer returns `429` when it blocks, with the envelope code always `TOO_MAN
 ten failed logins in a row against the same never-used email, and the eleventh trips the
 throttle — the response shown is one more request sent after the throttle engaged:
 
+<!-- capture: ch16-login-429-after-lock -->
 ```text
 $ POST /api/auth/login (-i, the attempt after the first 429)
 body:
 {"email":"$TW","password":"nope"}
 HTTP/1.1 429 Too Many Requests
 Content-Type: application/json; charset=utf-8
-Date: Tue, 15 Sep 2026 02:25:50 GMT
+Date: Mon, 23 Nov 2026 08:53:50 GMT
 Server: Kestrel
-Retry-After: 897
+Retry-After: 898
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
@@ -362,6 +364,7 @@ still a locked door. There are three ways to open it sooner:
   sign-in only.
 - Run `auth:unlock` on the server. It is the way in when nobody can sign in at all.
 
+<!-- capture: ch16-cli-unlock-cleared -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: cleared the login lock for the given account, if it had one.
@@ -380,6 +383,7 @@ connection string, and exits `1`.
 Without Redis, each API process counts attempts in its own memory, which a separate command cannot
 reach. The command says so and exits `1`, so a script does not take it for success:
 
+<!-- capture: ch16-cli-unlock-no-redis -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.

@@ -63,11 +63,14 @@ property twice is a `400` `BAD_USER_INPUT` on create and update; names that diff
 different properties.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
-Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
-`createFile` and `createUser` mutations get the same error. The refusal comes from the collection's
-`Creatable = false` flag ([Chapter 5](05-collections.md#cmscollection-options)). A file is created by uploading it to `POST api/files`, and a user by `POST api/users`,
-which sets the password. The refusal comes before any check of the body, so a duplicate email is a `400` there, not a
-`409`. Reading, updating and deleting both collections still go through the generic routes.
+Both return `400` `BAD_USER_INPUT` with a generic message that names the collection. When their
+input passes the schema, GraphQL's `createFile` and `createUser` mutations get the same code and
+message, with status `200`; an input field the schema does not have is a request-level error with no
+code (see [Chapter 14](14-graphql.md)). The refusal comes from the collection's `Creatable = false`
+flag ([Chapter 5](05-collections.md#cmscollection-options)). A file is created by uploading it to
+`POST api/files`, and a user by `POST api/users`, which sets the password. The refusal comes before
+any check of the body, so a duplicate email is a `400` there, not a `409`. Reading, updating and
+deleting both collections still go through the generic routes.
 
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
 `?purge=`, and a revision snapshot's field shape — are left to
@@ -79,13 +82,14 @@ The example below uses the Blog sample's `article` collection (revisions on) to 
 returning `200` rather than `204`; the ids that appear are specific to this batch of test data, and
 your own environment will differ:
 
+<!-- capture: ch13-trash-and-restore -->
 ```text
-$ DELETE /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c
+$ DELETE /api/items/article/01a2079c-7f48-70b5-918e-8342d5dfebc0
 
 HTTP_STATUS:204
 
-$ POST /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c/restore
-{"success":true,"data":{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+$ POST /api/items/article/01a2079c-7f48-70b5-918e-8342d5dfebc0/restore
+{"success":true,"data":{"id":"01a2079c-7f48-70b5-918e-8342d5dfebc0","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.440681Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.440782Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 ```
 
@@ -199,11 +203,13 @@ The `POST` takes `{ "emails": [...] }`, one to 100 addresses, each non-blank and
 anything else returns `400` `BAD_USER_INPUT`, and a caller without read on `user` gets `403`. It answers
 one entry per address, in the order sent, so an address sent twice is answered twice:
 
+<!-- capture: ch13-login-locks-query -->
 ```text
 $ POST /api/login-locks/query
 body:
 {"emails":["admin@admin.com","nobody@example.com"]}
 {"success":true,"data":[{"email":"admin@admin.com","locked":false,"retryAfterSeconds":0,"clearable":true},{"email":"nobody@example.com","locked":false,"retryAfterSeconds":0,"clearable":true}]}
+HTTP_STATUS:200
 ```
 
 `locked` is `true` when the account has used up its per-account login attempts for the current window,
@@ -274,13 +280,14 @@ only `Retry-After` differs, because the two windows aren't the same length.
 
 An actual login, followed by a read of `me`:
 
+<!-- capture: ch13-login-and-me -->
 ```text
 $ POST /api/auth/login
 body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Fri, 06 Nov 2026 06:17:45 GMT
+Date: Mon, 23 Nov 2026 08:53:47 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -289,18 +296,19 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae"}}
+{"success":true,"data":{"id":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
+{"success":true,"data":{"id":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie`'s value is long and elided here; what matters is that the header itself appears,
-carrying `path=/`, `samesite=lax`, `httponly`. This output comes from a Development host; where the
-cookie is always `Secure`, the name is `__Host-struo.session` and `secure` is added. `me` returns an
-empty `permissions` for a super-admin, because every grant is already implied by that identity.
+carrying `path=/`, `samesite=lax`, `httponly`. This output comes from a host that does not
+require the cookie to be `Secure`; where it is required, the name is `__Host-struo.session` and
+`secure` is added. `me` returns an empty `permissions` for a super-admin, because every grant is
+already implied by that identity.
 
 `login/oidc/{provider}` takes a provider id from `Oidc:Providers`. It returns `404` for an unknown or
 disabled provider, and a `302` redirect to that provider when it is enabled, with

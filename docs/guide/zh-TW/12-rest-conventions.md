@@ -41,19 +41,20 @@ required.`，`403` 是 `Forbidden.`，`404` 是 `Resource not found.`，`409` �
 
 一個 `201` 建立，帶完整回應標頭：
 
+<!-- capture: ch12-create-tag-201 -->
 ```text
 $ POST /api/items/tag
 body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:38 GMT
+Date: Mon, 23 Nov 2026 08:53:47 GMT
 Server: Kestrel
-Location: /api/items/tag/01a08f92-8470-718c-888b-1714ffaef71e
+Location: /api/items/tag/01a2079c-8257-72e8-8261-b4e0d17db394
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a08f92-8470-718c-888b-1714ffaef71e","version":0,"name":"launch","createdAt":"2026-09-11T08:25:39.185162Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:39.1853366Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+{"success":true,"data":{"id":"01a2079c-8257-72e8-8261-b4e0d17db394","version":0,"name":"launch","createdAt":"2026-11-23T08:53:47.2237499Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:47.2238284Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:201
 ```
 
@@ -147,8 +148,8 @@ public sealed class QuotaExceededException(string message)
 ```
 
 在 controller、minimal API 端點或 GraphQL resolver 裡丟出它。REST 會用那個狀態與一般的錯誤信封回應，
-信封裡帶著你的代碼與訊息；GraphQL 在錯誤上蓋上同樣的代碼與訊息（HTTP 狀態照舊是 `200`，所有 GraphQL
-錯誤都是這樣）。三條規則：
+信封裡帶著你的代碼與訊息；GraphQL 在錯誤上蓋上同樣的代碼與訊息（resolver 丟出的錯誤以 HTTP `200`
+回應；文件在 resolver 開始跑之前就出錯的情形見[第 14 章](14-graphql.md)）。三條規則：
 
 - 訊息會原樣送到客戶端，所以不要把內部細節（主機名稱、id、SQL）放進去。
 - 狀態必須是 400 到 499；其他值在建構例外時就會丟錯，空白的代碼也一樣。伺服器錯誤不是領域錯誤：沒處理的例外
@@ -161,6 +162,7 @@ public sealed class QuotaExceededException(string message)
 執行之前。另一個來源是缺必填翻譯的 `BAD_USER_INPUT`，見後面。陣列裡一個項目對應一項驗證失敗，不是一個欄位一項——同一個欄位若同時違反兩項檢查，會產生
 兩筆共用同一個 `field` 的項目。ASP.NET Core 沒給訊息時，退回固定的 `Invalid value.`。
 
+<!-- capture: ch12-users-validation-400 -->
 ```text
 $ POST /api/users
 body:
@@ -187,6 +189,7 @@ HTTP_STATUS:400
 全部資訊。例外是三種翻譯錯誤（缺必填翻譯、翻譯值無效（含型別不對、違反格式規則與超過
 `MaxLength`）、locale 重複），其中第一種見後面：
 
+<!-- capture: ch12-users-short-password-400 -->
 ```text
 $ POST /api/users
 body:
@@ -237,20 +240,21 @@ GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這
 
 替目前這個帳號申請一個權杖、用它讀一次、再撤銷它：
 
+<!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
-{"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
+$ POST /api/users/01a2079c-556b-7ef5-8f54-b890ea6ae21b/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <token>
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>)
+{"success":true,"data":[{"id":"01a2079c-7f48-70b5-918e-8342d5dfebc0","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.440681Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.440782Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
+$ DELETE /api/users/01a2079c-556b-7ef5-8f54-b890ea6ae21b/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <revoked token>
+$ GET /api/items/article?limit=1 (Authorization: Bearer <revoked token>)
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
@@ -275,6 +279,7 @@ cookie 也一樣豁免。
 這道檢查涵蓋每一個非安全方法的路徑，不只是 `/api/*`：`POST /graphql` 也是非安全方法，一個用 cookie
 認證的 GraphQL 請求，查詢或 mutation 都一樣要帶這個標頭。少了它，回應是：
 
+<!-- capture: ch12-query-no-csrf-403 -->
 ```text
 $ POST /api/items/article/query (no CSRF header)
 body:
@@ -293,8 +298,9 @@ HTTP_STATUS:403
 body 也可以把讀到的值原樣送回；伺服器拿這個值去比對目前存好的那一列，一致才會真的寫入，不一致就
 整個拒絕：
 
+<!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2079c-7ee6-749b-95b0-b8a92cfca896
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -339,6 +345,7 @@ body 也從不讀它。
 一個局部的 `PUT` 因此不會不小心清掉伺服器自己在管、呼叫端根本沒送的欄位。以下幾種常見的 body 錯誤
 都是實際跑出來的訊息：
 
+<!-- capture: ch12-put-published-at-empty-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'publishedAt' has an invalid value."}}
 HTTP_STATUS:400
@@ -350,6 +357,7 @@ HTTP_STATUS:400
 
 `file` 集合要走專屬的上傳端點，對它送 `POST /api/items/file` 一律被拒絕，不管 body 寫什麼：
 
+<!-- capture: ch12-post-file-collection-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Items cannot be created in collection 'file' through the generic items API."}}
 HTTP_STATUS:400
@@ -364,21 +372,23 @@ HTTP_STATUS:400
 
 以下是實際的寫入與回應，`tags` 的陣列裡一個純 id、一個帶 payload 的物件：
 
+<!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2079c-7ee6-749b-95b0-b8a92cfca896
 body:
-{"tags":["01a08f92-38f5-7f1b-a478-f8a1140f0b0b",{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":2,"status":"draft", …}}
+{"tags":["01a2079c-7ed1-7d66-b800-7ed99f652340",{"id":"01a2079c-7eda-7db8-be61-b1683556f728","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a2079c-7ee6-749b-95b0-b8a92cfca896","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.343476Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:47.338987Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 ```
 
-`data` 的其餘欄位省略，跟本章其他更新回應一樣的形狀。第一個目標只被連結，第二個目標的 `note`
-被換成 `editor pick`。
+`data` 是更新後的項目本身，`version` 從 1 推到 2。第一個目標只被連結，它原有的備註 `hero` 維持
+不變；第二個目標是新連上的，`note` 是 `editor pick`。
 
 payload 欄位驗證失敗時，訊息會標明是哪個關聯、哪個目標，方便一次改好幾筆連結的表單定位問題：
 
+<!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a08f92-396e-7bf7-a77c-149c9aa732b1': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2079c-7eda-7db8-be61-b1683556f728': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 
@@ -388,6 +398,7 @@ HTTP_STATUS:400
 一個物件元素送到沒有宣告 payload 的關聯，或陣列裡出現布林、陣列、`null`、非整數、不是目標主鍵型別的
 id 這些不合法的形狀，一律得到同一句泛用訊息：
 
+<!-- capture: ch12-put-tags-invalid-ids-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}
 HTTP_STATUS:400

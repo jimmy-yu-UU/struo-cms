@@ -342,7 +342,11 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 Background: `docs/ai/conventions.md`, "Transcripts". The tool is `docs/scripts/capture/` (Node,
 standard library only; `docs/ai/decisions/capture-client-reuses-one-connection.md` records why
 its client reuses one connection). It replays one ordered run against a host and writes the
-responses into the marked blocks of both languages from that run. Chapters 10 and 11 are covered.
+responses into the marked blocks of both languages from that run. Chapters 7 to 17 are covered:
+every transcript block in those chapters is marked and produced by the tool. The run is one list
+of groups, `scenarios/index.mjs`: the Guides data set and the editor account, chapters 10 and 11,
+the first block of chapter 14, chapters 12 and 13, the rest of chapter 14, chapters 15 to 17, the
+Tutorials data set, then chapters 7, 8 and 9. The order is the order the shared articles change in.
 
 **What the tool needs**
 
@@ -364,9 +368,17 @@ responses into the marked blocks of both languages from that run. Chapters 10 an
   `deletes` reason, for example revoking a token under the admin's id. Values the run read, fields
   other than an id, and empty values never qualify.
 - A new database for every run.
+- Redis for the host (`Redis__ConnectionString`): the login-lock scenario of chapter 16 counts
+  attempts there, and the first `auth:unlock` block needs it. Local file storage is enough for
+  chapter 15; the image block needs the native image library the published output carries.
 - Settings: `STRUO_CAPTURE_ADMIN_PASSWORD` (required), `STRUO_CAPTURE_BASE_URL` and
   `STRUO_CAPTURE_ADMIN_EMAIL` (default `admin@admin.com`). The password has no command-line flag, so
-  it stays out of the process list.
+  it stays out of the process list. The editor account's password is
+  `STRUO_CAPTURE_EDITOR_PASSWORD` or, when unset, a random value made for the run; it is a
+  registered secret and no block prints it.
+- Two fixtures for the upload scenarios live in `docs/scripts/capture/fixtures/`: `swatch.png` (a
+  64x48 PNG that `swatch.mjs` generates with `zlib`; a test proves the committed bytes are what the
+  generator produces) and `note.txt`. Sizes the chapter quotes follow the capture.
 
 **Run it** from `docs/`:
 
@@ -380,6 +392,27 @@ full one. `--chapters` (comma-separated, duplicates ignored) chooses only which 
 written; the other files are not read and their blocks are discarded. Without `--write` the
 captured blocks are printed and no file changes. `--base-url` and `--email` override the settings
 above, and `--guide-dir` points at another manual root inside the working directory.
+
+**Command blocks.** The tool does not run commands. A scenario step with `cli: { program, args,
+env, exit }` declares a command line (`$ <program> <args>`, the program one word), the environment
+it needs on top of the host's, and its exit code. `node scripts/capture/capture.mjs --list-cli`
+prints those steps as JSON (`id`, `file`, `program`, `args`, `env`, `exit`) without a network. The
+operator runs each one inside the container or environment the host runs in, with the listed
+environment added, and saves the merged stdout and stderr as `<id>.out` and the exit code as
+`<id>.exit` in one directory, as UTF-8 without a byte-order mark (a result with a byte-order mark
+or a NUL byte is refused). The run takes that directory through `--cli-results <dir>`, which lies
+inside the working directory. Before the first request it refuses to run when a command of a
+selected file has no result file or ended with another exit code, and it prints the saved output as
+the block. The environment is never printed: the two `auth:unlock` blocks have the same `$` line
+although the second runs without the Redis connection string, and the chapter's prose says when
+that happens. They set `Struo__Logging__ConsoleEnabled=false` so host log lines stay out of the
+output, and the second one sets `Redis__ConnectionString` to an empty value.
+
+**The login lock** (chapter 16) sends ten failed logins, the first refused one and the printed
+second refused one, one after another for an email made for the run, so it takes a few seconds
+(each failed attempt verifies a password hash). `Retry-After` is the time left in the lock window,
+so it differs on every run; the block prints the value received. A second run against the same
+Redis within the window needs a new email, and the tool makes a new one for every run.
 
 The run produces and checks every block of every selected file before it replaces any file. Each
 file is written to a temporary `*.capture-tmp` file next to it and the temporaries are renamed one
@@ -396,17 +429,49 @@ The docs build runs it.
 **Rules**
 
 - A marked block is never edited by hand. The tool replaces the lines between the fences.
-- Every difference between a printed body and the server's body is a transform named on the step
-  that uses it (`stripTraceId`, `elideData`). An undeclared difference does not exist.
+- Every difference between a printed body and the server's body is a transform or a mask named on
+  the step that uses it (`stripTraceId` and `stripGraphQlTraceId` for the trace id, `elideData` for
+  the `data` array of a list, `prettyJson` for a body the manual shows indented; a mask replaces a
+  secret). A transform that changes nothing fails the step. An undeclared difference does not
+  exist.
 - A printed request body differs from the sent one only through `print.requestBody` on the step
-  (for example a placeholder where the sent body holds the admin password). The tool refuses to
-  write a block that holds the admin password, the session cookie of an identity, or any value a
+  (a string, an object or a function of the run variables; for example a placeholder where the
+  sent body holds the admin password). The tool refuses to write a block that holds the admin
+  password, the session cookie of an identity, a run variable listed as secret, or any value a
   step registered with `secret`. A step that prints one declares `print.mask: { name: '<text>' }`,
-  naming the secret (`adminPassword`, `session_<identity>`, or the `secret` variable); every
-  occurrence in that exchange is replaced by the text before the check runs.
+  naming the secret (`adminPassword`, `editorPassword`, `session_<identity>`, or the `secret`
+  variable); every occurrence in that exchange, the `$` line included, is replaced by the text
+  before the check runs.
+- How an exchange is shown is set by `print`: `headers: true` prints the status line and every
+  response header, `headers: ['Name', ...]` only the named ones (a name the response lacks fails
+  the step). A step that transforms or masks the body cannot show `Content-Length` (a binary
+  summary may), because the length is the server's and the printed body is not; it names the
+  headers it shows. `note` takes `{{variables}}` and is appended to the `$` line after one space;
+  `path` takes `{{variables}}` and replaces the printed path; `responseOnly` leaves the request
+  out; `pretty: true` keeps the raw line and appends `pretty:` with an indented copy; `binary:
+  'png'` prints the decoded PNG size and the byte count in place of a binary body (`binary: true`
+  the byte count only) and cannot be combined with a transform. Steps that share a capture id make
+  one block.
+- A step can also upload a fixture as one multipart file part (`upload: { field, fixture,
+  contentType }`), send a bearer token (`bearer`), omit the CSRF header (`csrf: false`), or run as
+  an identity with its own cookie jar (`as`). An upload's body is never printed; the `$` line gets
+  the note `(multipart: file=@<fixture>; type=<contentType>)` from the declaration, before any
+  `print.note`. A step with no `as` sends no cookie at all. A login runs under an identity of its
+  own whose jar holds no cookie yet (chapters 13, 16 and 17): the session cookie it receives is kept
+  in that jar and registered as the secret `session_<identity>`. A cookie set on a step with no
+  `as` is registered as `session_anonymous`; one mask name covers every cookie held under it, so a
+  response that sets two cookies needs one `print.mask` entry.
+- A step may add request headers with `headers: { Name: value }`, sent as given. `Content-Type`,
+  `Content-Length`, `Transfer-Encoding`, `Host`, `Cookie`, `Authorization` and the CSRF header stay
+  the client's and are refused. A captured step with `headers` must declare a `print.note`, so the
+  block says the request was not a plain one; a step that prints nothing needs no note (the
+  `Accept` variants in chapter 14 are such steps).
+- `verify(json, vars)` and `verifyResponse(response)` check what the prose says about a request
+  the manual does not show; a throw stops the run, after the step's secrets are registered, so a
+  message that quotes the response is redacted.
 - Ids and timestamps change on every capture, so a re-capture rewrites every block of the files
   it selects. Ids quoted outside a marked block (a JSON sample, a sentence) are updated by hand from
-  the same run.
+  the same run; scan the chapter files for UUID-shaped text outside the marked blocks.
 - After a capture, read the prose around each block. A sentence that states a number, a row or an
   order is true for the new output or is fixed in both languages.
 

@@ -50,19 +50,20 @@ When the controller attaches its own message text, that text replaces the defaul
 
 A `201` create, with the complete set of response headers:
 
+<!-- capture: ch12-create-tag-201 -->
 ```text
 $ POST /api/items/tag
 body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:38 GMT
+Date: Mon, 23 Nov 2026 08:53:47 GMT
 Server: Kestrel
-Location: /api/items/tag/01a08f92-8470-718c-888b-1714ffaef71e
+Location: /api/items/tag/01a2079c-8257-72e8-8261-b4e0d17db394
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a08f92-8470-718c-888b-1714ffaef71e","version":0,"name":"launch","createdAt":"2026-09-11T08:25:39.185162Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:39.1853366Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+{"success":true,"data":{"id":"01a2079c-8257-72e8-8261-b4e0d17db394","version":0,"name":"launch","createdAt":"2026-11-23T08:53:47.2237499Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:47.2238284Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:201
 ```
 
@@ -172,9 +173,10 @@ public sealed class QuotaExceededException(string message)
     : StruoDomainException("ACME_QUOTA_EXCEEDED", 429, message);
 ```
 
-Throw it from a controller, a minimal-API endpoint or a GraphQL resolver. REST answers with that status and the
-usual error envelope carrying your code and message; GraphQL stamps the same code and message on the error
-(its HTTP status stays `200`, as for every GraphQL error). Three rules:
+Throw it from a controller, a minimal-API endpoint or a GraphQL resolver. REST answers with that
+status and the usual error envelope carrying your code and message; GraphQL stamps the same code and
+message on the error (an error a resolver raises is answered with HTTP `200`; failures before any
+resolver runs are described in [Chapter 14](14-graphql.md)). Three rules:
 
 - The message goes to the client as written. Keep internal detail (hostnames, ids, SQL) out of it.
 - The status must be 400 to 499; any other value throws when the exception is constructed, and so does a blank
@@ -192,6 +194,7 @@ corresponds to one validation failure, not one field: a field that violates two 
 produces two entries sharing the same `field`. When ASP.NET Core gives no message of its own, it
 falls back to the fixed `Invalid value.`.
 
+<!-- capture: ch12-users-validation-400 -->
 ```text
 $ POST /api/users
 body:
@@ -221,6 +224,7 @@ translation errors (a missing required translation, an invalid translation value
 a format violation or a value over its `MaxLength`, and a duplicate locale), of which the first is shown
 below:
 
+<!-- capture: ch12-users-short-password-400 -->
 ```text
 $ POST /api/users
 body:
@@ -280,20 +284,21 @@ rules is left to the authentication chapter.
 
 Issue a token for the current account, read once with it, then revoke it:
 
+<!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
-{"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
+$ POST /api/users/01a2079c-556b-7ef5-8f54-b890ea6ae21b/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <token>
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>)
+{"success":true,"data":[{"id":"01a2079c-7f48-70b5-918e-8342d5dfebc0","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.440681Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.440782Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
+$ DELETE /api/users/01a2079c-556b-7ef5-8f54-b890ea6ae21b/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <revoked token>
+$ GET /api/items/article?limit=1 (Authorization: Bearer <revoked token>)
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
@@ -322,6 +327,7 @@ This check covers every unsafe-method path, not just `/api/*` — `POST /graphql
 method too, so a GraphQL request authenticated with a cookie needs this header whether it's a
 query or a mutation. Without it, the response is:
 
+<!-- capture: ch12-query-no-csrf-403 -->
 ```text
 $ POST /api/items/article/query (no CSRF header)
 body:
@@ -343,8 +349,9 @@ A collection with `version` returns it on every read and list response, and an u
 that value back for the server to compare against the row's current value; the write lands only when
 the two match, and is rejected whole when they don't:
 
+<!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2079c-7ee6-749b-95b0-b8a92cfca896
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -403,6 +410,7 @@ its many-to-one foreign keys alike — and that presence check is case-insensiti
 therefore never accidentally clears a server-managed field the caller never sent. A few common body
 mistakes and the messages they actually produce:
 
+<!-- capture: ch12-put-published-at-empty-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'publishedAt' has an invalid value."}}
 HTTP_STATUS:400
@@ -415,6 +423,7 @@ sending `{"name":null}` against a required field produces `Field 'name' is requi
 The `file` collection has to go through its own dedicated upload endpoint — sending
 `POST /api/items/file` against it is always refused, whatever the body says:
 
+<!-- capture: ch12-post-file-collection-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Items cannot be created in collection 'file' through the generic items API."}}
 HTTP_STATUS:400
@@ -433,23 +442,25 @@ looks like written into a `PUT` body.
 Here is an actual write and response, with one bare id and one payload-carrying object in the
 `tags` array:
 
+<!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2079c-7ee6-749b-95b0-b8a92cfca896
 body:
-{"tags":["01a08f92-38f5-7f1b-a478-f8a1140f0b0b",{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":2,"status":"draft", …}}
+{"tags":["01a2079c-7ed1-7d66-b800-7ed99f652340",{"id":"01a2079c-7eda-7db8-be61-b1683556f728","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a2079c-7ee6-749b-95b0-b8a92cfca896","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.343476Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:47.338987Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 ```
 
-The rest of `data`'s fields are elided, in the same shape as any other update response in this
-chapter. The first target is only linked; the second target's `note` is replaced with
+`data` is the updated item itself, and its `version` moves from 1 to 2. The first target is only
+linked, so its existing note `hero` stays; the second target is newly linked, with `note` set to
 `editor pick`.
 
 When a payload field fails validation, the message names the relation and the target, so a form
 editing several links at once can pin down exactly where the problem is:
 
+<!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a08f92-396e-7bf7-a77c-149c9aa732b1': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2079c-7eda-7db8-be61-b1683556f728': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 
@@ -461,6 +472,7 @@ An object element sent to a relation that has no declared payload, or an invalid
 array — a boolean, an array, `null`, a non-integer, an id that is not of the target's key type —
 always gets the same general-purpose message:
 
+<!-- capture: ch12-put-tags-invalid-ids-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}
 HTTP_STATUS:400

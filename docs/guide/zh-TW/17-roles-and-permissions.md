@@ -181,8 +181,9 @@ GraphQL 在 `extensions.code` 帶同一個代碼。
 以角色只被授予 `article` 讀取的 `editor@example.com` 為例，拿它去改一篇文章，送出的 body 在前，
 回應在後：
 
+<!-- capture: ch17-put-article-editor-403 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2079c-7ee6-749b-95b0-b8a92cfca896
 body:
 {"status":"draft"}
 {"success":false,"error":{"code":"FORBIDDEN","message":"Write not permitted."}}
@@ -237,8 +238,9 @@ pretty:
 以角色只有 `article` 讀取的 `editor@example.com` 為例，先看不帶 `roles=` 的結果，再看換成一個超
 級管理員角色的假設結果：
 
+<!-- capture: ch17-effective-permissions -->
 ```text
-$ GET /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/effective-permissions
+$ GET /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/effective-permissions
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{"article":{"read":true,"write":false,"delete":false}}}}
 HTTP_STATUS:200
 pretty:
@@ -256,7 +258,7 @@ pretty:
   }
 }
 
-$ GET /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/effective-permissions?roles=01a08f90-8c13-764d-84c1-11fd1380ac9a
+$ GET /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/effective-permissions?roles=01a2079c-5569-7f33-a314-67717a393680
 {"success":true,"data":{"isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 pretty:

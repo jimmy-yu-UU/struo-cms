@@ -156,8 +156,9 @@ The last two decide write and delete behavior:
 | `OnDelete` | `OnDelete` | `Restrict` | many-to-one only |
 | `Editable` | `bool` | `true` | whether the admin picker accepts input |
 
-There is no per-relation depth setting. The one cap that is enforced is the global
-`Query:MaxRelationDepth`; see "Reading related data with `deep`" below.
+There is no per-relation depth setting. The one cap enforced for REST `deep` and relation paths is
+the global `Query:MaxRelationDepth`; see "Reading related data with `deep`" below. A GraphQL
+selection set is also bound by the limits in [Chapter 14](14-graphql.md#depth-caps).
 
 ## Junction entities and payloads
 
@@ -332,9 +333,10 @@ still succeeds with no expansion and no error.
 A one-to-many expansion looks like this, with `articles` an array of full item projections, each
 carrying its `translations` because `article` has a translation sidecar:
 
+<!-- capture: ch8-deep-category-articles -->
 ```text
-$ GET /api/items/category/01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1?deep=articles
-{"success":true,"data":{"id":"01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1","version":0,"name":"Tutorials","createdAt":"2026-11-19T10:33:47.3768579Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.3773908Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","articles":[{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}]}}
+$ GET /api/items/category/01a2079c-92b5-7fb2-bff9-eaa797cceb59?deep=articles
+{"success":true,"data":{"id":"01a2079c-92b5-7fb2-bff9-eaa797cceb59","version":0,"name":"Tutorials","createdAt":"2026-11-23T08:53:51.413705Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.413748Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","articles":[{"id":"01a2079c-92ba-755f-8900-59ac7908e3cc","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:51.418788Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.418794Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}]}}
 HTTP_STATUS:200
 ```
 
@@ -351,9 +353,10 @@ name, and it's reachable only through `deep`.
 A many-to-many expansion with payload looks like this, with each of `tags`' entries gaining a
 `_junction`:
 
+<!-- capture: ch8-deep-article-tags -->
 ```text
-$ GET /api/items/article/01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b?deep=tags
-{"success":true,"data":{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","tags":[{"id":"01a1f35e-a088-7ce7-9813-aa98d6dca224","version":0,"name":"howto","createdAt":"2026-11-19T10:33:47.4015639Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4016547Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","_junction":{"note":"primary tag"}}],"translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}}
+$ GET /api/items/article/01a2079c-92ba-755f-8900-59ac7908e3cc?deep=tags
+{"success":true,"data":{"id":"01a2079c-92ba-755f-8900-59ac7908e3cc","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:51.418788Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:51.418794Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","tags":[{"id":"01a2079c-7ed1-7d66-b800-7ed99f652340","version":0,"name":"howto","createdAt":"2026-11-23T08:53:46.321861Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.321939Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","_junction":{"note":"primary tag"}}],"translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}}
 HTTP_STATUS:200
 ```
 

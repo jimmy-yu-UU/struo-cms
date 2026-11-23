@@ -222,8 +222,9 @@ envelope shape is the same as any other error, covered in
 Take `editor@example.com`, whose role is granted only `article` read, and use it to edit an
 article. The request body comes first, the response after:
 
+<!-- capture: ch17-put-article-editor-403 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2079c-7ee6-749b-95b0-b8a92cfca896
 body:
 {"status":"draft"}
 {"success":false,"error":{"code":"FORBIDDEN","message":"Write not permitted."}}
@@ -284,8 +285,9 @@ all is simply absent from `permissions`.
 Take `editor@example.com` again, whose role only grants `article` read. First the result with no
 `roles=`, then the result with a hypothetical super-admin role swapped in:
 
+<!-- capture: ch17-effective-permissions -->
 ```text
-$ GET /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/effective-permissions
+$ GET /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/effective-permissions
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{"article":{"read":true,"write":false,"delete":false}}}}
 HTTP_STATUS:200
 pretty:
@@ -303,7 +305,7 @@ pretty:
   }
 }
 
-$ GET /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/effective-permissions?roles=01a08f90-8c13-764d-84c1-11fd1380ac9a
+$ GET /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/effective-permissions?roles=01a2079c-5569-7f33-a314-67717a393680
 {"success":true,"data":{"isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 pretty:

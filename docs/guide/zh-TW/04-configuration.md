@@ -322,21 +322,25 @@ OIDC 登入接受哪些絕對的 `returnUrl`，見[第 16 章](16-authentication
 `MaxDeepRelations` 計算一次請求的 `deep` 樹裡所有關聯節點。`MaxFilterConditions` 是整個 REST 請求共用的一份
 額度：根層 `filter` 與每個巢狀 `deep` 篩選一起從裡面扣；GraphQL 一個 operation 裡的每個集合查詢欄位各扣各的。
 
-`MaxInValues` 計算一次 REST 請求裡所有 `_in` 與 `_nin` 的值：根層 `filter`、關聯量詞與每個巢狀 `deep`
-篩選一起從裡面扣。GraphQL 一個 operation 裡的每個集合查詢欄位各自計算，和 `MaxFilterConditions` 一樣。查詢字串的清單依逗號切開，一個元素算一個；JSON 陣列也是一個元素算一個。超過就回 400，
-訊息點名這個上限與鍵名，查詢不會執行。文字欄位的 `_in`／`_nin` 每個值綁一個參數，上限定在 900 以內，
-是為了不碰到 SQLite 的運算式深度 1000，也低於 SQL Server 每個命令 2100 個參數。
+`MaxInValues` 計算一次 REST 請求裡所有 `_in` 與 `_nin` 的值：根層 `filter`、關聯量詞與每個巢狀
+`deep` 篩選一起從裡面扣。GraphQL 一個 operation 裡的每個集合查詢欄位各自計算，和
+`MaxFilterConditions` 一樣。查詢字串的清單依逗號切開，一個元素算一個；JSON 陣列也是一個元素算一個。
+超過時 REST 回 400，GraphQL 回 `200` 配 `BAD_USER_INPUT` 錯誤，訊息都點名這個上限與鍵名，查詢不會
+執行。文字欄位的 `_in`／`_nin` 每個值綁一個參數，上限定在 900 以內，是為了不碰到 SQLite 的運算式深度
+1000，也低於 SQL Server 每個命令 2100 個參數。
 
-`MaxRelationLinks` 限制一次寫入時單一多對多關聯收下的 id 數，REST 與 GraphQL 都一樣。陣列更長就回
-400，訊息點名該關聯與鍵名，什麼都不會寫入。還原修訂不受此限，快照是系統自己存的資料。
+`MaxRelationLinks` 限制一次寫入時單一多對多關聯收下的 id 數，REST 與 GraphQL 都適用。陣列更長時，
+REST 回 400，GraphQL 回 `200` 配 `BAD_USER_INPUT` 錯誤，訊息都點名該關聯與鍵名，什麼都不會寫入。
+還原修訂不受此限，快照是系統自己存的資料。
 
 `MaxExpandRows` 限制 `deep` 展開一頁資料時，單次關聯讀取最多讀幾列。讀到超過 `MaxExpandRows` 列就回
 400 並點名該關聯，不會截斷結果。唯一的例外是只展開一個父列、經由一對多關聯，而且巢狀清單帶有 `limit`：
 視窗由資料庫套用，所以不受這個上限限制。
 
 `MaxOffset` 限制清單請求的 `offset`，頂層或巢狀在 `deep` 裡的都算，REST、`POST .../query` 與
-GraphQL 都一樣。`offset` 等於 `MaxOffset` 時照常回傳；更大的值回 400，訊息點名這個上限，並建議
-用篩選條件縮小範圍。要翻更深就調高這個鍵。
+GraphQL 都適用。`offset` 等於 `MaxOffset` 時照常回傳；更大的值在 REST 與 `POST .../query` 回 400，
+在 GraphQL 回 `200` 配 `BAD_USER_INPUT` 錯誤，訊息都點名這個上限，並建議用篩選條件縮小範圍。要翻
+更深就調高這個鍵。
 
 `MaxRelationDepth` 算的是路徑裡的關聯跳轉次數，最後一個欄位本身跟 `_junction` 虛擬區段都不算
 在內。超過 `MaxSearchCandidates` 不是截斷結果，而是視為 `ISearchProvider` 回傳了不該回傳的

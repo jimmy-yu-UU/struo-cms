@@ -178,20 +178,21 @@ CSRF 的完整說明見[第 12 章：REST API 慣例](12-rest-conventions.md)。
 
 替 `editor@example.com` 核發一支權杖、拿它讀一次、撤銷、再讀一次：
 
+<!-- capture: ch16-token-flow -->
 ```text
-$ POST /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
-{"success":true,"data":{"token":"Lg9y_o7xrCFg2nGIQzeOPPluSndpdNQ-Hr9YtfNW7Pc"}}
+$ POST /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":4,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
+{"success":true,"data":[{"id":"01a2079c-7f48-70b5-918e-8342d5dfebc0","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.440681Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.440782Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
+$ DELETE /api/users/01a2079c-80bd-75ec-8985-2edb2034f245/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
@@ -248,15 +249,16 @@ bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒�
 裡因此無法分辨。下面這段示範對同一個沒用過的 email 連續打了十次錯誤登入，第十一次觸發節流；貼出
 來的回應，是節流生效之後再送一次的樣子：
 
+<!-- capture: ch16-login-429-after-lock -->
 ```text
 $ POST /api/auth/login (-i, the attempt after the first 429)
 body:
 {"email":"$TW","password":"nope"}
 HTTP/1.1 429 Too Many Requests
 Content-Type: application/json; charset=utf-8
-Date: Tue, 15 Sep 2026 02:25:50 GMT
+Date: Mon, 23 Nov 2026 08:53:50 GMT
 Server: Kestrel
-Retry-After: 897
+Retry-After: 898
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
@@ -273,6 +275,7 @@ HTTP_STATUS:429
 
 - 另一位超級管理員照上面說的解除。只有 `user` 寫入授權的人做不到，因為鎖定在超級管理員帳號上。
 
+<!-- capture: ch16-cli-unlock-cleared -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: cleared the login lock for the given account, if it had one.
@@ -288,6 +291,7 @@ email 依登入的做法去頭尾空白並轉小寫。`--email` 缺少、空白�
 沒有 Redis 時，每個 API 行程各自在記憶體裡計數，另一個命令碰不到。命令會這樣說並以 `1` 結束，
 腳本才不會把它當成成功：
 
+<!-- capture: ch16-cli-unlock-no-redis -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.

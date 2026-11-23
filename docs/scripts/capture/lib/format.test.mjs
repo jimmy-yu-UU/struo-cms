@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { formatBlock, formatExchange } from './format.mjs'
+const LOWER_TYPE = 'content-type'
+const STATUS_200 = 'HTTP_STATUS:200'
 
 const response = (over = {}) => ({
   status: 200,
@@ -21,13 +23,18 @@ test('a bodyless exchange prints the request line, the raw response and the stat
 })
 
 test('a request body prints after a body: line, exactly as sent', () => {
+  // The JSON escape for e-acute: a backslash, u, 00e9 (six characters), which must come out unchanged.
+  const escape = `${String.fromCodePoint(92)}u00e9`
+  const sent = `{"a": 1,"b":"${escape}"}`
   const text = formatExchange({
     method: 'POST',
     path: '/api/x',
-    requestBody: '{"a": 1,"b":"\\u00e9"}',
+    requestBody: sent,
     response: response({ status: 400, body: '{"e":1}' }),
   })
-  assert.equal(text, '$ POST /api/x\nbody:\n{"a": 1,"b":"\\u00e9"}\n{"e":1}\nHTTP_STATUS:400')
+  assert.equal(escape.length, 6)
+  assert.ok(text.includes(escape))
+  assert.equal(text, `$ POST /api/x\nbody:\n${sent}\n{"e":1}\nHTTP_STATUS:400`)
 })
 
 test('a note follows the path after one space', () => {
@@ -47,13 +54,13 @@ test('headers true prints the status line and every header in server order, then
       'Server: Kestrel',
       '',
       '{"success":true}',
-      'HTTP_STATUS:200',
+      STATUS_200,
     ].join('\n'),
   )
 })
 
 test('a header list keeps only the named headers, compared without regard to case', () => {
-  const text = formatExchange({ method: 'GET', path: '/x', headers: ['content-type'], response: response() })
+  const text = formatExchange({ method: 'GET', path: '/x', headers: [LOWER_TYPE], response: response() })
   assert.equal(text.split('\n').slice(1, 4).join('|'), 'HTTP/1.1 200 OK|Content-Type: application/json; charset=utf-8|')
 })
 
@@ -81,4 +88,38 @@ test('printPath replaces the path shown on the request line, not the one sent', 
 test('a block joins several exchanges with a blank line', () => {
   assert.equal(formatBlock(['a\nb', 'c']), 'a\nb\n\nc')
   assert.equal(formatBlock(['solo']), 'solo')
+})
+
+test('pretty appends a pretty: line and an indented copy after the status, leaving the raw line alone', () => {
+  const text = formatExchange({
+    method: 'GET',
+    path: '/x',
+    pretty: true,
+    response: response({ body: '{"a":{"b":[1]},"c":{}}' }),
+  })
+  assert.equal(
+    text,
+    ['$ GET /x', '{"a":{"b":[1]},"c":{}}', STATUS_200, 'pretty:', '{', '  "a": {', '    "b": [', '      1', '    ]', '  },', '  "c": {}', '}'].join('\n'),
+  )
+})
+
+test('a binary response prints its summary lines in place of the body, after the chosen headers', () => {
+  const text = formatExchange({
+    method: 'GET',
+    path: '/img',
+    headers: [LOWER_TYPE],
+    binary: ['# body: 3 bytes (binary, not shown)'],
+    response: response({ body: '���' }),
+  })
+  assert.equal(
+    text,
+    ['$ GET /img', 'HTTP/1.1 200 OK', 'Content-Type: application/json; charset=utf-8', '', '# body: 3 bytes (binary, not shown)', STATUS_200].join('\n'),
+  )
+})
+
+test('a header list naming a header the response lacks is an error that names it', () => {
+  assert.throws(
+    () => formatExchange({ method: 'GET', path: '/x', headers: [LOWER_TYPE, 'X-Missing'], response: response() }),
+    /X-Missing/,
+  )
 })

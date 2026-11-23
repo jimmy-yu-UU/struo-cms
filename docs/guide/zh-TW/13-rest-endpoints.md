@@ -53,7 +53,9 @@ JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `40
 是不同的屬性。
 
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
-`BAD_USER_INPUT`，訊息是點出集合名稱的通用句子，GraphQL 的 `createFile`、`createUser` mutation 也得到同一種錯誤。
+`BAD_USER_INPUT`，訊息是點出集合名稱的通用句子。輸入通過 schema 時，GraphQL 的 `createFile`、
+`createUser` mutation 得到同一個代碼與訊息，狀態碼是 `200`；輸入帶 schema 沒有的欄位時，是沒有代碼的
+request 層級錯誤，見[第 14 章](14-graphql.md)。
 拒絕的依據是集合的 `Creatable = false` 旗標（見[第 5 章](05-collections.md#cmscollection-選項)）。檔案要上傳到
 `POST api/files`，使用者要走會設定密碼的 `POST api/users`。拒絕發生在任何 body 檢查之前，所以重複 email
 在這裡是 `400`，不是 `409`。這兩個集合的讀取、更新與刪除仍然走通用路由。
@@ -65,13 +67,14 @@ JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `40
 以下用 Blog 樣板的 `article`（有開版本紀錄）示範復原回 `200` 而不是 `204`；下面出現的 id 都是這
 批測試資料本身的，讀者環境會不同：
 
+<!-- capture: ch13-trash-and-restore -->
 ```text
-$ DELETE /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c
+$ DELETE /api/items/article/01a2079c-7f48-70b5-918e-8342d5dfebc0
 
 HTTP_STATUS:204
 
-$ POST /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c/restore
-{"success":true,"data":{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+$ POST /api/items/article/01a2079c-7f48-70b5-918e-8342d5dfebc0/restore
+{"success":true,"data":{"id":"01a2079c-7f48-70b5-918e-8342d5dfebc0","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:53:46.440681Z","createdBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","updatedAt":"2026-11-23T08:53:46.440782Z","updatedBy":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 ```
 
@@ -169,11 +172,13 @@ role collection is required.`。寫入超級管理員角色或 `public` 角色�
 `BAD_USER_INPUT`，沒有 `user` 讀取授權的呼叫端回 `403`。它依送出的順序，每個位址回一筆，同一個位址送兩次
 就回兩次：
 
+<!-- capture: ch13-login-locks-query -->
 ```text
 $ POST /api/login-locks/query
 body:
 {"emails":["admin@admin.com","nobody@example.com"]}
 {"success":true,"data":[{"email":"admin@admin.com","locked":false,"retryAfterSeconds":0,"clearable":true},{"email":"nobody@example.com","locked":false,"retryAfterSeconds":0,"clearable":true}]}
+HTTP_STATUS:200
 ```
 
 帳號在目前視窗內已把依帳號的登入嘗試額度用光時，`locked` 為 `true`，`retryAfterSeconds` 是視窗還剩的秒數，
@@ -236,13 +241,14 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 
 登入接著讀 `me` 的一次實際回應：
 
+<!-- capture: ch13-login-and-me -->
 ```text
 $ POST /api/auth/login
 body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Fri, 06 Nov 2026 06:17:45 GMT
+Date: Mon, 23 Nov 2026 08:53:47 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -251,17 +257,18 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae"}}
+{"success":true,"data":{"id":"01a2079c-556b-7ef5-8f54-b890ea6ae21b"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
+{"success":true,"data":{"id":"01a2079c-556b-7ef5-8f54-b890ea6ae21b","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
-這段輸出來自 Development 主機；cookie 一律帶 `Secure` 的環境，名稱是 `__Host-struo.session`，
-並多一個 `secure`。`me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
+這段輸出來自沒有要求 cookie 一律帶 `Secure` 的主機；要求的環境，名稱是
+`__Host-struo.session`，並多一個 `secure`。`me` 對超級管理員回傳空的 `permissions`，因為每一項授權
+都已經隱含在這個身分裡。
 
 `login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，
 `?returnUrl=` 只有在是站內相對路徑，或來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時才沿用，否則改用 `Oidc:ReturnUrlDefault`；

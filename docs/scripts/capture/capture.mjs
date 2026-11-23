@@ -5,6 +5,8 @@
 //     --base-url http://localhost:5221 --chapters 10,11 --write
 //
 //   --check        no network: markers, cross-language identity, scenario/marker match
+//   --list-cli     no network: the commands the scenario needs run (JSON: id, program, args, env, exit)
+//   --cli-results  directory (inside the working directory) holding <id>.out and <id>.exit per command
 //   --write        write the chapter files (without it the captured blocks are only printed)
 //   --chapters     comma-separated chapter numbers whose files are written; the run itself always
 //                  executes every group in order (default: every file with a capture)
@@ -12,18 +14,36 @@
 //   --email        or STRUO_CAPTURE_ADMIN_EMAIL (default admin@admin.com)
 //   --guide-dir    the manual's root (default: ../../guide); must lie inside the working directory
 //
-// The admin password comes from STRUO_CAPTURE_ADMIN_PASSWORD only.
+// The admin password comes from STRUO_CAPTURE_ADMIN_PASSWORD only. The editor account's password is
+// STRUO_CAPTURE_EDITOR_PASSWORD or, when unset, a random value made for the run; it is a secret and is
+// never printed. The email the login-lock scenario probes is made fresh for every run.
+import { randomBytes } from 'node:crypto'
 import { realpathSync, statSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { parseArgs } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { checkGuide } from './lib/check.mjs'
+import { cliDescriptors } from './lib/cli.mjs'
 import { CaptureError } from './lib/errors.mjs'
 import { runCapture } from './lib/runner.mjs'
 import { selectFiles, summarize } from './lib/select.mjs'
 import { CONTENT_COLLECTIONS, GROUPS } from './scenarios/index.mjs'
+const CLI_RESULTS = 'cli-results'
 
-const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'guide')
+const HERE = dirname(fileURLToPath(import.meta.url))
+const DEFAULT_GUIDE = join(HERE, '..', '..', 'guide')
+const FIXTURES = join(HERE, 'fixtures')
+const SECRET_VARS = ['editorPassword']
+
+// Values made for one run: the editor's password and an email no login lock has seen.
+function runVariables(adminEmail, adminPassword) {
+  return {
+    adminEmail,
+    adminPassword,
+    editorPassword: process.env.STRUO_CAPTURE_EDITOR_PASSWORD ?? randomBytes(15).toString('base64url'),
+    lockEmail: `login-probe-${randomBytes(6).toString('hex')}@example.com`,
+  }
+}
 
 // A directory taken from the command line is resolved, confined to the working directory and only
 // then touched, as docs/scripts/check-table-width.mjs does.
@@ -51,9 +71,16 @@ async function main() {
       'base-url': { type: 'string' },
       email: { type: 'string' },
       'guide-dir': { type: 'string' },
+      'list-cli': { type: 'boolean', default: false },
+      [CLI_RESULTS]: { type: 'string' },
     },
   })
   const guideOption = values['guide-dir'] ?? DEFAULT_GUIDE
+
+  if (values['list-cli']) {
+    process.stdout.write(`${JSON.stringify(cliDescriptors(GROUPS), null, 2)}\n`)
+    return
+  }
 
   if (values.check) {
     const guideDir = confinedDirectory(guideOption)
@@ -73,7 +100,10 @@ async function main() {
   const only = selectFiles(values.chapters, GROUPS)
   const { blocks, files } = await runCapture({
     baseUrl,
-    vars: { adminEmail, adminPassword },
+    vars: runVariables(adminEmail, adminPassword),
+    secretVars: SECRET_VARS,
+    fixturesDir: FIXTURES,
+    cliResults: values[CLI_RESULTS] === undefined ? undefined : confinedDirectory(values[CLI_RESULTS]),
     groups: GROUPS,
     only,
     freshCollections: CONTENT_COLLECTIONS,

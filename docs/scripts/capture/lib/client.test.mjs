@@ -2,11 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
 import { startStub } from '../test-support/stub-server.mjs'
+const CONTENT_TYPE = 'Content-Type'
+const LOWER_TYPE = 'content-type'
+const JSON_TYPE = 'application/json'
 
 const SET_COOKIE = 'Set-Cookie'
 const login = (request) =>
   request.path === '/login'
-    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', 'Content-Type': 'application/json' }, body: '{"ok":true}' }
+    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', [CONTENT_TYPE]: JSON_TYPE }, body: '{"ok":true}' }
     : { status: 200, body: 'plain' }
 
 async function withStub(handler, fn) {
@@ -32,7 +35,7 @@ test('a response comes back raw, with the status text and the headers in server 
     assert.equal(res.body, '{"ok":true}')
     assert.deepEqual(res.headers.slice(0, 2), [
       [SET_COOKIE, 'sess=abc; path=/; httponly'],
-      ['Content-Type', 'application/json'],
+      [CONTENT_TYPE, JSON_TYPE],
     ])
   })
 })
@@ -83,7 +86,7 @@ test('a JSON body is sent byte for byte with a JSON content type', async () => {
   await withStub(login, async (stub, client) => {
     await client.request({ method: 'POST', path: '/x', body: '{"a": 1 }' })
     assert.equal(stub.requests[0].body, '{"a": 1 }')
-    assert.match(stub.requests[0].headers['content-type'], /application\/json/)
+    assert.match(stub.requests[0].headers[LOWER_TYPE], /application\/json/)
   })
 })
 
@@ -232,4 +235,54 @@ test('a POST the server processed and then reset is never sent twice, and the st
       assert.equal(stub.requests.filter((r) => r.path === '/create').length, 1, method)
     })
   }
+})
+
+test('a response keeps its raw bytes next to the decoded text', async () => {
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00])
+  await withStub(
+    () => ({ status: 200, headers: { [CONTENT_TYPE]: 'image/png' }, body: bytes }),
+    async (_stub, client) => {
+      const res = await client.request({ identity: undefined, method: 'GET', path: '/img' })
+      assert.deepEqual(res.bytes, bytes)
+      assert.equal(typeof res.body, 'string')
+    },
+  )
+})
+
+test('a Buffer body is sent byte for byte with the content type the step names', async () => {
+  const body = Buffer.from([0x00, 0xff, 0x0d, 0x0a, 0x41])
+  await withStub(
+    () => ({ status: 201, body: '{}' }),
+    async (stub, client) => {
+      await client.request({
+        identity: 'admin',
+        method: 'POST',
+        path: '/up',
+        body,
+        contentType: 'multipart/form-data; boundary=zz',
+      })
+      assert.equal(stub.requests[0].headers[LOWER_TYPE], 'multipart/form-data; boundary=zz')
+      assert.deepEqual(stub.requests[0].rawBody, body)
+    },
+  )
+})
+
+test('extra request headers are sent as given and the headers the client owns cannot be replaced', async () => {
+  await withStub(
+    () => ({ status: 200, body: '{}' }),
+    async (stub, client) => {
+      await client.request({ identity: undefined, method: 'GET', path: '/x', headers: { Accept: JSON_TYPE } })
+      assert.equal(stub.requests[0].headers.accept, JSON_TYPE)
+      const owned = [LOWER_TYPE, 'Cookie', 'AUTHORIZATION', 'X-Struo-CSRF', 'Content-Length', 'transfer-encoding', 'HOST']
+      await Promise.all(
+        owned.map((name) =>
+          assert.rejects(
+            client.request({ identity: undefined, method: 'GET', path: '/x', headers: { [name]: 'v' } }),
+            new RegExp(name, 'i'),
+          ),
+        ),
+      )
+      assert.equal(stub.requests.length, 1)
+    },
+  )
 })

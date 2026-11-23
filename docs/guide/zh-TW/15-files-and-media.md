@@ -16,8 +16,8 @@
 [第 13 章：REST API 端點參考](13-rest-endpoints.md)。
 
 透過通用的項目 API 建立 `file` 一律被拒，因為 `File` 宣告了 `Creatable = false`。
-REST 與 GraphQL 共用的項目用例會做這項拒絕，因此 GraphQL 的 `createFile` mutation
-也被同一句訊息擋下，狀態碼 `400`／`BAD_USER_INPUT`：
+REST 與 GraphQL 共用的項目用例會做這項拒絕，因此輸入通過 schema 的 GraphQL `createFile` mutation
+也被同一句訊息擋下：REST 回 `400`，GraphQL 回 `200`，代碼都是 `BAD_USER_INPUT`：
 `Items cannot be created in collection 'file' through the generic items API.`
 檔案要靠上傳到 `POST /api/files` 來建立。
 
@@ -73,17 +73,18 @@ not permitted.`。
 
 成功是 `201`，`Location` 指向剛建立的檔案，body 是投影過的一列：
 
+<!-- capture: ch15-upload-swatch-201 -->
 ```text
-$ POST /api/files  (multipart: file=@swatch.png; type=image/png)
+$ POST /api/files (multipart: file=@swatch.png; type=image/png)
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Tue, 15 Sep 2026 03:01:43 GMT
+Date: Mon, 23 Nov 2026 08:53:47 GMT
 Server: Kestrel
-Location: /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df
+Location: /api/files/760cd82c-5181-4a01-87f0-13a6756e19fc
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"c4440800-43d3-4ff0-9fe7-b5d7671b30df","fileName":"swatch.png","contentType":"image/png","size":125,"width":64,"height":48,"status":"published","folderId":null}}
+{"success":true,"data":{"id":"760cd82c-5181-4a01-87f0-13a6756e19fc","fileName":"swatch.png","contentType":"image/png","size":6325,"width":64,"height":48,"status":"published","folderId":null}}
 HTTP_STATUS:201
 ```
 
@@ -195,8 +196,9 @@ allowed.`。
 權。沒有另一個「讀取未發布」的授權旗標，這條規則就是從每個集合都有的那三個既有旗標推出來
 的。列出媒體庫（`GET /api/items/file`）是另一回事，需要一般的 `file` 讀取授權。
 
+<!-- capture: ch15-get-draft-anon-404 -->
 ```text
-$ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
+$ GET /api/files/6ee78e4c-c929-495a-976c-2e2738cf54a5
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 HTTP_STATUS:404
 ```
@@ -204,9 +206,10 @@ HTTP_STATUS:404
 本手冊的錯誤範例省略了每個錯誤回應都帶有的 `traceId`，
 見[第 12 章](12-rest-conventions.md#回應信封)。
 
+<!-- capture: ch15-get-draft-admin -->
 ```text
-$ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
-{"success":true,"data":{"id":"27327d5a-6cb0-40e3-b288-6d1186db6ab9","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
+$ GET /api/files/6ee78e4c-c929-495a-976c-2e2738cf54a5
+{"success":true,"data":{"id":"6ee78e4c-c929-495a-976c-2e2738cf54a5","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
 HTTP_STATUS:200
 ```
 
@@ -312,13 +315,15 @@ cover 高度。
 
 ### 例子
 
+<!-- capture: ch15-content-width5000-png -->
 ```text
-$ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
+$ GET /api/files/760cd82c-5181-4a01-87f0-13a6756e19fc/content?width=5000&format=png
 HTTP/1.1 200 OK
-Content-Length: 394
+Content-Length: 6538
 Content-Type: image/png
+
 # decoded PNG IHDR: width=64, height=48
-# body: 394 bytes (binary, not shown)
+# body: 6538 bytes (binary, not shown)
 HTTP_STATUS:200
 ```
 
@@ -434,8 +439,9 @@ null，指向這個檔案的多對多連接資料列會被移除。blob 的清�
 
 只有 `true` 會觸發永久刪除，大小寫不拘；`?purge=1` 這種寫法不行：
 
+<!-- capture: ch15-delete-purge-1-400 -->
 ```text
-$ DELETE /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9?purge=1
+$ DELETE /api/files/6ee78e4c-c929-495a-976c-2e2738cf54a5?purge=1
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"purge","message":"The value '1' is not valid."}]}}
 HTTP_STATUS:400
 ```
