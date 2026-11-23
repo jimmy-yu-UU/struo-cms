@@ -33,6 +33,26 @@
     屬性配浮點欄位。
 :::
 
+### 新增
+
+- `GraphQl:MaxFieldCycleDepth` 設定同一個欄位（型別加欄位名稱）在一次操作的同一條路徑上最多出現幾
+  次；預設 `3`，與先前 GraphQL 伺服器套用的值相同；小於 `1` 或大於 `65535` 的值讓主機啟動失敗，
+  訊息帶上這個鍵（見 [第 4 章](04-configuration.md)、[第 14 章](14-graphql.md)）。
+- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`。
+
+### 修正
+
+- 0.31.0 中，以 POST 送出、GraphQL 伺服器無法讀成請求的 JSON 本文（例如 `query` 為空字串、完全沒有
+  `query`、本文不是 JSON、`query`、`operationName` 或 `extensions` 的型別不對，或 `variables` 是數字
+  或字串）會回 `400`
+  與錯誤 `An internal error occurred.`、代碼 `INTERNAL_SERVER_ERROR`，API 還為它寫一筆 error 等級的
+  記錄。狀態碼仍是 `400`；錯誤現在帶代碼 `BAD_USER_INPUT` 與 GraphQL 伺服器自己的訊息，例如
+  `Request must contain either a query or a document id.`，沒有 `data` 鍵；也不再寫 error 等級的記錄
+  （見 [第 14 章](14-graphql.md)）。
+- 0.31.0 中，上傳請求的本文在伺服器讀取 multipart 表單時逾時，會回 `500` `INTERNAL_SERVER_ERROR`。
+  現在回 `408`，代碼 `BAD_USER_INPUT`，訊息 `The request body could not be read.`，伺服器記一則警告
+  （見 [第 15 章](15-files-and-media.md)）。
+
 ## 0.31.0 — 2026-11-23
 
 ::: danger 破壞性變更

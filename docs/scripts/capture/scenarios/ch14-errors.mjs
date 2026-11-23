@@ -1,7 +1,9 @@
 // Chapter 14 checks that print nothing: how the GraphQL endpoint answers the failures the prose
 // describes. Request-level failures (a document that does not parse, an unknown field, a depth or
 // cost violation, a self-reference nested too far) fail validation before any resolver runs, so an
-// anonymous caller sees them; their status depends on the Accept header. The shared-validator checks
+// anonymous caller sees them; their status depends on the Accept header, except a POST whose JSON body
+// the server cannot read as a request, which is 400 under the three Accept values checked. The
+// shared-validator checks
 // run as the admin. Each statement the chapter makes about a status, a code or a message is asserted
 // here, so the run fails when the behaviour changes.
 import { anonymous, check, must, setup } from './steps.mjs'
@@ -22,7 +24,8 @@ const MAX_IN_VALUES = 500
 const LEVELS_AROUND_PARENTS = 3
 const PARENTS_OVER_DEPTH = DEPTH_LIMIT - LEVELS_AROUND_PARENTS + 1
 const DETECTED_DEPTH = PARENTS_OVER_DEPTH + LEVELS_AROUND_PARENTS
-// A path may repeat one self-referencing field three times; the fourth is refused.
+// A path may repeat one self-referencing field three times (the default of GraphQl:MaxFieldCycleDepth); the
+// fourth is refused.
 const PARENTS_ALLOWED = 3
 const ALIAS_BOMB = 50
 const ALIAS_BOMB_COST = 550
@@ -36,6 +39,8 @@ const PARSE_CODE = 'HC0011'
 const COST_CODE = 'HC0047'
 const CYCLE_CODE = 'HC0087'
 const UNAUTHORIZED = 'UNAUTHORIZED'
+const NO_OPERATION_MESSAGE = 'Request must contain either a query or a document id.'
+const NOT_JSON_MESSAGE = 'Invalid JSON document.'
 
 function nestedParents(parents) {
   return '{ categories { items { ' + 'parent { '.repeat(parents) + 'name' + ' }'.repeat(parents) + ' } } }'
@@ -125,6 +130,16 @@ function cycleExceeded(json) {
   must(json.errors[0].message === CYCLE_MESSAGE, 'the cycle message')
 }
 
+// A request the server cannot read as a GraphQL request: a stable code, the server's own message, no data key.
+function malformedRequest(message) {
+  return (json) => {
+    noData(json)
+    must(json.errors.length === 1, 'a malformed request has one error')
+    must(codeOf(json.errors[0]) === BAD_USER_INPUT, `a malformed request carries ${BAD_USER_INPUT}`)
+    must(json.errors[0].message === message, `the message is: ${message}`)
+  }
+}
+
 // A resolver-level error: the document was valid, so `data` is present (null) and every error carries
 // one of the chapter's stable codes. Here the anonymous caller may not read.
 function resolverError(json) {
@@ -140,6 +155,12 @@ const REQUEST_LEVEL = [
   { label: 'a self-reference nested four times', query: nestedParents(PARENTS_ALLOWED + 1), assertion: cycleExceeded },
   { label: 'a field repeated four times through two types', query: nested(FOUR_TIMES), assertion: cycleExceeded },
   { label: 'a depth violation with no repeated field', query: nested(DEEP_NO_REPEAT), assertion: depthOnly },
+]
+
+const MALFORMED_REQUESTS = [
+  { label: 'a request with an empty query', body: '{"query":""}', message: NO_OPERATION_MESSAGE },
+  { label: 'a request with no query', body: '{}', message: NO_OPERATION_MESSAGE },
+  { label: 'a request body that is not JSON', body: 'not json', message: NOT_JSON_MESSAGE },
 ]
 
 // status by Accept: no header and */* answer 400, application/json answers 200.
@@ -159,6 +180,18 @@ const anonymousQuery = (name, accept, query, expect, assertion) =>
 
 const requestLevel = REQUEST_LEVEL.flatMap(({ label, query, assertion }) =>
   ACCEPTS.map(({ accept, label: how, status }) => anonymousQuery(`${label} with ${how}`, accept, query, status, assertion)),
+)
+
+// A malformed request is 400 with no Accept header, with */* and with application/json.
+const malformedRequests = MALFORMED_REQUESTS.flatMap(({ label, body, message }) =>
+  ACCEPTS.map(({ accept, label: how }) =>
+    anonymous(undefined, 'POST', GRAPHQL, 400, {
+      name: `${label} with ${how}`,
+      headers: accept === NO_ACCEPT ? undefined : { Accept: accept },
+      body,
+      verify: malformedRequest(message),
+    }),
+  ),
 )
 
 // Up to three nested parents pass validation; the anonymous caller then gets the resolver error.
@@ -254,6 +287,7 @@ const restCounterparts = [
 
 export const errorChecks = [
   ...requestLevel,
+  ...malformedRequests,
   ...withinLimits,
   ...sameFieldWithinLimit,
   ...resolverLevel,

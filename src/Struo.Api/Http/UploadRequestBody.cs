@@ -13,7 +13,7 @@ namespace Struo.Api.Http;
 /// an upload below <c>Struo:Files:MaxUploadBytes</c> once that key is raised above it, so the cap for
 /// this endpoint alone is <c>MaxUploadBytes</c> plus <see cref="FileStorageOptions.UploadFramingHeadroomBytes"/>. A body over the
 /// cap is refused as <see cref="PayloadTooLargeException"/>, the same error and limit detail as an
-/// over-limit file; a form that cannot be read is a 400 with a fixed message.
+/// over-limit file; a form that cannot be read is a 400 with a fixed message, and a read that times out is a 408.
 /// </summary>
 internal static class UploadRequestBody
 {
@@ -39,8 +39,14 @@ internal static class UploadRequestBody
             // framework logs as an aborted request and does not try to answer.
             request.HttpContext.RequestAborted.ThrowIfCancellationRequested();
 
-            // Kestrel's own rejection (a body timeout, say) keeps its failure, and so does a disk fault
-            // on the server while the form is buffered; the exception handler answers both.
+            if (IsBodyTimeout(e))
+            {
+                logger.LogWarning(e, "The upload request body timed out.");
+                throw new RequestBodyTimeoutException();
+            }
+
+            // Kestrel's other rejections keep their failure, and so does a disk fault on the server while
+            // the form is buffered; the exception handler answers both.
             if (e is BadHttpRequestException || IsDiskFault(e))
                 throw;
 
@@ -88,6 +94,15 @@ internal static class UploadRequestBody
     // HResult of the IOException, and the Windows disk-full errors as HRESULTs.
     private static bool IsDiskFault(Exception exception) =>
         exception.HResult is 28 or 122 or unchecked((int)0x80070070) or unchecked((int)0x80070027);
+
+    // Kestrel's 408 reaches the caller either directly or wrapped by the form reader.
+    private static bool IsBodyTimeout(Exception exception)
+    {
+        for (var e = exception; e is not null; e = e.InnerException)
+            if (e is BadHttpRequestException { StatusCode: StatusCodes.Status408RequestTimeout })
+                return true;
+        return false;
+    }
 
     // Kestrel's 413 reaches the caller either directly or wrapped by the form reader.
     private static bool IsBodyTooLarge(Exception exception)

@@ -681,8 +681,10 @@ settings, and fields they add to `Mutation` do not get `MutationAuthentication`.
 `RootFieldCollisionInterceptor` fails the schema build on a Query/Mutation field name contributed twice
 (HotChocolate would silently merge them), and `StruoCmsGraphQlCheck` builds the schema during the startup
 checks and rewrites HotChocolate's duplicate-type errors into the `GraphQL name collision` message. The
-depth and cost limits are `GraphQlOptions.MaxExecutionDepth/MaxFieldCost/MaxTypeCost`, read at registration
-time by `GraphQlServiceCollectionExtensions.ResolveLimits`, which throws on a non-positive value. See
+depth, cost and field-repetition limits are `GraphQlOptions.MaxExecutionDepth/MaxFieldCost/MaxTypeCost/MaxFieldCycleDepth`,
+read at registration time by `GraphQlServiceCollectionExtensions.ResolveLimits`, which throws on a value
+outside its range. The field-repetition rule replaces the HotChocolate default (the default is removed first;
+a second rule would sit next to the default 3). See
 `docs/guide/en/14-graphql.md`.
 
 ### The frontend field-type registry

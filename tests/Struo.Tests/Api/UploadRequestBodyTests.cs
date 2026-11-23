@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using Struo.Api.Auth;
 using Struo.Api.Http;
 using Struo.Application.Files;
+using Struo.Domain;
 using Struo.Domain.Query;
 using Xunit;
 
@@ -241,7 +242,7 @@ public class UploadRequestBodyTests
     }
 
     [Fact]
-    public async Task A_request_the_server_rejected_keeps_its_own_failure_and_is_not_turned_into_a_bad_input_error()
+    public async Task A_read_the_server_timed_out_is_a_408_with_a_fixed_message_and_a_warning()
     {
         var timeout = new BadHttpRequestException("Request body timeout.", StatusCodes.Status408RequestTimeout);
         var context = Multipart(new FailingBodyStream(timeout));
@@ -249,7 +250,35 @@ public class UploadRequestBodyTests
 
         var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
 
-        (await act.Should().ThrowAsync<BadHttpRequestException>()).Which.Should().BeSameAs(timeout);
+        var thrown = (await act.Should().ThrowAsync<StruoDomainException>()).Which;
+        thrown.Code.Should().Be("BAD_USER_INPUT");
+        thrown.Status.Should().Be(StatusCodes.Status408RequestTimeout);
+        thrown.Message.Should().Be("The request body could not be read.");
+        logger.Entries.Should().ContainSingle().Which.Level.Should().Be(LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task A_timeout_wrapped_by_the_form_reader_is_a_408_too()
+    {
+        var timeout = new BadHttpRequestException("Request body timeout.", StatusCodes.Status408RequestTimeout);
+        var context = Multipart(new FailingBodyStream(new InvalidDataException("form", timeout)));
+
+        var act = () => UploadRequestBody.ReadFormAsync(
+            context.Request, MaxUploadBytes, NullLogger.Instance, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<StruoDomainException>()).Which.Status.Should().Be(StatusCodes.Status408RequestTimeout);
+    }
+
+    [Fact]
+    public async Task Another_request_the_server_rejected_keeps_its_own_failure_and_is_not_turned_into_a_bad_input_error()
+    {
+        var rejected = new BadHttpRequestException("Bad chunk.", StatusCodes.Status400BadRequest);
+        var context = Multipart(new FailingBodyStream(rejected));
+        var logger = new RecordingLogger();
+
+        var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<BadHttpRequestException>()).Which.Should().BeSameAs(rejected);
         logger.Entries.Should().BeEmpty();
     }
 

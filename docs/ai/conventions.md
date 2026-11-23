@@ -577,6 +577,12 @@ the status from, so it needs no arm; anything left
 unmapped collapses to `INTERNAL_SERVER_ERROR` with a masked generic message — the real exception is
 logged server-side, never leaked to the response. See `docs/guide/en/12-rest-conventions.md`.
 
+Two request-body failures are answered as client errors without an arm in `DomainErrorMap`. A malformed GraphQL
+request (HotChocolate's `InvalidGraphQLRequestException`, an error with no path) is stamped `BAD_USER_INPUT`
+in `StruoErrorFilter` with the parser's message and is not logged; the same exception raised by a resolver has
+a path and stays masked. An upload whose form read times out (Kestrel's 408) becomes
+`RequestBodyTimeoutException`, a `StruoDomainException` with status 408 and `BAD_USER_INPUT`.
+
 `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
 exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`
 (`SEARCH_UNAVAILABLE`/503) with the fixed client-facing message

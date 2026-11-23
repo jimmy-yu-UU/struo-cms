@@ -365,7 +365,7 @@ HTTP_STATUS:200
 `UNAUTHORIZED`。對 resolver 層級的錯誤，呼叫端得看每一則錯誤自己的 `extensions.code`，不能看狀態列。
 
 `errors` 陣列裡的每一則錯誤還帶有 `extensions.traceId`，跟 REST 錯誤信封帶的是同一個請求 trace id（見
-[第 12 章](12-rest-conventions.md)），本節兩種錯誤都有。這裡的範例都省略了它。
+[第 12 章](12-rest-conventions.md)），本節的每一種錯誤都有。這裡的範例都省略了它。
 
 GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver 丟出的例外套進同一份對照表，蓋上一模
 一樣的穩定代碼字串；resolver 丟出的例外，傳輸層的狀態永遠是 `200`，文件在 resolver 開始跑之前就
@@ -399,7 +399,16 @@ HTTP_STATUS:400
 看的是回應有沒有 `data` 鍵，不是狀態碼：resolver 丟出的錯誤與共用驗證器的錯誤，回應帶 `data`
 （`null`，或某個成員是 `null` 的物件），代碼是[第 12 章](12-rest-conventions.md#錯誤代碼)列出的
 穩定代碼，狀態碼是 `200`；文件在 resolver 開始跑之前就出錯時，回應沒有 `data` 鍵，錯誤沒有代碼，
-或只帶 GraphQL 伺服器自己的代碼，狀態碼隨 `Accept` 而變。
+或只帶 GraphQL 伺服器自己的代碼，狀態碼隨 `Accept` 而變；格式不對的請求是例外，見下一段：它帶
+`BAD_USER_INPUT`，狀態碼是 `400`。
+
+以 POST 送出 JSON body，而伺服器讀不成 GraphQL 請求時，沒帶 `Accept`、帶 `*/*` 或帶
+`application/json` 都回 HTTP `400`，沒有 `data` 鍵，只有一則錯誤，`extensions.code` 是
+`BAD_USER_INPUT`，訊息是 GraphQL 伺服器自己的。例如 body 不是 JSON，訊息是
+`Invalid JSON document.`；沒有 `query` 或 `query` 為空，訊息是
+`Request must contain either a query or a document id.`；`query`、`operationName`、`variables` 或
+`extensions` 的型別不對，訊息像 `Invalid 'query' value. Expected string or null, but got Number.`。
+這類請求不會寫 error 等級的記錄。
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
@@ -423,7 +432,7 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 |---|---|---|
 | 執行深度（`GraphQl:MaxExecutionDepth`） | 預設 12 層 | 巢狀選擇集過深，introspection 欄位不算 |
 | Cost（`GraphQl:MaxFieldCost`／`GraphQl:MaxTypeCost`） | 預設 150 | alias 放大：同一昂貴欄位配多別名重複算 |
-| 欄位重複（GraphQL 伺服器內建） | 同一個欄位在一條路徑上最多 3 次 | 沿著 `parent` 這類來回的關聯一路往下寫 |
+| 欄位重複（`GraphQl:MaxFieldCycleDepth`） | 預設 3 次 | 沿著 `parent` 這類來回的關聯一路往下寫 |
 | 關聯路徑深度（`Query:MaxRelationDepth`） | 預設 6 | 跨關聯篩選與巢狀展開，跟 REST 共用設定 |
 | 排序欄位（`Query:MaxSortFields`） | 預設 5 | 過長的排序，跟 REST 共用設定 |
 | 關聯節點（`Query:MaxDeepRelations`） | 預設 20 | 過寬的關聯展開，跟 REST 共用設定 |
@@ -439,15 +448,15 @@ execution depth of N which exceeds the max allowed execution depth of 12.`，N �
 allowed field cost was exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCost`。50 個別名各選一次
 `articles { items { id } }`，成本是 550，上限是預設的 150。
 
-欄位重複是另一條獨立的規則，不屬於執行深度上限：GraphQL 伺服器內建這條規則，專案沒有為它提供設定鍵。
-同一個欄位（同一個型別上的同一個欄位名）在一條路徑上最多出現 3 次，第 4 次被拒絕。最簡單的情形是
-自我參照的 `parent`：在
+欄位重複是另一條獨立的規則，不屬於執行深度上限。`GraphQl:MaxFieldCycleDepth` 設定同一個欄位（同一個
+型別上的同一個欄位名）在一條路徑上最多出現幾次，再多一次就被拒絕；預設是 3，下面的例子都用預設值。
+最簡單的情形是自我參照的 `parent`：在
 `{ categories { items { parent { parent { parent { name } } } } } }` 這樣的路徑上，`parent` 最多巢狀
 3 層。穿過兩個型別來回的路徑同樣受限，`Category.articles` 在
 `{ categories { items { articles { category { articles { category { articles { id } } } } } } } }`
 裡出現 3 次，可以通過驗證，再多一次就被拒絕。被拒絕的回應只有一則 `extensions.code` 為 `HC0087` 的
 錯誤，訊息是 `Maximum allowed coordinate cycle depth was exceeded.`；一份文件同時超過執行深度上限與
-這條規則時，兩則錯誤都在回應裡，沒有任何欄位重複過 3 次、但深度超過上限的文件，回應只有深度那一則
+這條規則時，兩則錯誤都在回應裡，沒有任何欄位重複超過上限、但深度超過上限的文件，回應只有深度那一則
 錯誤。
 
 這三種錯誤都沒有 `data` 鍵；沒帶 `Accept` 或帶 `*/*` 時回 HTTP `400`，帶 `Accept: application/json`
@@ -456,10 +465,11 @@ allowed field cost was exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCo
 你選取的每個關聯欄位都算 deep 樹的一個節點，所以查詢選了很多關聯時，不必傳任何 `deep` 參數就可能撞到
 `MaxDeepRelations`。
 
-前兩個上限設在 `GraphQl:` 底下（見[第 4 章](04-configuration.md)），而且只能在設定裡設：在程式碼裡設定
-`GraphQlOptions` 沒有作用。預設值是只針對核心 schema 量出來的：
-最重的一般查詢成本是 33，50 個 alias 的放大是 550，150 落在兩者之間。fork 加了比較重的查詢，就像
-`GraphQlCostAnalysisTests` 對核心做的那樣，量出自己最重的正當查詢，把成本上限設在它的上面一點。
+執行深度、cost 與欄位重複這三個上限設在 `GraphQl:` 底下（見[第 4 章](04-configuration.md)），而且
+只能在設定裡設：在程式碼裡設定 `GraphQlOptions` 沒有作用。成本上限的預設值是只針對核心 schema
+量出來的：最重的一般查詢成本是 33，50 個 alias 的放大是 550，150 落在兩者之間。fork 加了比較重的
+查詢，就像 `GraphQlCostAnalysisTests` 對核心做的那樣，量出自己最重的正當查詢，把成本上限設在它的
+上面一點。
 
 ## 加上自己的型別與欄位
 

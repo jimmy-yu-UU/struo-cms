@@ -669,7 +669,8 @@ public sealed class BuildInfoMutation
 
 Names must not collide with the generated schema; startup fails with a `GraphQL name collision`
 message when one does. The query depth and cost limits, which a heavier fork query may need to
-raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxTypeCost`. See
+raise, are `GraphQl:MaxExecutionDepth`, `GraphQl:MaxFieldCost` and `GraphQl:MaxTypeCost`;
+`GraphQl:MaxFieldCycleDepth` sets how many times one field may appear along a path. See
 [Chapter 14: GraphQL API](14-graphql.md).
 
 ## What's next

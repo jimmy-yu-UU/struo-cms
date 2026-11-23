@@ -589,7 +589,8 @@ public sealed class BuildInfoMutation
 ```
 
 名稱不能和產生出來的 schema 衝突；衝突時啟動會失敗，訊息是 `GraphQL name collision`。查詢深度與成本的
-上限是 `GraphQl:MaxExecutionDepth`、`GraphQl:MaxFieldCost` 與 `GraphQl:MaxTypeCost`，比較重的 fork 查詢
+上限是 `GraphQl:MaxExecutionDepth`、`GraphQl:MaxFieldCost` 與 `GraphQl:MaxTypeCost`；
+`GraphQl:MaxFieldCycleDepth` 設定同一個欄位在一條路徑上最多出現幾次。比較重的 fork 查詢
 可能需要調高。見[第 14 章：GraphQL API](14-graphql.md)。
 
 ## 接下來
