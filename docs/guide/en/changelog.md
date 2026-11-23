@@ -50,12 +50,11 @@
 
 - In 0.31.0, a GraphQL request the server cannot read as a request (an empty `query`, no `query` at
   all, a body that is not JSON, a `query`, `operationName` or `extensions` of the wrong type, or
-  `variables` that are not an object) was answered with `400` and the error
+  `variables` that is a number or a string) was answered with `400` and the error
   `An internal error occurred.`, code `INTERNAL_SERVER_ERROR`, and the API wrote an error-level log
-  entry for it. The status is the same `400`, and the error now has the code `BAD_USER_INPUT` and the
-  GraphQL server's own message, such as `Request must contain either a query or a document id.`,
-  with no `data` key; nothing is logged at error level
-  ([Chapter 14](14-graphql.md)).
+  entry for it. The status is the same `400`, and the error now has the code `BAD_USER_INPUT` and
+  the GraphQL server's own message, such as `Request must contain either a query or a document id.`,
+  with no `data` key; nothing is logged at error level ([Chapter 14](14-graphql.md)).
 - In 0.31.0, an upload whose request body timed out while the server read the multipart form was
   answered with `500` `INTERNAL_SERVER_ERROR`. It is `408` with `BAD_USER_INPUT` and the message
   `The request body could not be read.`, and the server logs a warning
