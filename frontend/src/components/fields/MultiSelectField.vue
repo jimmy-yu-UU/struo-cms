@@ -69,7 +69,7 @@ function toggleValue(value: string): void {
         <ComboboxTrigger
           v-bind="$attrs"
           :aria-label="triggerAccessibleName"
-          class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:opacity-50"
         >
           <span :class="selected.length ? '' : 'text-muted-foreground'">
             {{ selected.length ? t('fields.selectedCount', { n: selected.length }) : field.label }}

@@ -736,6 +736,23 @@ at `z-[60]` or above can cover the confirm dialog, and since `ConfirmHost` is th
 destructive actions, the user is left with a blocked action and no working way to confirm or cancel it.
 `z-[60]` is reserved for this one singleton, not a scale to build on.
 
+## Disabled controls (frontend)
+
+A disabled control is greyed out, cannot be interacted with, and shows the default cursor. This
+applies to every control: buttons, inputs, selects, checkboxes, switches, number fields and the
+boxes that stand in for them. The admin has no `not-allowed` cursor, and first-party code does not
+use the `cursor-not-allowed` class. A disabled element that is not a native control, such as a box
+built from a `div`, takes `cursor-default` explicitly.
+
+The files under `frontend/src/components/ui/` are read-only and use `disabled:cursor-not-allowed`
+(the label uses `peer-disabled:cursor-not-allowed`). `frontend/src/assets/tokens.css` tells Tailwind
+not to generate those classes with `@source not inline(...)` and gives every `:disabled`,
+`aria-disabled="true"` and `data-disabled` element `cursor: default` in the base layer. A vendored
+component that adds another variant of the class needs that variant in the `@source not inline(...)`
+list. `frontend/tests/disabledCursor.test.ts` checks the source and `tokens.css`, and
+`frontend/scripts/checkBuiltCss.ts`, the last step of the `build` script, fails when a built
+stylesheet sets the cursor.
+
 ## Tests per layer
 
 - **Backend** (`tests/Struo.Tests`, xUnit, run with `dotnet test`): most tests take a fresh database
