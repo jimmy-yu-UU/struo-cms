@@ -19,6 +19,8 @@ export class HostUnreachableError extends Error {}
 export class ConnectionError extends Error {}
 export class RequestTimeoutError extends Error {}
 
+const CUT_OFF = 'response cut off before its body was complete'
+
 function cookieEnds(attributes) {
   return attributes.some((attribute) => {
     const [name, value = ''] = attribute.split('=').map((part) => part.trim())
@@ -56,17 +58,20 @@ function attempt(url, options, body, timeoutMs) {
       clearTimeout(timer)
       settle(value)
     }
+    // Once the headers have arrived the server has the request: a failure from then on is never a
+    // stale-socket reset, and a body that stops short must not settle as a response. The socket
+    // error reaches the request and the response in either order, so both paths report it the same way.
+    let started = null
+    const cutOff = () =>
+      finish(reject, Object.assign(new Error(CUT_OFF), { code: 'ECONNRESET', detail: CUT_OFF, reusedSocket: false }))
     const req = transport.request(url, options, (res) => {
-      // Headers have arrived, so the server has the request: a failure from here on is never a
-      // stale-socket reset, and a body that stops short must not settle as a response.
-      const cutOff = (cause) =>
-        finish(reject, Object.assign(new Error(cause), { code: 'ECONNRESET', detail: cause, reusedSocket: false }))
+      started = res
       const chunks = []
       res.on('data', (chunk) => chunks.push(chunk))
-      res.on('error', (error) => cutOff(error.message))
-      res.on('aborted', () => cutOff('response cut off before its body was complete'))
+      res.on('error', cutOff)
+      res.on('aborted', cutOff)
       res.on('close', () => {
-        if (!res.complete) cutOff('response cut off before its body was complete')
+        if (!res.complete) cutOff()
       })
       res.on('end', () => {
         const headers = []
@@ -84,7 +89,10 @@ function attempt(url, options, body, timeoutMs) {
       () => req.destroy(new RequestTimeoutError(`no answer within ${timeoutMs} ms`)),
       timeoutMs,
     )
-    req.on('error', (error) => finish(reject, Object.assign(error, { reusedSocket: req.reusedSocket })))
+    req.on('error', (error) => {
+      if (started && !started.complete && !(error instanceof RequestTimeoutError)) cutOff()
+      else finish(reject, Object.assign(error, { reusedSocket: req.reusedSocket }))
+    })
     req.end(body)
   })
 }
