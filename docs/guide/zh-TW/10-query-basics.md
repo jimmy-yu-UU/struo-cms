@@ -14,7 +14,7 @@
 <!-- capture: ch10-filter-published-sort-limit -->
 ```text
 $ GET /api/items/article?filter[status][_eq]=published&sort=-publishedAt&limit=1&offset=0
-{"success":true,"data":[{"id":"01a206a9-dc23-71a4-807b-c6027907b653","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T04:28:44.96388Z","createdBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","updatedAt":"2026-11-23T04:28:44.963932Z","updatedBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-0a3c-7a89-99df-dc013fac5c37","version":0,"status":"published","publishedAt":"2026-06-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.493027Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.493077Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -165,7 +165,7 @@ body 只收下面這些鍵，沒有別的。沒有列出的鍵，不論值是不
 <!-- capture: ch10-filter-publishedat-null -->
 ```text
 $ GET /api/items/article?filter[publishedAt][_null]=true
-{"success":true,"data":[{"id":"01a206a9-dc34-71ad-8490-2fa51c2f4a3d","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T04:28:44.981142Z","createdBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","updatedAt":"2026-11-23T04:28:44.981247Z","updatedBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-0a52-7700-bb7c-d7e497c6cd2c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.515175Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.515328Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
@@ -199,7 +199,7 @@ REST 回應裡每個 `DateTime` 都是以 `Z` 結尾的 UTC 時刻。寫入時�
 `_and`／`_or`，這樣寫：
 
 ```json
-{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a206a9-db95-7950-8059-d4df3e1f0b00"}}]}}
+{"filter":{"_or":[{"status":{"_eq":"draft"}},{"categoryId":{"_eq":"01a206da-09b5-764b-a394-59a8cc848468"}}]}}
 ```
 
 POST 到 `/api/items/article/query`；三篇文章都符合——草稿那一篇滿足第一個分支，三篇的分類都是
@@ -243,7 +243,7 @@ array.`），查詢字串上沒分成欄位與運算子兩段的鍵是 `Malforme
 <!-- capture: ch10-some-quantifier-junction -->
 ```text
 $ GET /api/items/article?filter[tags._some.name][_eq]=howto&filter[tags._some._junction.note][_eq]=hero
-{"success":true,"data":[{"id":"01a206a9-dbc8-73d4-9e9f-a9cac93e20ea","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T04:28:44.87308Z","createdBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","updatedAt":"2026-11-23T04:28:44.873174Z","updatedBy":"01a206a9-bfb1-780b-a4ee-11ace75b061c","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+{"success":true,"data":[{"id":"01a206da-09e5-791f-a9c2-cbbaf5d25f51","version":0,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T05:21:22.406149Z","createdBy":"01a206d9-f9a7-7435-8986-58fccecb3690","updatedAt":"2026-11-23T05:21:22.406202Z","updatedBy":"01a206d9-f9a7-7435-8986-58fccecb3690","translations":{"en":{"title":"Getting started","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 ```
 
