@@ -38,6 +38,10 @@
 - `GraphQl:MaxFieldCycleDepth` 設定同一個欄位（型別加欄位名稱）在一次操作的同一條路徑上最多出現幾
   次；預設 `3`，與先前 GraphQL 伺服器套用的值相同；小於 `1` 或大於 `65535` 的值讓主機啟動失敗，
   訊息帶上這個鍵（見 [第 4 章](04-configuration.md)、[第 14 章](14-graphql.md)）。
+- `migrate` 與 `Database:MigrateOnStartup` 的啟動會說明套用核心植入的那一次有沒有建立 bootstrap 管理員。
+  `migrate` 在 `Applied` 各行之後多印一行：管理員的 email，或 `Auth:BootstrapAdmin:Email` 沒設、
+  設定檔是從哪個目錄讀的。啟動則把同樣的文字寫進記錄，建了用 `Information`，沒建用 `Warning`。
+  結束代碼不變，`--contentRoot <目錄>` 改讀另一個目錄的設定檔（見 [第 20 章](20-deployment.md)）。
 - 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`。
 
 ### 修正

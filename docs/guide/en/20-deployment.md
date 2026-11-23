@@ -29,6 +29,10 @@ session-level advisory lock, and a pooler in transaction mode (PgBouncer, for ex
 acquire and the release to different server sessions. Point the `migrate` step at the database
 directly, not through the pooler.
 
+The command-line commands read the configuration files from the content root, which is the current
+working directory unless `--contentRoot <directory>` says otherwise. Run `migrate` from the directory
+that holds `appsettings.json`, or add `--contentRoot` with that directory.
+
 Migrations only go forward and there is no rollback command, so back up the database first.
 Production does not run the schema check at startup; run `migrate:check` yourself after `migrate`.
 The commands and the lock are covered in

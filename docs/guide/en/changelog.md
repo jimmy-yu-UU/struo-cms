@@ -44,6 +44,12 @@
   along one path of an operation; the default is `3`, the value the GraphQL server applied before,
   and a value below `1` or above `65535` stops the host at start, with the key in the message
   ([Chapter 4](04-configuration.md), [Chapter 14](14-graphql.md)).
+- `migrate` and a `Database:MigrateOnStartup` start say whether the run that applied the core seed
+  created the bootstrap admin. `migrate` prints one more line after the `Applied` lines: the admin's
+  email, or that `Auth:BootstrapAdmin:Email` is not set and which directory the configuration files
+  were read from. The start writes the same text to the log, at `Information` when the admin was
+  created and at `Warning` when it was not. Exit codes are unchanged, and `--contentRoot <directory>`
+  reads the configuration files from another directory ([Chapter 20](20-deployment.md)).
 - New public member: `GraphQlOptions.MaxFieldCycleDepth`.
 
 ### Fixed
