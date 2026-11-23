@@ -142,13 +142,13 @@ nested to-many list with its own `sort`/`limit` arguments; later examples reuse 
 data — the id is data-specific, and your own environment will differ:
 
 ```graphql
-query { article(id: "01a2075c-2eb8-771e-b609-665813c88c3c") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
+query { article(id: "01a20771-1000-7db9-aaff-b61b64098eca") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
 ```
 
 The actual response:
 
 ```json
-{"data":{"article":{"id":"01a2075c-2eb8-771e-b609-665813c88c3c","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
+{"data":{"article":{"id":"01a20771-1000-7db9-aaff-b61b64098eca","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
 ```
 
 `article` with only `id` returns that same item; `category` is many-to-one, straight to an object
@@ -237,7 +237,7 @@ both a same-row quantifier (`some` paired with `junction`) and `tagsLinks`' own 
 $ POST /graphql
 body:
 {"query": "query { articles(filter: { tags: { some: { name: { eq: \"howto\" }, junction: { note: { eq: \"hero\" } } } } }) { total items { id status tagsLinks { node { name } junction { note } } } } }"}
-{"data":{"articles":{"total":1,"items":[{"id":"01a2075c-2eb8-771e-b609-665813c88c3c","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
+{"data":{"articles":{"total":1,"items":[{"id":"01a20771-1000-7db9-aaff-b61b64098eca","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
 HTTP_STATUS:200
 ```
 
@@ -364,8 +364,8 @@ or unmappable. Below is the actual response after sending `tagsLinks`:
 ```text
 $ POST /graphql
 body:
-{"query": "mutation { updateArticle(id: \"01a2075c-2eb8-771e-b609-665813c88c3c\", input: { tagsLinks: [{ id: \"01a2075c-2eac-7761-9265-1b1c56c9d83b\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
-{"data":{"updateArticle":{"id":"01a2075c-2eb8-771e-b609-665813c88c3c","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
+{"query": "mutation { updateArticle(id: \"01a20771-1000-7db9-aaff-b61b64098eca\", input: { tagsLinks: [{ id: \"01a20771-0ff3-76d9-8728-5dbedad4341f\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
+{"data":{"updateArticle":{"id":"01a20771-1000-7db9-aaff-b61b64098eca","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
 HTTP_STATUS:200
 ```
 
@@ -434,7 +434,7 @@ body:
 {"query":"{ users { total } }"}
 HTTP/1.1 200 OK
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:43:32 GMT
+Date: Mon, 23 Nov 2026 08:06:20 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff
@@ -472,7 +472,7 @@ body:
 {"query": "query { bogusThing { id } }"}
 HTTP/1.1 400 Bad Request
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:43:32 GMT
+Date: Mon, 23 Nov 2026 08:06:20 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff
