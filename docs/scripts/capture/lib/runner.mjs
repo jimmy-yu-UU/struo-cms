@@ -23,6 +23,9 @@
 //                                   // a function receives the variables and returns either
 //     expect: 201,                  // required: the status the manual shows
 //     csrf: false,                  // omit X-Struo-CSRF for this step
+//     headers: { Accept: '*/*' },   // extra request headers, sent as given; never Content-Type, Content-Length,
+//                                   // Transfer-Encoding, Host, Cookie, Authorization or the CSRF header. A
+//                                   // captured step with headers must declare print.note
 //     timeoutMs: 120000,            // overrides the client's request timeout
 //     save: { xId: 'data.id' },     // variables taken from the JSON response by dotted path
 //     secret: { token: 'data.token' }, // like save; the value may never appear in a written block
@@ -37,7 +40,7 @@
 //                                   // path take {{name}}; headers: true or a list of names; pretty adds a
 //                                   // `pretty:` copy; binary: 'png' | true prints a summary of the bytes
 //                                   // instead of the body; mask: { name: '<placeholder>' } replaces every occurrence
-//                                   // of the secret registered under that name in the exchange text
+//                                   // of every value registered as secret under that name in the exchange text
 //   }
 //
 // Secrets: the admin password (name adminPassword), every value a step saves with `secret`, and the

@@ -372,11 +372,11 @@ GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver
 裡一樣是 `200` 配這個代碼。沒有對照表可查的例外會被遮罩成固定的通用訊息，伺服器端照樣完整記錄，搜
 尋提供者失敗的訊息也是同一種遮罩。
 
-還有一種失敗走另一條路。一個文件在任何 resolver 開始跑之前就出錯，不帶任何例外：指名了不存在的
-欄位、超過深度上限的文件，錯誤沒有 `extensions.code`；剖析不了的文件與超過 cost 上限的文件，帶的
-是 HotChocolate 自己的代碼，例如 `HC0011` 與 `HC0047`。這些錯誤都沒有 `data` 鍵，在請求沒帶
-`Accept` 或帶 `*/*` 時回 HTTP `400`；帶 `Accept: application/json` 時，同一份錯誤以 `200` 回應。
-兩個上限的細節在後面的「深度上限」一節。下面的請求沒帶 `Accept`：
+還有一種失敗走另一條路。一個文件在任何 resolver 開始跑之前就出錯，不帶任何例外：文件指名了不存在
+的欄位時，這則錯誤沒有 `extensions.code`；超過深度上限的文件同樣沒有；剖析不了的文件帶 `HC0011`，
+超過 cost 上限的文件帶 `HC0047`，這兩個是 HotChocolate 自己的代碼。這些錯誤都沒有 `data` 鍵，在請
+求沒帶 `Accept` 或帶 `*/*` 時回 HTTP `400`；帶 `Accept: application/json` 時，同一份錯誤以 `200` 回
+應。上限與自我參照深度的細節在後面的「深度上限」一節。下面的請求沒帶 `Accept`：
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -395,8 +395,9 @@ HTTP_STATUS:400
 ```
 
 錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——判斷一則 GraphQL 錯誤屬於哪一種，
-看的是 `extensions.code`，不是狀態碼：resolver 執行時丟出的例外是 `200` 配本章列出的穩定代碼，
-request 層級的錯誤，例如不存在的欄位，沒有這種代碼，狀態碼還隨 `Accept` 而變。
+看的是 `extensions.code`，不是狀態碼：resolver 執行時丟出的例外是 `200` 配
+[第 12 章](12-rest-conventions.md#錯誤代碼)列出的穩定代碼，上面這幾種 request 層級的錯誤沒有這種
+代碼，狀態碼還隨 `Accept` 而變。
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
@@ -404,33 +405,45 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 的 body 因為其他原因讀不出來時，回該失敗的狀態 `400` 或 `408`，內容是一則 `BAD_USER_INPUT` 的錯誤，
 訊息是 `The request body could not be read.`。
 
-第 10 章與[第 11 章](11-query-advanced.md)列的 REST 驗證訊息——未知欄位、未知關聯、超出深度——因為兩
-個協定共用同一個驗證器，在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配代碼的路。讀
-不到的關聯是例外：它跟上面那則錯誤一樣是 `FORBIDDEN`，匿名呼叫端是 `UNAUTHORIZED`，但同樣走 `200`
-配代碼這條路。
+共用驗證器對 `sort` 引數與關聯路徑的訊息——未知欄位、未知關聯、跨多對多關聯的排序、超過
+`Query:MaxRelationDepth` 的路徑，內容見[第 10 章](10-query-basics.md)與
+[第 11 章](11-query-advanced.md)——在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配
+代碼的路。型別化的 `filter` 引數不走這條路：`filter` 裡寫了 schema 沒有的欄位，是上面那種沒有代碼
+的 request 層級錯誤。讀不到的關聯是例外：錯誤代碼是 `FORBIDDEN`，匿名呼叫端是 `UNAUTHORIZED`，但
+同樣走 `200` 配代碼這條路。
 
 ## 深度上限
 
-六個獨立的上限各自把關：
+七個獨立的上限各自把關：
 
 | 限制 | 數值 | 防的是什麼 |
 |---|---|---|
 | 執行深度（`GraphQl:MaxExecutionDepth`） | 預設 12 層 | 巢狀選擇集過深，introspection 欄位不算 |
 | Cost（`GraphQl:MaxFieldCost`／`GraphQl:MaxTypeCost`） | 預設 150 | alias 放大：同一昂貴欄位配多別名重複算 |
+| 自我參照深度（伺服器內建，專案沒有設定鍵） | 同一個自我參照欄位最多巢狀 3 層 | 沿著 `parent` 這類自我參照關聯一路往下寫 |
 | 關聯路徑深度（`Query:MaxRelationDepth`） | 預設 6 | 跨關聯篩選與巢狀展開，跟 REST 共用設定 |
 | 排序欄位（`Query:MaxSortFields`） | 預設 5 | 過長的排序，跟 REST 共用設定 |
 | 關聯節點（`Query:MaxDeepRelations`） | 預設 20 | 過寬的關聯展開，跟 REST 共用設定 |
 | 每個關聯的列數（`Query:MaxExpandRows`） | 預設 1000 | 單次關聯抓取讀太多列，跟 REST 共用設定 |
 
 超過執行深度上限的文件，在 resolver 開始跑之前就被拒絕：訊息是 `The GraphQL document has an
-execution depth of N which exceeds the max allowed execution depth of 12.`，N 是文件實際的深度，
-`extensions` 帶 `detectedExecutionDepth` 與 `allowedExecutionDepth`，沒有 `extensions.code`。選取
-的每一層欄位都算一層，所以 `{ categories { items { name } } }` 是 3 層。沿著自我參照的關聯，例如
-`parent`，往下寫時，回應另外帶一則 `extensions.code` 為 `HC0087` 的錯誤，訊息是
-`Maximum allowed coordinate cycle depth was exceeded.`。超過 cost 上限的文件同樣
-被拒絕：`extensions.code` 是 HotChocolate 的 `HC0047`，訊息是 `The maximum allowed field cost was
-exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCost`。兩種錯誤都沒有 `data` 鍵；沒帶 `Accept`
-或帶 `*/*` 時回 HTTP `400`，帶 `Accept: application/json` 時回 `200`。
+execution depth of N which exceeds the max allowed execution depth of 12.`，N 是文件實際的深度，12
+是設定的 `GraphQl:MaxExecutionDepth`，`extensions` 帶 `detectedExecutionDepth` 與
+`allowedExecutionDepth`，沒有 `extensions.code`。選取的每一層欄位都算一層，所以
+`{ categories { items { name } } }` 是 3 層。
+
+超過 cost 上限的文件同樣被拒絕：`extensions.code` 是 HotChocolate 的 `HC0047`，訊息是 `The maximum
+allowed field cost was exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCost`。50 個別名各選一次
+`articles { items { id } }`，成本是 550，上限是預設的 150。
+
+自我參照深度是另一條獨立的規則，不屬於執行深度上限：在
+`{ categories { items { parent { parent { parent { name } } } } } }` 這樣的路徑上，`parent` 最多
+巢狀 3 層，第 4 層被拒絕。回應只有一則 `extensions.code` 為 `HC0087` 的錯誤，訊息是
+`Maximum allowed coordinate cycle depth was exceeded.`；一份文件同時超過執行深度上限與這條規則時，
+兩則錯誤都在回應裡。
+
+這三種錯誤都沒有 `data` 鍵；沒帶 `Accept` 或帶 `*/*` 時回 HTTP `400`，帶 `Accept: application/json`
+時回 `200`。
 
 你選取的每個關聯欄位都算 deep 樹的一個節點，所以查詢選了很多關聯時，不必傳任何 `deep` 參數就可能撞到
 `MaxDeepRelations`。

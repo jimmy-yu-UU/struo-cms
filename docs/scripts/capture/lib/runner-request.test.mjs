@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { inRoot, run } from '../test-support/run-helpers.mjs'
+import { inOrder } from './sequence.mjs'
 
 const ID = 'demo-headers-req'
 const ACCEPT = 'Accept'
@@ -33,12 +34,13 @@ test('a setup step with headers needs no note', () =>
 
 test('headers the client controls cannot be overridden, whatever the case, and nothing is sent', () =>
   inRoot([ID], async (root) => {
-    for (const name of ['Content-Type', 'cookie', 'AUTHORIZATION', 'x-struo-csrf']) {
+    const owned = ['Content-Type', 'cookie', 'AUTHORIZATION', 'x-struo-csrf', 'content-length', 'Transfer-Encoding', 'host']
+    await inOrder(owned, (name) => {
       const step = { name: 'probe', method: 'GET', path: '/g', expect: 200, headers: { [name]: 'x' } }
-      await assert.rejects(run(root, [step]), (error) => {
+      return assert.rejects(run(root, [step]), (error) => {
         assert.match(error.message, new RegExp(name, 'i'))
         assert.equal(error.stub.requests.length, 0)
         return true
       })
-    }
+    })
   }))

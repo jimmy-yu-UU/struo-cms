@@ -417,9 +417,10 @@ non-positive `limit` is clamped to `Query:DefaultLimit` (default 25); anything o
 clamped to `Query:MaxLimit` (default 100). `offset` floors at 0 and is capped at `Query:MaxOffset`
 (default 100000).
 
-A larger `offset` is rejected with a 400, in REST, `POST .../query` and GraphQL alike: `Offset 100001
-exceeds the maximum of 100000; narrow the result set with filters instead of paging deeper.`. A
-nested list's `offset` inside `deep` has the same cap.
+A larger `offset` is rejected with a 400 in REST and in `POST .../query`, and with a `200` carrying
+a `BAD_USER_INPUT` error in GraphQL (see [Chapter 14](14-graphql.md)); the message is the same:
+`Offset 100001 exceeds the maximum of 100000; narrow the result set with filters instead of paging
+deeper.`. A nested list's `offset` inside `deep` has the same cap.
 
 A non-numeric value such as `limit=abc`, or one beyond the 32-bit integer range such as
 `limit=99999999999`, isn't an error — it's treated exactly as if `limit` were missing, and clamped

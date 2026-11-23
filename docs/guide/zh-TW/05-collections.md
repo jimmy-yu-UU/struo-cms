@@ -115,9 +115,9 @@ GraphQL 有三種輸入型別，各自至少要有一個計入的項目，否則
 仍照一般 RBAC 走。
 
 `Creatable = false` 給列是由自己專屬流程產生的集合，就像 `file` 的列來自上傳。`POST
-api/items/{collection}` 與 GraphQL 的 `create` mutation 會在檢視 body 之前就回 `400`
-`BAD_USER_INPUT`，`/api/schema` 回報 `creatable: false`，後台據此隱藏「新增」按鈕。讀取、更新與刪除
-不受影響。核心的 `file` 與 `user` 集合就設了它。
+api/items/{collection}` 會在檢視 body 之前就回 `400` `BAD_USER_INPUT`，GraphQL 的 `create`
+mutation 回 `200` 配 `BAD_USER_INPUT` 錯誤，`/api/schema` 回報 `creatable: false`，後台據此隱藏
+「新增」按鈕。讀取、更新與刪除不受影響。核心的 `file` 與 `user` 集合就設了它。
 
 軟刪除和版本紀錄是兩個各自獨立的開關：軟刪除讓集合實作 `ISoftDeletable`，版本紀錄在
 `[CmsCollection]` 上設 `Revisions = true`。

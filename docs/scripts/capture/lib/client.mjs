@@ -13,7 +13,15 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
 const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 const CSRF_HEADER = 'X-Struo-CSRF'
 // Request headers the client decides itself: a step cannot replace them through its own headers.
-const CLIENT_OWNED = new Set(['content-type', 'cookie', 'authorization', CSRF_HEADER.toLowerCase()])
+const CLIENT_OWNED = new Set([
+  'content-type',
+  'content-length',
+  'transfer-encoding',
+  'host',
+  'cookie',
+  'authorization',
+  CSRF_HEADER.toLowerCase(),
+])
 
 export function ownedHeaders(extra) {
   return Object.keys(extra ?? {}).filter((name) => CLIENT_OWNED.has(name.toLowerCase()))

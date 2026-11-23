@@ -24,7 +24,7 @@ test('a bodyless exchange prints the request line, the raw response and the stat
 
 test('a request body prints after a body: line, exactly as sent', () => {
   // The JSON escape for e-acute: a backslash, u, 00e9 (six characters), which must come out unchanged.
-  const escape = `${String.fromCharCode(92)}u00e9`
+  const escape = `${String.fromCodePoint(92)}u00e9`
   const sent = `{"a": 1,"b":"${escape}"}`
   const text = formatExchange({
     method: 'POST',

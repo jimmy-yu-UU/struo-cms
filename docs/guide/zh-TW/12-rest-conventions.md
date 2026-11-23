@@ -148,8 +148,8 @@ public sealed class QuotaExceededException(string message)
 ```
 
 在 controller、minimal API 端點或 GraphQL resolver 裡丟出它。REST 會用那個狀態與一般的錯誤信封回應，
-信封裡帶著你的代碼與訊息；GraphQL 在錯誤上蓋上同樣的代碼與訊息（HTTP 狀態照舊是 `200`，所有 GraphQL
-錯誤都是這樣）。三條規則：
+信封裡帶著你的代碼與訊息；GraphQL 在錯誤上蓋上同樣的代碼與訊息（resolver 丟出的錯誤以 HTTP `200`
+回應；文件在 resolver 開始跑之前就出錯的情形見[第 14 章](14-graphql.md)）。三條規則：
 
 - 訊息會原樣送到客戶端，所以不要把內部細節（主機名稱、id、SQL）放進去。
 - 狀態必須是 400 到 499；其他值在建構例外時就會丟錯，空白的代碼也一樣。伺服器錯誤不是領域錯誤：沒處理的例外

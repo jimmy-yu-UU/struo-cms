@@ -429,10 +429,11 @@ The docs build runs it.
 **Rules**
 
 - A marked block is never edited by hand. The tool replaces the lines between the fences.
-- Every difference between a printed body and the server's body is a transform named on the step
-  that uses it (`stripTraceId` and `stripGraphQlTraceId` for the trace id, `elideData` for the
-  `data` array of a list, `prettyJson` for a body the manual shows indented). A transform that
-  changes nothing fails the step. An undeclared difference does not exist.
+- Every difference between a printed body and the server's body is a transform or a mask named on
+  the step that uses it (`stripTraceId` and `stripGraphQlTraceId` for the trace id, `elideData` for
+  the `data` array of a list, `prettyJson` for a body the manual shows indented; a mask replaces a
+  secret). A transform that changes nothing fails the step. An undeclared difference does not
+  exist.
 - A printed request body differs from the sent one only through `print.requestBody` on the step
   (a string, an object or a function of the run variables; for example a placeholder where the
   sent body holds the admin password). The tool refuses to write a block that holds the admin
@@ -443,14 +444,14 @@ The docs build runs it.
   before the check runs.
 - How an exchange is shown is set by `print`: `headers: true` prints the status line and every
   response header, `headers: ['Name', ...]` only the named ones (a name the response lacks fails
-  the step); a step that transforms or masks the body cannot show `Content-Length` (a binary
-  summary may), because the length is the server's and the printed body is not, so it names the
-  headers it shows; `note` takes `{{variables}}` and is appended to the `$` line after one space;
+  the step). A step that transforms or masks the body cannot show `Content-Length` (a binary
+  summary may), because the length is the server's and the printed body is not; it names the
+  headers it shows. `note` takes `{{variables}}` and is appended to the `$` line after one space;
   `path` takes `{{variables}}` and replaces the printed path; `responseOnly` leaves the request
   out; `pretty: true` keeps the raw line and appends `pretty:` with an indented copy; `binary:
-  'png'` prints the
-  decoded PNG size and the byte count in place of a binary body (`binary: true` the byte count
-  only) and cannot be combined with a transform. Steps that share a capture id make one block.
+  'png'` prints the decoded PNG size and the byte count in place of a binary body (`binary: true`
+  the byte count only) and cannot be combined with a transform. Steps that share a capture id make
+  one block.
 - A step can also upload a fixture as one multipart file part (`upload: { field, fixture,
   contentType }`), send a bearer token (`bearer`), omit the CSRF header (`csrf: false`), or run as
   an identity with its own cookie jar (`as`). An upload's body is never printed; the `$` line gets
@@ -459,13 +460,15 @@ The docs build runs it.
   own whose jar holds no cookie yet (chapters 13, 16 and 17): the session cookie it receives is kept
   in that jar and registered as the secret `session_<identity>`. A cookie set on a step with no
   `as` is registered as `session_anonymous`; one mask name covers every cookie held under it, so a
-  response that sets two cookies needs one `print.mask` entry. A step may add request headers with
-  `headers: { Name: value }`, sent as given; `Content-Type`, `Cookie`, `Authorization` and the CSRF
-  header stay the client's and are refused, and a captured step with `headers` must declare a
-  `print.note` so the block says the request was not a plain one (chapter 14 uses `Accept`).
-  `verify(json, vars)` and `verifyResponse(response)`
-  check what the prose says about a request the manual does not show; a throw stops the run, after
-  the step's secrets are registered, so a message that quotes the response is redacted.
+  response that sets two cookies needs one `print.mask` entry.
+- A step may add request headers with `headers: { Name: value }`, sent as given. `Content-Type`,
+  `Content-Length`, `Transfer-Encoding`, `Host`, `Cookie`, `Authorization` and the CSRF header stay
+  the client's and are refused. A captured step with `headers` must declare a `print.note`, so the
+  block says the request was not a plain one; a step that prints nothing needs no note (the
+  `Accept` variants in chapter 14 are such steps).
+- `verify(json, vars)` and `verifyResponse(response)` check what the prose says about a request
+  the manual does not show; a throw stops the run, after the step's secrets are registered, so a
+  message that quotes the response is redacted.
 - Ids and timestamps change on every capture, so a re-capture rewrites every block of the files
   it selects. Ids quoted outside a marked block (a JSON sample, a sentence) are updated by hand from
   the same run; scan the chapter files for UUID-shaped text outside the marked blocks.

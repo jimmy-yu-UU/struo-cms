@@ -344,8 +344,9 @@ MySQL／MariaDB 遞增排序時 `NULL` 排最前，PostgreSQL 排最後。
 `Query:DefaultLimit`（預設 25），超過上限的會夾到 `Query:MaxLimit`（預設 100）；`offset` 最低是 0，上限是
 `Query:MaxOffset`（預設 100000）。
 
-更大的 `offset` 回 400，REST、`POST .../query` 與 GraphQL 都一樣：`Offset 100001 exceeds the maximum
-of 100000; narrow the result set with filters instead of paging deeper.`。`deep` 裡巢狀清單的
+更大的 `offset` 在 REST 與 `POST .../query` 回 400，在 GraphQL 回 `200` 配 `BAD_USER_INPUT` 錯誤
+（見[第 14 章](14-graphql.md)），訊息都是：`Offset 100001 exceeds the maximum of 100000; narrow the
+result set with filters instead of paging deeper.`。`deep` 裡巢狀清單的
 `offset` 受同一個上限限制。
 
 `limit=abc` 這種非數字值，或 `limit=99999999999` 這種超出 32 位元整數範圍的值，不會報錯，直接當成沒

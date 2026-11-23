@@ -129,10 +129,10 @@ a name that doesn't resolve throws `MetadataException` at startup.
 whatever RBAC grants the collection has; reads still follow ordinary RBAC.
 
 `Creatable = false` is for a collection whose rows come from a pipeline of its own, the way `file`
-rows come from an upload. `POST api/items/{collection}` and GraphQL's `create` mutation answer `400`
-`BAD_USER_INPUT` before looking at the body, and `/api/schema` reports `creatable: false`, which the
-admin UI reads to hide the New button. Reading, updating and deleting are unaffected. The core's
-`file` and `user` collections set it.
+rows come from an upload. `POST api/items/{collection}` answers `400` `BAD_USER_INPUT` before
+looking at the body, GraphQL's `create` mutation answers `200` with a `BAD_USER_INPUT` error, and
+`/api/schema` reports `creatable: false`, which the admin UI reads to hide the New button. Reading,
+updating and deleting are unaffected. The core's `file` and `user` collections set it.
 
 Soft delete and revisions are two independent opt-ins: soft delete comes from the collection
 implementing `ISoftDeletable`, and revisions come from setting `Revisions = true` on

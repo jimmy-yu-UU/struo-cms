@@ -376,25 +376,28 @@ draws its own budget.
 
 `MaxInValues` counts every value of every `_in` and `_nin` in one REST request: the root `filter`,
 relation predicates and every nested `deep` filter draw from it together. In GraphQL each collection
-query field of an operation has its own count, like `MaxFilterConditions`. A query-string list counts
-once per comma-separated element and a JSON array once per element. Going over fails with a 400
-that names the limit and the key, and the query never executes. A text `_in` or `_nin` binds one
-parameter per value, and the ceiling of 900 keeps that under SQLite's expression-depth limit of
-1000 and SQL Server's limit of 2100 parameters per command.
+query field of an operation has its own count, like `MaxFilterConditions`. A query-string list
+counts once per comma-separated element and a JSON array once per element. Going over fails, with a
+400 in REST and a `200` carrying a `BAD_USER_INPUT` error in GraphQL, and the message names the
+limit and the key; the query never executes. A text `_in` or `_nin` binds one parameter per value,
+and the ceiling of 900 keeps that under SQLite's expression-depth limit of 1000 and SQL Server's
+limit of 2100 parameters per command.
 
 `MaxRelationLinks` bounds the ids one many-to-many relation accepts in a single write, in REST and
-GraphQL alike. A longer array fails with a 400 that names the relation and the key; nothing is
-written. Reverting a revision is not bound by it: a snapshot is data the system stored.
+GraphQL. A longer array fails, with a 400 in REST and a `200` carrying a `BAD_USER_INPUT` error in
+GraphQL, and the message names the relation and the key; nothing is written. Reverting a revision is
+not bound by it: a snapshot is data the system stored.
 
 `MaxExpandRows` bounds the rows one relation fetch reads while `deep` expands a page. A fetch that
 finds more than `MaxExpandRows` rows fails with a 400 naming the relation; the rows are never
 truncated. The one exception is a single parent expanded through a one-to-many relation with a
 nested `limit`: the database applies the window, so the cap does not apply.
 
-`MaxOffset` caps the `offset` of a list request, top-level or nested in `deep`, in REST,
-`POST .../query` and GraphQL alike. An `offset` equal to `MaxOffset` is served; a larger one fails
-with a 400 that names the cap and suggests narrowing the result set with filters. Raise the key to
-page deeper.
+`MaxOffset` caps the `offset` of a list request, top-level or nested in `deep`, in REST, `POST
+.../query` and GraphQL. An `offset` equal to `MaxOffset` is served; a larger one fails, with a 400
+in REST and in `POST .../query` and a `200` carrying a `BAD_USER_INPUT` error in GraphQL, and the
+message names the cap and suggests narrowing the result set with filters. Raise the key to page
+deeper.
 
 `MaxRelationDepth` counts the number of relation hops in a path; the final field itself and the
 `_junction` pseudo-segment don't count toward it. Exceeding `MaxSearchCandidates` doesn't truncate

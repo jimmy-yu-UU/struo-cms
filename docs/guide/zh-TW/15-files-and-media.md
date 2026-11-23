@@ -17,7 +17,7 @@
 
 透過通用的項目 API 建立 `file` 一律被拒，因為 `File` 宣告了 `Creatable = false`。
 REST 與 GraphQL 共用的項目用例會做這項拒絕，因此 GraphQL 的 `createFile` mutation
-也被同一句訊息擋下，狀態碼 `400`／`BAD_USER_INPUT`：
+也被同一句訊息擋下，REST 回 `400`，GraphQL 回 `200`，代碼都是 `BAD_USER_INPUT`：
 `Items cannot be created in collection 'file' through the generic items API.`
 檔案要靠上傳到 `POST /api/files` 來建立。
 

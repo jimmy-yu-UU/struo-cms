@@ -460,12 +460,13 @@ An exception with no entry in the lookup table is masked to a fixed, generic mes
 logged server-side; a search-provider failure is masked the same way.
 
 There's a second kind of failure on a different path entirely. A document fails before any resolver
-ever runs and carries no exception: a field that does not exist, or a document over the depth
-limit, gives an error with no `extensions.code`, while a document that does not parse and a document
-over the cost limit carry a HotChocolate code of their own, `HC0011` and `HC0047`. None of them has
-a `data` key. Without an `Accept` header or with `*/*` they are answered with HTTP `400`; with
-`Accept: application/json` the same error comes back with `200`. The depth and cost limits are
-described under "Depth caps" below. This request sends no `Accept`:
+ever runs and carries no exception: a document that names a field that does not exist gets an error
+with no `extensions.code`, and so does a document over the depth limit; a document that does not
+parse carries `HC0011` and a document over the cost limit carries `HC0047`, both codes of the
+GraphQL server itself. None of these errors has a `data` key. Without an `Accept` header or with
+`*/*` they are answered with HTTP `400`; with `Accept: application/json` the same error comes back
+with `200`. The limits and the self-reference depth are described under "Depth caps" below. This
+request sends no `Accept`:
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -483,10 +484,11 @@ X-Content-Type-Options: nosniff
 HTTP_STATUS:400
 ```
 
-The error message names the nonexistent field `bogusThing`, but carries no `extensions.code` —
-the code, not the status, tells the two kinds of GraphQL error apart: an exception a resolver throws
-at execution time is `200` with one of this chapter's stable codes, while a request-level error such
-as a missing field has no such code, and its status changes with `Accept`.
+The error message names the unknown field `bogusThing`, but carries no `extensions.code` — the code,
+not the status, tells the two kinds of GraphQL error apart: an exception a resolver throws at
+execution time is `200` with one of the stable codes listed in
+[Chapter 12](12-rest-conventions.md#error-codes), while the request-level errors above carry none of
+those codes, and their status changes with `Accept`.
 
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
@@ -495,36 +497,47 @@ holds whether the request declared its length or streamed the body, and the mess
 be read for another reason answers with the status of that failure, `400` or `408`, and one error
 with `BAD_USER_INPUT` and the message `The request body could not be read.`.
 
-Every REST validation message listed in Chapter 10 and [Chapter 11](11-query-advanced.md) — an
-unknown field, an unknown relation, exceeding the depth cap — is stamped `BAD_USER_INPUT` on
-GraphQL too, since both protocols share the same validator, taking the first path: `200` paired
-with a code. An unreadable relation is the exception: like the error above it carries `FORBIDDEN`,
-or `UNAUTHORIZED` for an anonymous caller, still on that same `200`-with-a-code path.
+The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
+field, an unknown relation, a sort across a to-many relation, a path past `Query:MaxRelationDepth`;
+see [Chapter 10](10-query-basics.md) and [Chapter 11](11-query-advanced.md) — are stamped
+`BAD_USER_INPUT` on GraphQL too, taking the first path: `200` paired with a code. A typed `filter`
+argument does not take that path: a field the schema does not have, written inside `filter`, is the
+request-level error above, with no code. An unreadable relation is the exception: its code is
+`FORBIDDEN`, or `UNAUTHORIZED` for an anonymous caller, on that same `200`-with-a-code path.
 
 ## Depth caps
 
-Six independent caps each guard their own concern:
+Seven independent caps each guard their own concern:
 
 | Limit | Value | Guards against |
 |---|---|---|
 | Execution depth (`GraphQl:MaxExecutionDepth`) | 12 by default | Selection sets nested too deep; introspection fields exempt |
 | Cost (`GraphQl:MaxFieldCost`/`GraphQl:MaxTypeCost`) | 150 by default | Alias amplification: one costly field under many aliases |
+| Self-reference depth (built into the server; the project has no setting for it) | One self-referencing field nests 3 levels at most | Writing a query far down a self-referencing relation such as `parent` |
 | Relation path depth (`Query:MaxRelationDepth`) | 6 by default | Cross-relation filters and expansion; shared with REST |
 | Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
 | Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
 | Rows per relation (`Query:MaxExpandRows`) | 1000 by default | One relation fetch reading too many rows; shared with REST |
 
-A document over the execution depth limit is rejected before any resolver runs: the message is
-`The GraphQL document has an execution depth of N which exceeds the max allowed execution depth of
-12.` with N the depth of the document, `extensions` carries `detectedExecutionDepth` and
-`allowedExecutionDepth`, and there is no `extensions.code`. Every field level you select counts as
-one, so `{ categories { items { name } } }` is 3 levels deep. Nesting along a self-referencing
-relation such as `parent` adds a second error with `extensions.code` `HC0087` and the message
-`Maximum allowed coordinate cycle depth was exceeded.` A document over the cost limit is
-rejected the same way: `extensions.code` is HotChocolate's `HC0047`, the message is `The maximum
-allowed field cost was exceeded.`, and `extensions` carries `fieldCost` and `maxFieldCost`. Neither
-error has a `data` key; without `Accept` or with `*/*` the status is `400`, with
-`Accept: application/json` it is `200`.
+A document over the execution depth limit is rejected before any resolver runs: the message is `The
+GraphQL document has an execution depth of N which exceeds the max allowed execution depth of 12.`
+with N the depth of the document and 12 the configured `GraphQl:MaxExecutionDepth`; `extensions`
+carries `detectedExecutionDepth` and `allowedExecutionDepth`, and there is no `extensions.code`.
+Every field level you select counts as one, so `{ categories { items { name } } }` is 3 levels deep.
+
+A document over the cost limit is rejected the same way: `extensions.code` is HotChocolate's
+`HC0047`, the message is `The maximum allowed field cost was exceeded.`, and `extensions` carries
+`fieldCost` and `maxFieldCost`. Fifty aliases of `articles { items { id } }` cost 550 against the
+default limit of 150.
+
+Self-reference depth is a separate rule, not part of the execution depth limit: on a path such as `{
+categories { items { parent { parent { parent { name } } } } } }`, `parent` nests 3 levels at most,
+and the fourth is rejected. The response holds one error with `extensions.code` `HC0087` and the
+message `Maximum allowed coordinate cycle depth was exceeded.` A document that exceeds both the
+execution depth limit and this rule has both errors in the response.
+
+None of these three errors has a `data` key; without `Accept` or with `*/*` the status is `400`,
+with `Accept: application/json` it is `200`.
 
 Each relation field you select counts as one node of the deep tree, so a query that selects many
 relations can hit `MaxDeepRelations` without sending any `deep` argument.

@@ -173,9 +173,10 @@ public sealed class QuotaExceededException(string message)
     : StruoDomainException("ACME_QUOTA_EXCEEDED", 429, message);
 ```
 
-Throw it from a controller, a minimal-API endpoint or a GraphQL resolver. REST answers with that status and the
-usual error envelope carrying your code and message; GraphQL stamps the same code and message on the error
-(its HTTP status stays `200`, as for every GraphQL error). Three rules:
+Throw it from a controller, a minimal-API endpoint or a GraphQL resolver. REST answers with that
+status and the usual error envelope carrying your code and message; GraphQL stamps the same code and
+message on the error (an error a resolver raises is answered with HTTP `200`; failures before any
+resolver runs are described in [Chapter 14](14-graphql.md)). Three rules:
 
 - The message goes to the client as written. Keep internal detail (hostnames, ids, SQL) out of it.
 - The status must be 400 to 499; any other value throws when the exception is constructed, and so does a blank

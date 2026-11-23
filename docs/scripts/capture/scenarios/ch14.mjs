@@ -2,6 +2,7 @@
 // still holds exactly the howto/hero link (before chapter 12 adds a second link), and the mutation
 // replaces that link, so it runs after chapters 12 and 13. The request bodies are the text the
 // manual prints, spaces included.
+import { errorChecks } from './ch14-errors.mjs'
 import { anonymous, check, exchange, must } from './steps.mjs'
 
 const GRAPHQL = '/graphql'
@@ -25,78 +26,6 @@ const FACETS = '[{"field":"status","values":[{"value":"published","count":2},{"v
 function sampleMatches(json, vars) {
   const article = { id: vars.articleAId, status: 'published', version: 3, category: { name: 'Guides' }, tags: [{ name: 'release' }] }
   must(JSON.stringify(json) === JSON.stringify({ data: { article } }), 'the single-article sample')
-}
-
-const ACCEPT_ANY = '*/*'
-const ACCEPT_JSON = 'application/json'
-
-const DEPTH_LIMIT = 12
-const ALIAS_BOMB = 50
-
-// categories -> items -> parent x n -> name: every field level counts, so the depth is n + 3.
-function nestedParents(parents) {
-  return '{ categories { items { ' + 'parent { '.repeat(parents) + 'name' + ' }'.repeat(parents) + ' } } }'
-}
-
-// The same costly list field under many aliases (the amplification the cost rule exists for).
-function aliasBomb(count) {
-  return '{ ' + Array.from({ length: count }, (_, index) => 'a' + index + ': articles { items { id } }').join(' ') + ' }'
-}
-
-// The request-level errors the prose describes. They fail before any resolver runs, so an anonymous
-// caller sees them: the validation does not look at who asks.
-const REQUEST_LEVEL_QUERIES = [
-  { label: 'a document that does not parse', query: 'query {', assertion: parserCode },
-  { label: 'an unknown field', query: 'query { bogusThing { id } }', assertion: noCodeErrors },
-  { label: 'a document over the depth limit', query: nestedParents(DEPTH_LIMIT - 2), assertion: depthExceeded },
-  { label: 'a document over the cost limit', query: aliasBomb(ALIAS_BOMB), assertion: costExceeded },
-]
-
-// The same anonymous request under a chosen Accept header: only the status depends on it.
-const acceptCheck = (name, accept, query, expect, assertion) =>
-  anonymous(undefined, 'POST', GRAPHQL, expect, { name, headers: { Accept: accept }, body: spaced(query), verify: assertion })
-
-function noData(json) {
-  must(!('data' in json), 'a request-level failure has no data key')
-}
-
-// The depth error has no code. Writing the nesting along a self-referencing relation (parent) also
-// trips the parser's coordinate-cycle rule, which adds a second error with its own code.
-function depthExceeded(json) {
-  noData(json)
-  const [first, cycle, ...rest] = json.errors
-  must(first.extensions.code === undefined, 'the depth error has no extensions.code')
-  must(rest.length === 0 && cycle.extensions.code === 'HC0087', 'a self-referencing nesting adds one HC0087 error')
-  must(cycle.message === 'Maximum allowed coordinate cycle depth was exceeded.', 'the cycle message')
-  must(first.extensions.allowedExecutionDepth === DEPTH_LIMIT, 'the error reports the allowed depth')
-  must(first.extensions.detectedExecutionDepth === DEPTH_LIMIT + 1, 'every field level counts: 10 parents is depth 13')
-  must(/execution depth of 13 which exceeds the max allowed execution depth of 12/.test(first.message), 'the depth message')
-}
-
-function costExceeded(json) {
-  noData(json)
-  const [first] = json.errors
-  must(json.errors.length === 1 && first.extensions.code === 'HC0047', 'the cost error carries HC0047')
-  must(first.message === 'The maximum allowed field cost was exceeded.', 'the cost message')
-  must(first.extensions.fieldCost > first.extensions.maxFieldCost, 'the measured cost is above the limit')
-}
-
-function noCodeErrors(json) {
-  noData(json)
-  must(Array.isArray(json.errors) && json.errors.length > 0, 'a request-level failure answers with an errors array')
-  must(json.errors.every((error) => error.extensions?.code === undefined), 'a request-level failure has no extensions.code')
-}
-
-// A document that does not parse carries the parser's own code (HC0011 and its kin), not one of the
-// stable codes of the chapter.
-function parserCode(json) {
-  noData(json)
-  must(Array.isArray(json.errors) && json.errors.length > 0, 'a parse failure answers with an errors array')
-  must(json.errors.every((error) => /^HC\d+$/.test(error.extensions?.code ?? '')), 'a parse failure carries an HC code')
-}
-
-function codedError(json) {
-  must(json.errors.every((error) => typeof error.extensions?.code === 'string'), 'a resolver error carries extensions.code')
 }
 
 // The mutation replaces the whole set of links: after it only release is linked, with its note.
@@ -166,10 +95,6 @@ export const ch14Rest = {
       { body: { query: NULL_WINS } },
     ),
     check('the links after tagsLinks null', 'GET', '/api/items/article/{{articleAId}}?deep=tags', 200, onlyReleaseLinked),
-    ...REQUEST_LEVEL_QUERIES.flatMap(({ label, query, assertion }) => [
-      acceptCheck(`${label} with Accept */*`, ACCEPT_ANY, query, 400, assertion),
-      acceptCheck(`${label} with Accept application/json`, ACCEPT_JSON, query, 200, assertion),
-    ]),
-    acceptCheck('a resolver error with Accept application/json', ACCEPT_JSON, '{ users { total } }', 200, codedError),
+    ...errorChecks,
   ],
 }
