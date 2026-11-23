@@ -21,7 +21,8 @@ internal static class ColumnTypeFit
     private const string BooleanWhy =
         "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
         "and the check is the same on every backend";
-    private const string DecimalFix = "Declare an exact decimal type such as decimal(18,4), or remove ColumnDataType";
+    private const string DecimalFix =
+        "Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType";
     private const string DecimalWhy =
         "a single-precision type returns 12345.6789 as 12345.68 or 12345.7, " +
         "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
@@ -35,14 +36,17 @@ internal static class ColumnTypeFit
         "and the check is the same on every backend";
 
     // One type name as written in a column type: the words it is made of, for a one-word name the length
-    // or precision that must follow it (null when any, or none, matches), and a word that may follow the name
-    // without changing it ("double precision" is "double", "character varying" is "character").
-    private sealed record Entry(string[] Words, string? FirstArgument = null, string? OptionalNext = null);
+    // or precision that must follow it (null when any, or none, matches), a word that may follow the name
+    // without changing it ("double precision" is "double", "character varying" is "character"), and whether
+    // "unsigned" and "zerofill" after the name leave it the same type.
+    private sealed record Entry(
+        string[] Words, string? FirstArgument = null, string? OptionalNext = null, bool IgnoresSign = false);
 
     private sealed record Rule(Type Clr, Entry[] Entries, Misfit Misfit);
 
-    private static Entry Name(string words, string? firstArgument = null, string? optionalNext = null) =>
-        new(words.Split(' '), firstArgument, optionalNext);
+    private static Entry Name(
+        string words, string? firstArgument = null, string? optionalNext = null, bool ignoresSign = false) =>
+        new(words.Split(' '), firstArgument, optionalNext, ignoresSign);
 
     private static readonly Rule[] Rules =
     [
@@ -55,7 +59,10 @@ internal static class ColumnTypeFit
         new(typeof(long), [Name("tinyint", "1")], new(BooleanFix, BooleanWhy)),
         new(
             typeof(decimal),
-            [Name("real"), Name("float"), Name("float4"), Name("float8"), Name("double", optionalNext: "precision")],
+            [
+                Name("real", ignoresSign: true), Name("float", ignoresSign: true), Name("float4"), Name("float8"),
+                Name("double", optionalNext: "precision", ignoresSign: true),
+            ],
             new(DecimalFix, DecimalWhy)),
         new(
             typeof(bool),
@@ -99,13 +106,13 @@ internal static class ColumnTypeFit
         if (entry.FirstArgument is not null && tokens[0].Argument != entry.FirstArgument) return false;
         if (entry.OptionalNext is not null && tokens.Count > count && tokens[count].Word == entry.OptionalNext) count++;
 
-        // "unsigned", "zerofill" and an array suffix turn the name into another type; any other trailing word is
-        // a column modifier.
-        return tokens.Count == count || !MakesAnotherType(tokens[count].Word);
+        // An array suffix turns any name into another type, and "unsigned" and "zerofill" do for a name whose
+        // entry does not ignore them; any other trailing word is a column modifier.
+        return tokens.Count == count || !MakesAnotherType(tokens[count].Word, entry.IgnoresSign);
     }
 
-    private static bool MakesAnotherType(string word) =>
-        word is "unsigned" or "zerofill" or "array" || word.Contains('[');
+    private static bool MakesAnotherType(string word, bool ignoresSign) =>
+        word == "array" || word.Contains('[') || (!ignoresSign && word is "unsigned" or "zerofill");
 
     // Lower-case words split at whitespace and at a parenthesised group; the group's text, without spaces,
     // is the argument of the word before it. A word wrapped whole in brackets, double quotes or backticks keeps

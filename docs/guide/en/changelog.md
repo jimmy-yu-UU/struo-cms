@@ -14,8 +14,10 @@
     single-precision type (`real` on PostgreSQL and SQL Server, `float` on MySQL and MariaDB)
     returned 12345.6789 as 12345.68 or 12345.7, a double-precision type returned
     12345678901234.5678 as 12345678901234.6, and filter counts, facet buckets and sums on the
-    column were wrong. Use an exact type such as `decimal(18,4)`, or remove `ColumnDataType`; a
-    table that exists needs a migration when the column type changes.
+    column were wrong. `float unsigned`, `double unsigned`, `real unsigned` and `float zerofill`
+    on MySQL and MariaDB behave the same and are rejected too. Use `decimal(18,4)` or another
+    decimal type with an explicit scale, or remove `ColumnDataType`; a table that exists needs a
+    migration when the column type changes.
   - A `bool` or `bool?` with `varchar`, `nvarchar`, `char`, `nchar`, `character`,
     `character varying`, `bpchar`, `text`, `ntext`, `tinytext`, `mediumtext` or `longtext`. The
     value was stored as `0` or `1` (`false` or `true` on PostgreSQL); where the database accepted

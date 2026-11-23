@@ -319,8 +319,10 @@ type name is compared by its words, without letter case, and a length or precisi
 is ignored, except for `tinyint(1)`. A word wrapped whole in brackets, double quotes or backticks
 counts as one word, so `[bigint]` is `bigint` and `"int custom"` is not `int`; brackets inside a
 word, as in `int[]`, make another type. Words after the type, such as `not null` or
-`identity(1,1)`, are column modifiers: `bigint not null` counts as `bigint`. `unsigned`,
-`zerofill` and `array` after the type make another type, so `int unsigned` is not `int`.
+`identity(1,1)`, are column modifiers: `bigint not null` counts as `bigint`. `array` after the
+type makes another type, and so do `unsigned` and `zerofill` after an integer or string name, so
+`int unsigned` is not `int`. After `real`, `float` and `double` they are column modifiers:
+`float unsigned` counts as `float`.
 `double precision` counts as `double` and `character varying` as `character`; the `precision`
 and `varying` belong to the name. A name that is not in the table, `timestamp with local time zone`
 included, is yours, and passes.

@@ -12,8 +12,9 @@
     MySQL 8.4 與 MariaDB 11.8 上量到：單精度型別（PostgreSQL 與 SQL Server 的 `real`，MySQL 與
     MariaDB 的 `float`）把 12345.6789 讀成 12345.68 或 12345.7，雙精度型別把
     12345678901234.5678 讀成 12345678901234.6，欄位上的篩選筆數、facet 分組與加總也都是錯的。
-    改用 `decimal(18,4)` 這類精確型別，或拿掉 `ColumnDataType`；欄位型別有變時，已存在的表需要
-    migration。
+    MySQL 與 MariaDB 的 `float unsigned`、`double unsigned`、`real unsigned` 與 `float zerofill`
+    結果相同，同樣被擋。改用 `decimal(18,4)` 或其他寫明小數位數的 decimal 型別，或拿掉
+    `ColumnDataType`；欄位型別有變時，已存在的表需要 migration。
   - `bool` 或 `bool?` 配 `varchar`、`nvarchar`、`char`、`nchar`、`character`、`character varying`、
     `bpchar`、`text`、`ntext`、`tinytext`、`mediumtext` 或 `longtext`。值存成 `0` 或 `1`（PostgreSQL
     存成 `false` 或 `true`）；資料庫肯收這個寫入時，讀取該列與對欄位做 facet 隨後失敗，在

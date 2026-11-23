@@ -411,7 +411,9 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   `tinyint(1)`), a word wrapped whole in brackets, double quotes or backticks is one word,
   brackets inside a word make another type (`int[]`), trailing column modifiers such as `not null`
   are skipped, `double precision` counts as `double` and `character varying` as `character`, and
-  `unsigned`, `zerofill` or `array` after the name makes another type. Any other name passes,
+  `array` after any name makes another type, and so do `unsigned` and `zerofill` after an integer or
+  string name; after `real`, `float` and `double` they are column modifiers (`float unsigned` is
+  `float`, measured on MySQL and MariaDB). Any other name passes,
   `timestamp with local time zone`, `decimal(18,4)`, `bit`, `boolean` and `string` included.
   `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`

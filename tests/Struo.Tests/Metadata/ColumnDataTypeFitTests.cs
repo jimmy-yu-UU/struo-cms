@@ -109,6 +109,14 @@ public sealed class ColumnDataTypeFitTests
         { typeof(decimal?), "real default 0" },
         { typeof(decimal), "double precision not null" },
         { typeof(decimal), "float(53) null" },
+        { typeof(decimal), "float unsigned" },
+        { typeof(decimal?), "float unsigned" },
+        { typeof(decimal), "double unsigned" },
+        { typeof(decimal), "real unsigned" },
+        { typeof(decimal), "float zerofill" },
+        { typeof(decimal), "float unsigned zerofill" },
+        { typeof(decimal), "double precision unsigned" },
+        { typeof(decimal), "DOUBLE UNSIGNED" },
         // a bool property on a string column type
         { typeof(bool), "varchar(5)" },
         { typeof(bool?), "varchar(5)" },
@@ -148,6 +156,10 @@ public sealed class ColumnDataTypeFitTests
         { typeof(bool), "varchar(5) not null" },
         { typeof(bool), "varchar(5) default 'x'" },
         { typeof(bool), "character varying(5) not null" },
+        { typeof(bool), "char" },
+        { typeof(bool), "nchar" },
+        { typeof(bool), "bpchar(5)" },
+        { typeof(bool), "longtext collate utf8mb4_bin" },
     };
 
     [Theory]
@@ -161,11 +173,24 @@ public sealed class ColumnDataTypeFitTests
         misfit.Value.Why.Should().NotBeNullOrWhiteSpace();
     }
 
+    [Theory]
+    [MemberData(nameof(Rejected))]
+    public void The_nullable_twin_of_a_rejected_pair_is_found_too(Type propertyType, string columnType)
+    {
+        if (!propertyType.IsValueType || Nullable.GetUnderlyingType(propertyType) is not null) return;
+        var twin = typeof(Nullable<>).MakeGenericType(propertyType);
+
+        var misfit = ColumnTypeFit.Find(twin, columnType);
+
+        misfit.Should().NotBeNull();
+        misfit!.Value.Fix.Should().Contain(ExpectedFix(propertyType, columnType));
+    }
+
     // The fix text identifies the rule that fired.
     private static string ExpectedFix(Type propertyType, string columnType)
     {
         var single = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
-        if (single == typeof(decimal)) return "Declare an exact decimal type such as decimal(18,4)";
+        if (single == typeof(decimal)) return "Declare decimal(18,4) or another decimal type with an explicit scale";
         if (single == typeof(bool)) return "declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
         var name = columnType.ToLowerInvariant();
         if (name.Contains("tinyint", StringComparison.Ordinal)) return "Write tinyint without its length";
@@ -263,8 +288,9 @@ public sealed class ColumnDataTypeFitTests
         { typeof(float), "real" },
         { typeof(float), "float4" },
         // another type: unsigned, arrays, whole words only
-        { typeof(decimal), "double unsigned" },
-        { typeof(decimal), "float unsigned" },
+        { typeof(decimal), "float4 unsigned" },
+        { typeof(decimal), "float8 zerofill" },
+        { typeof(decimal), "float unsigned[]" },
         { typeof(decimal), "float4[]" },
         { typeof(decimal), "real[]" },
         { typeof(decimal), "double precision[]" },
@@ -276,6 +302,7 @@ public sealed class ColumnDataTypeFitTests
         { typeof(decimal), "float4range" },
         { typeof(decimal), "my_float" },
         { typeof(decimal), "\"double custom\"" },
+        { typeof(decimal), "\"double precision\"" },
         // another property type is not the concern of the floating-point rule
         { typeof(long), "real" },
         { typeof(int), "double" },
@@ -290,7 +317,7 @@ public sealed class ColumnDataTypeFitTests
         { typeof(bool), "bigint" },
         { typeof(bool), "smallint" },
         { typeof(bool), "[bit] not null" },
-        // a name that is no string type on the measured backends is the fork's own
+        // names outside the table
         { typeof(bool), "string" },
         { typeof(bool), "varchar2(5)" },
         { typeof(bool), "clob" },
@@ -584,7 +611,7 @@ public sealed class ColumnDataTypeFitTests
 
         act.Should().Throw<MetadataException>().Which.Message.Should().Be(
             "Field 'DecimalReal.Price' has [SugarColumn(ColumnDataType = \"real\")] and is a decimal property. " +
-            "Declare an exact decimal type such as decimal(18,4), or remove ColumnDataType: " +
+            "Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType: " +
             "a single-precision type returns 12345.6789 as 12345.68 or 12345.7, " +
             "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
             "and filters, facets and sums on the column then go wrong, " +
@@ -597,7 +624,7 @@ public sealed class ColumnDataTypeFitTests
         var act = () => MetadataScanner.ScanTypes([typeof(DecimalNullableDouble)]);
 
         act.Should().Throw<MetadataException>().Which.Message
-            .Should().Contain("and is a decimal? property. Declare an exact decimal type such as decimal(18,4), or remove ColumnDataType:");
+            .Should().Contain("and is a decimal? property. Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType:");
     }
 
     [Fact]

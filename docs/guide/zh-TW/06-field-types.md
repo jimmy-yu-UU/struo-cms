@@ -280,8 +280,10 @@ JSON 欄位，同樣如此。
 各個單字，不分大小寫，括號裡的長度或精度也不看，`tinyint(1)` 除外。整個單字被中括號、雙引號
 或反引號包起來時算一個單字，所以 `[bigint]` 就是 `bigint`，`"int custom"` 不是 `int`；單字
 中間出現中括號，例如 `int[]`，是另一種型別。型別後面的字，例如 `not null`、`identity(1,1)`，
-是欄位修飾：`bigint not null` 當作 `bigint`。型別後面接 `unsigned`、`zerofill` 或 `array`，
-名稱就變成另一種型別，所以 `int unsigned` 不是 `int`。`double precision` 算
+是欄位修飾：`bigint not null` 當作 `bigint`。`array` 接在名稱後面，名稱就變成另一種型別；
+`unsigned` 與 `zerofill` 接在整數或字串型別名稱後面也一樣，所以 `int unsigned` 不是 `int`。
+接在 `real`、`float`、`double` 後面時，它們是欄位修飾：`float unsigned` 當作 `float`。
+`double precision` 算
 `double`，`character varying` 算 `character`，後面的 `precision`、`varying` 屬於名稱。
 不在表裡的名稱，包含 `timestamp with local time zone`，是你自己的，照常通過。
 
