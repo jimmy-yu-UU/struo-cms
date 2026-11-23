@@ -16,3 +16,9 @@ export function selectFiles(option, groups) {
   }
   return files.filter((file) => wanted.has(file.slice(0, file.indexOf('-'))))
 }
+
+// The closing line of a run: how many files changed and which chapter files were selected.
+export function summarize({ write, files, only }) {
+  const changed = files.filter((file) => file.changed).length
+  return `${write ? 'wrote' : 'would write'} ${changed} files (${only.join(', ')})`
+}

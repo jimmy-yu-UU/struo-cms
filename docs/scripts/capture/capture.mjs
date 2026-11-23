@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url'
 import { checkGuide } from './lib/check.mjs'
 import { CaptureError } from './lib/errors.mjs'
 import { runCapture } from './lib/runner.mjs'
-import { selectFiles } from './lib/select.mjs'
+import { selectFiles, summarize } from './lib/select.mjs'
 import { CONTENT_COLLECTIONS, GROUPS } from './scenarios/index.mjs'
 
 const DEFAULT_GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'guide')
@@ -81,8 +81,7 @@ async function main() {
     write: values.write,
   })
   for (const [id, text] of blocks) process.stdout.write(`--- ${id}\n${text}\n`)
-  const changed = files.filter((file) => file.changed).length
-  process.stdout.write(`${values.write ? 'wrote' : 'would write'} ${blocks.size} blocks into ${changed} files\n`)
+  process.stdout.write(`${summarize({ write: values.write, files, only })}\n`)
 }
 
 main().catch((error) => {
