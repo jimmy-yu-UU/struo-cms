@@ -391,29 +391,33 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   `[ColumnShape(TimestampWithTimeZone)]` on one that is not `DateTime` or `DateTime?`;
 - `[ColumnShape]` beside `ColumnDataType`;
 - a `ColumnDataType` that `ColumnTypeFit` (`src/Struo.Infrastructure/Metadata/ColumnTypeFit.cs`: a
-  closed table of property type and column type name) lists as contradicting the property type, each
-  with its `Nullable<T>`: `DateTime` with `timestamptz`, `timestamp with time zone` or
+  closed table of property type and column type name) lists as contradicting the property type,
+  each with its `Nullable<T>`: `DateTime` with `timestamptz`, `timestamp with time zone` or
   `datetimeoffset` (only `[ColumnShape(TimestampWithTimeZone)]` makes the framework read and write
-  the column as a UTC instant, on PostgreSQL and SQL Server; without it the database takes the clock
-  digits, in the PostgreSQL server's time zone and as UTC on SQL Server, PostgreSQL returns
+  the column as a UTC instant, on PostgreSQL and SQL Server; without it the database takes the
+  clock digits, in the PostgreSQL server's time zone and as UTC on SQL Server, PostgreSQL returns
   `Kind = Local` on every read, and the unshaped SQL Server column breaks the facet of a zone-less
-  `DateTime` column); `int` with `bigint` or `smallint`; `long` with `int`, `integer` or `smallint`
-  (the integer names SQL Server has whose reader types share one entry of the ORM's row-binder
-  cache; only SQL Server fails, in one facet order, but the rule is the same on every backend);
-  `int` or `long` with `tinyint(1)` (the MySQL driver reads it as a boolean); `decimal` with `real`,
-  `float`, `float4`, `float8`, `double` or `double precision` (a binary floating-point column rounds
-  the value: a single-precision type returns 12345.6789 as 12345.68 or 12345.7, a double-precision
-  type returns 12345678901234.5678 as 12345678901234.6, and filters, facets and sums on it are
-  wrong); `bool` with `varchar`, `nvarchar`, `char`, `nchar`, `character`, `character varying`,
-  `bpchar`, `text`, `ntext`, `tinytext`, `mediumtext` or `longtext` (a string column is not read
-  back as a bool: where the write succeeds, the read of the row and the facet fail). The name is
-  matched by its words: case and a parenthesised length are ignored (the length only for
-  `tinyint(1)`), a word wrapped whole in brackets, double quotes or backticks is one word,
-  brackets inside a word make another type (`int[]`), trailing column modifiers such as `not null`
-  are skipped, `double precision` counts as `double` and `character varying` as `character`, and
-  `array` after any name makes another type, and so do `unsigned` and `zerofill` after an integer or
-  string name; after `real`, `float` and `double` they are column modifiers (`float unsigned` is
-  `float`, measured on MySQL and MariaDB). Any other name passes,
+  `DateTime` column); `int` with `bigint` or `smallint`; `long` with `int`, `integer` or
+  `smallint` (the integer names SQL Server has whose reader types share one entry of the ORM's
+  row-binder cache; only SQL Server fails, in one facet order, but the rule is the same on every
+  backend); `int` or `long` with `tinyint(1)` (the MySQL driver reads it as a boolean); `decimal`
+  with `real`, `float`, `float4`, `float8`, `double` or `double precision` (a binary
+  floating-point column rounds the value: a single-precision type returns 12345.6789 as 12345.68
+  or 12345.7, a double-precision type returns 12345678901234.5678 as 12345678901234.6, and
+  filters, facets and sums on it are wrong); `decimal` with `decimal`, `numeric`, `dec` or `fixed`
+  and no precision (the column has scale 0 on MySQL and MariaDB, and on SQL Server for `numeric`
+  and `dec`, so 12345.6789 reads back as 12346); `bool` with `varchar`, `nvarchar`, `char`,
+  `nchar`, `character`, `character varying`, `bpchar`, `text`, `ntext`, `tinytext`, `mediumtext`
+  or `longtext` (a string column is not read back as a bool: where the write succeeds, the read of
+  the row and the facet fail). The name is matched by its words: case and a parenthesised length
+  are ignored (the length matters only for `tinyint(1)`, and for `decimal`, `numeric`, `dec` and
+  `fixed`, which are listed only when written without one), a word wrapped whole in brackets,
+  double quotes or backticks is one word, brackets inside a word make another type (`int[]`),
+  trailing column modifiers such as `not null` are skipped, `double precision` counts as `double`
+  and `character varying` as `character`, and `array` after any name makes another type, and so do
+  `unsigned` and `zerofill` after an integer or string name; after `real`, `float` and `double`
+  they are column modifiers (`float unsigned` is `float`, measured on MySQL and MariaDB; the same
+  holds after `decimal`, `numeric`, `dec` and `fixed`). Any other name passes,
   `timestamp with local time zone`, `decimal(18,4)`, `bit`, `boolean` and `string` included.
   `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`

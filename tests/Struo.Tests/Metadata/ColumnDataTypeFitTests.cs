@@ -117,6 +117,30 @@ public sealed class ColumnDataTypeFitTests
         { typeof(decimal), "float unsigned zerofill" },
         { typeof(decimal), "double precision unsigned" },
         { typeof(decimal), "DOUBLE UNSIGNED" },
+        // no precision and scale
+        { typeof(decimal), "decimal" },
+        { typeof(decimal?), "decimal" },
+        { typeof(decimal), "numeric" },
+        { typeof(decimal?), "numeric" },
+        { typeof(decimal), "dec" },
+        { typeof(decimal?), "dec" },
+        { typeof(decimal), "fixed" },
+        { typeof(decimal?), "fixed" },
+        { typeof(decimal), "DECIMAL" },
+        { typeof(decimal), "Numeric" },
+        { typeof(decimal), "  decimal  " },
+        { typeof(decimal), "decimal not null" },
+        { typeof(decimal?), "numeric default 0" },
+        { typeof(decimal), "[decimal]" },
+        { typeof(decimal), "[numeric] not null" },
+        { typeof(decimal), "\"numeric\"" },
+        { typeof(decimal), "`dec`" },
+        { typeof(decimal), "decimal unsigned" },
+        { typeof(decimal), "numeric unsigned" },
+        { typeof(decimal), "dec unsigned" },
+        { typeof(decimal), "fixed unsigned" },
+        { typeof(decimal), "decimal zerofill" },
+        { typeof(decimal), "numeric zerofill" },
         // a bool property on a string column type
         { typeof(bool), "varchar(5)" },
         { typeof(bool?), "varchar(5)" },
@@ -190,9 +214,12 @@ public sealed class ColumnDataTypeFitTests
     private static string ExpectedFix(Type propertyType, string columnType)
     {
         var single = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
-        if (single == typeof(decimal)) return "Declare decimal(18,4) or another decimal type with an explicit scale";
         if (single == typeof(bool)) return "declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
         var name = columnType.ToLowerInvariant();
+        if (single == typeof(decimal) && (name.Contains("float") || name.Contains("real") || name.Contains("double")))
+            return "Declare decimal(18,4) or another decimal type with an explicit scale";
+        if (single == typeof(decimal) && !name.Contains("float") && !name.Contains("real") && !name.Contains("double"))
+            return "Write the precision and scale, such as decimal(18,4)";
         if (name.Contains("tinyint", StringComparison.Ordinal)) return "Write tinyint without its length";
         if (propertyType == typeof(DateTime) || propertyType == typeof(DateTime?)) return "TimestampWithTimeZone";
         var isInt = propertyType == typeof(int) || propertyType == typeof(int?);
@@ -274,10 +301,24 @@ public sealed class ColumnDataTypeFitTests
         { typeof(long), "[int value]" },
         // a group with no word before it adds nothing, so tinyint has no length here
         { typeof(int), "(1)tinyint" },
-        // exact decimal types
-        { typeof(decimal), "numeric" },
-        { typeof(decimal), "decimal" },
+        // decimal types with a precision
         { typeof(decimal), "decimal(18,4)" },
+        { typeof(decimal), "decimal(18)" },
+        { typeof(decimal), "numeric(10,0)" },
+        { typeof(decimal), "decimal (18,4)" },
+        { typeof(decimal), "numeric(18, 4) unsigned" },
+        { typeof(decimal), "decimal(18,4) zerofill" },
+        { typeof(decimal), "dec(18,4)" },
+        { typeof(decimal), "fixed(18,4)" },
+        { typeof(decimal), "decimal(18,4)[]" },
+        { typeof(decimal), "decimal[]" },
+        { typeof(decimal), "numeric array" },
+        { typeof(decimal), "decimal_custom" },
+        { typeof(decimal), "fixedpoint" },
+        { typeof(decimal), "decimals" },
+        { typeof(double), "decimal" },
+        { typeof(long), "numeric" },
+        { typeof(string), "decimal" },
         { typeof(decimal?), "numeric(18,4)" },
         { typeof(decimal), "decimal(18, 4) not null" },
         { typeof(decimal), "[decimal](18,4)" },
@@ -493,6 +534,22 @@ public sealed class ColumnDataTypeFitTests
         [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal? Price { get; set; }
     }
 
+    [CmsCollection("Decimal without precision", Name = "cdtDecimalBare")]
+    public sealed class DecimalBare
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "decimal")]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal Price { get; set; }
+    }
+
+    [CmsCollection("Nullable decimal without precision", Name = "cdtNumericBare")]
+    public sealed class NumericBareNullable
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "NUMERIC not null", IsNullable = true)]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal? Price { get; set; }
+    }
+
     [CmsCollection("Bool on varchar", Name = "cdtBoolVarchar")]
     public sealed class BoolVarchar
     {
@@ -539,6 +596,8 @@ public sealed class ColumnDataTypeFitTests
         { typeof(LongSmallint), "LongSmallint.Total", "ColumnDataType = \"smallint\")] and is a long property" },
         { typeof(DecimalReal), "DecimalReal.Price", "ColumnDataType = \"real\")] and is a decimal property" },
         { typeof(DecimalNullableDouble), "DecimalNullableDouble.Price", "ColumnDataType = \"Double Precision\")] and is a decimal? property" },
+        { typeof(DecimalBare), "DecimalBare.Price", "ColumnDataType = \"decimal\")] and is a decimal property" },
+        { typeof(NumericBareNullable), "NumericBareNullable.Price", "ColumnDataType = \"NUMERIC not null\")] and is a decimal? property" },
         { typeof(BoolVarchar), "BoolVarchar.Flag", "ColumnDataType = \"varchar(5)\")] and is a bool property" },
         { typeof(BoolNullableText), "BoolNullableText.Flag", "ColumnDataType = \"text\")] and is a bool? property" },
     };
@@ -625,6 +684,28 @@ public sealed class ColumnDataTypeFitTests
 
         act.Should().Throw<MetadataException>().Which.Message
             .Should().Contain("and is a decimal? property. Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType:");
+    }
+
+    [Fact]
+    public void The_message_for_a_decimal_without_precision_asks_for_the_precision_and_scale()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(DecimalBare)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'DecimalBare.Price' has [SugarColumn(ColumnDataType = \"decimal\")] and is a decimal property. " +
+            "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType: " +
+            "a column with no scale keeps no fraction on MySQL and MariaDB (decimal(10,0)) and, " +
+            "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
+            "and the check is the same on every backend.");
+    }
+
+    [Fact]
+    public void The_message_for_a_nullable_decimal_without_precision_offers_the_same_fix()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(NumericBareNullable)]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("and is a decimal? property. Write the precision and scale, such as decimal(18,4), or remove ColumnDataType:");
     }
 
     [Fact]

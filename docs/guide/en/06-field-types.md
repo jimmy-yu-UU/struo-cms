@@ -316,16 +316,17 @@ gives the property's type, what the interface accepts and which interfaces accep
 
 A `ColumnDataType` from the table below stops the host as well. `Nullable<T>` counts as `T`. The
 type name is compared by its words, without letter case, and a length or precision in parentheses
-is ignored, except for `tinyint(1)`. A word wrapped whole in brackets, double quotes or backticks
-counts as one word, so `[bigint]` is `bigint` and `"int custom"` is not `int`; brackets inside a
-word, as in `int[]`, make another type. Words after the type, such as `not null` or
+is ignored, except for `tinyint(1)` and for `decimal`, `numeric`, `dec` and `fixed`, which are in
+the table only when written without one. A word wrapped whole in brackets, double quotes or
+backticks counts as one word, so `[bigint]` is `bigint` and `"int custom"` is not `int`; brackets
+inside a word, as in `int[]`, make another type. Words after the type, such as `not null` or
 `identity(1,1)`, are column modifiers: `bigint not null` counts as `bigint`. `array` after the
 type makes another type, and so do `unsigned` and `zerofill` after an integer or string name, so
-`int unsigned` is not `int`. After `real`, `float` and `double` they are column modifiers:
-`float unsigned` counts as `float`.
-`double precision` counts as `double` and `character varying` as `character`; the `precision`
-and `varying` belong to the name. A name that is not in the table, `timestamp with local time zone`
-included, is yours, and passes.
+`int unsigned` is not `int`. After `real`, `float`, `double`, `decimal`, `numeric`, `dec` and
+`fixed` they are column modifiers: `float unsigned` counts as `float`. `double precision` counts
+as `double` and `character varying` as `character`; the `precision` and `varying` belong to the
+name. A name that is not in the table, `timestamp with local time zone` included, is yours, and
+passes.
 
 | Property type | `ColumnDataType` | Declare instead |
 |---|---|---|
@@ -337,6 +338,7 @@ included, is yours, and passes.
 | `int`, `long` | `tinyint(1)` | `tinyint` with no length, or remove `ColumnDataType` |
 | `decimal` | `real`, `float`, `float4`, `float8` | Use `decimal(18,4)`, or remove `ColumnDataType` |
 | `decimal` | `double`, `double precision` | Use `decimal(18,4)`, or remove `ColumnDataType` |
+| `decimal` | `decimal`, `numeric`, `dec`, `fixed` with no parentheses | Write precision and scale, or remove `ColumnDataType` |
 | `bool` | `varchar`, `nvarchar`, `char`, `nchar` | Remove `ColumnDataType`, or use `boolean` or `bit` |
 | `bool` | `character`, `character varying`, `bpchar` | Remove `ColumnDataType`, or use `boolean` or `bit` |
 | `bool` | `text`, `ntext`, `tinytext`, `mediumtext`, `longtext` | Remove `ColumnDataType`, or use `boolean` or `bit` |
@@ -383,6 +385,13 @@ and a double-precision type reads 12345678901234.5678 as 12345678901234.6. Filte
 buckets and sums are wrong with them. With no `ColumnDataType`, the column of a `decimal` property
 is `decimal(18,4)` on SQL Server, MySQL and MariaDB, and `numeric` with no limit on precision on
 PostgreSQL.
+
+A `decimal` column type written with no precision and scale has scale 0. On MySQL and MariaDB,
+`decimal`, `numeric`, `dec` and `fixed` create `decimal(10,0)`, and on SQL Server `numeric` and
+`dec` create a type of scale 0, so 12345.6789 reads back as 12346 and the fraction is dropped.
+PostgreSQL `numeric` and SQL Server `decimal` are not affected, but the check is the same on every
+backend. To write the type, give the precision and scale, such as `decimal(18,4)`; `unsigned` and
+`zerofill` after the name change nothing.
 
 A `bool` on a string column is stored as `0` and `1` (`false` and `true` on PostgreSQL). Where the
 database accepts the write, reading the row and a facet over the column fail, on SQLite,

@@ -28,6 +28,11 @@ internal static class ColumnTypeFit
         "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
         "and filters, facets and sums on the column then go wrong, " +
         "and the check is the same on every backend";
+    private const string BareDecimalFix = "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType";
+    private const string BareDecimalWhy =
+        "a column with no scale keeps no fraction on MySQL and MariaDB (decimal(10,0)) and, " +
+        "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
+        "and the check is the same on every backend";
     private const string BoolStringFix =
         "Remove ColumnDataType, or declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
     private const string BoolStringWhy =
@@ -37,16 +42,21 @@ internal static class ColumnTypeFit
 
     // One type name as written in a column type: the words it is made of, for a one-word name the length
     // or precision that must follow it (null when any, or none, matches), a word that may follow the name
-    // without changing it ("double precision" is "double", "character varying" is "character"), and whether
-    // "unsigned" and "zerofill" after the name leave it the same type.
+    // without changing it ("double precision" is "double", "character varying" is "character"), whether
+    // "unsigned" and "zerofill" after the name leave it the same type, and whether the name must have no
+    // length or precision at all.
     private sealed record Entry(
-        string[] Words, string? FirstArgument = null, string? OptionalNext = null, bool IgnoresSign = false);
+        string[] Words, string? FirstArgument = null, string? OptionalNext = null, bool IgnoresSign = false,
+        bool NoArgument = false);
 
     private sealed record Rule(Type Clr, Entry[] Entries, Misfit Misfit);
 
     private static Entry Name(
-        string words, string? firstArgument = null, string? optionalNext = null, bool ignoresSign = false) =>
-        new(words.Split(' '), firstArgument, optionalNext, ignoresSign);
+        string words, string? firstArgument = null, string? optionalNext = null, bool ignoresSign = false,
+        bool noArgument = false) =>
+        new(words.Split(' '), firstArgument, optionalNext, ignoresSign, noArgument);
+
+    private static Entry Bare(string word) => Name(word, ignoresSign: true, noArgument: true);
 
     private static readonly Rule[] Rules =
     [
@@ -64,6 +74,7 @@ internal static class ColumnTypeFit
                 Name("double", optionalNext: "precision", ignoresSign: true),
             ],
             new(DecimalFix, DecimalWhy)),
+        new(typeof(decimal), [Bare("decimal"), Bare("numeric"), Bare("dec"), Bare("fixed")], new(BareDecimalFix, BareDecimalWhy)),
         new(
             typeof(bool),
             [
@@ -104,6 +115,7 @@ internal static class ColumnTypeFit
         for (var i = 0; i < count; i++)
             if (tokens[i].Word != entry.Words[i]) return false;
         if (entry.FirstArgument is not null && tokens[0].Argument != entry.FirstArgument) return false;
+        if (entry.NoArgument && tokens[0].Argument is not null) return false;
         if (entry.OptionalNext is not null && tokens.Count > count && tokens[count].Word == entry.OptionalNext) count++;
 
         // An array suffix turns any name into another type, and "unsigned" and "zerofill" do for a name whose

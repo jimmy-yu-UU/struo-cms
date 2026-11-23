@@ -18,6 +18,12 @@
     on MySQL and MariaDB behave the same and are rejected too. Use `decimal(18,4)` or another
     decimal type with an explicit scale, or remove `ColumnDataType`; a table that exists needs a
     migration when the column type changes.
+  - A `decimal` or `decimal?` with `decimal`, `numeric`, `dec` or `fixed` and no precision or scale,
+    also with `unsigned` or `zerofill` after it. The column has scale 0: MySQL and MariaDB create
+    `decimal(10,0)`, and SQL Server creates a type of scale 0 for `numeric` and `dec`, so 12345.6789
+    was read back as 12346. A name with a precision, such as `decimal(18,4)`, passes. Write the
+    precision and scale, or remove `ColumnDataType`; a table that exists needs a migration when the
+    column type changes.
   - A `bool` or `bool?` with `varchar`, `nvarchar`, `char`, `nchar`, `character`,
     `character varying`, `bpchar`, `text`, `ntext`, `tinytext`, `mediumtext` or `longtext`. The
     value was stored as `0` or `1` (`false` or `true` on PostgreSQL); where the database accepted

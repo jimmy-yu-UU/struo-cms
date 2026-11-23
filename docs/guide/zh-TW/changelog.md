@@ -15,6 +15,11 @@
     MySQL 與 MariaDB 的 `float unsigned`、`double unsigned`、`real unsigned` 與 `float zerofill`
     結果相同，同樣被擋。改用 `decimal(18,4)` 或其他寫明小數位數的 decimal 型別，或拿掉
     `ColumnDataType`；欄位型別有變時，已存在的表需要 migration。
+  - `decimal` 或 `decimal?` 配沒寫精度與小數位數的 `decimal`、`numeric`、`dec` 或 `fixed`，後面接
+    `unsigned` 或 `zerofill` 也一樣。欄位的小數位數是 0：MySQL 與 MariaDB 建出 `decimal(10,0)`，
+    SQL Server 的 `numeric` 與 `dec` 建出小數位數為 0 的型別，所以 12345.6789 讀回 12346。寫了
+    精度的名稱，例如 `decimal(18,4)`，照常通過。寫明精度與小數位數，或拿掉 `ColumnDataType`；
+    欄位型別有變時，已存在的表需要 migration。
   - `bool` 或 `bool?` 配 `varchar`、`nvarchar`、`char`、`nchar`、`character`、`character varying`、
     `bpchar`、`text`、`ntext`、`tinytext`、`mediumtext` 或 `longtext`。值存成 `0` 或 `1`（PostgreSQL
     存成 `false` 或 `true`）；資料庫肯收這個寫入時，讀取該列與對欄位做 facet 隨後失敗，在
