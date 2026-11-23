@@ -10,35 +10,36 @@ internal static class ColumnTypeFit
 {
     internal readonly record struct Misfit(string Fix, string Why);
 
+    private const string SameOnEveryBackend = "and the check is the same on every backend";
     private const string ZoneFix = "Declare [ColumnShape(ColumnShape.TimestampWithTimeZone)] and remove ColumnDataType";
     private const string ZoneWhy =
         "only the shape makes the framework read and write the column as a UTC instant on PostgreSQL and SQL Server, " +
         "and without it a facet of the column and a facet of a zone-less DateTime column fail each other on SQL Server";
     private const string WidthWhy =
         "on SQL Server a facet of this column fails when a facet of a column of the property's own width ran first, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
     private const string BooleanFix = "Write tinyint without its length, or remove ColumnDataType";
     private const string BooleanWhy =
         "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
     private const string DecimalFix =
         "Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType";
     private const string DecimalWhy =
         "a single-precision type returns 12345.6789 as 12345.68 or 12345.7, " +
         "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
         "and filters, facets and sums on the column then go wrong, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
     private const string BareDecimalFix = "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType";
     private const string BareDecimalWhy =
         "a decimal type written with no precision gets scale 0 on MySQL and MariaDB (decimal(10,0)) and, " +
         "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
     private const string BoolStringFix =
         "Remove ColumnDataType, or declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
     private const string BoolStringWhy =
         "a string column is not read back as a bool, so where the database accepts the write, " +
         "reading the row and a facet of the column then fail, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
 
     // One type name as written in a column type: the words it is made of, for a one-word name the length
     // or precision that must follow it (null when any, or none, matches), a word that may follow the name
