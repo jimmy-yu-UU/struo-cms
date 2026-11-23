@@ -347,8 +347,8 @@ public static class MetadataScanner
     private static EntityDescriptor DescribeEntity(Type type)
     {
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-            fieldToProp[Camel(prop.Name)] = prop.Name;
+        foreach (var name in type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(prop => prop.Name))
+            fieldToProp[Camel(name)] = name;
 
         // Also map each declared many-to-one relation's local FK (camelCase -> CLR
         // property name) so the WHERE/sort column resolver (ConditionalModelTranslator.Column)
