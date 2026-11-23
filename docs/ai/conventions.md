@@ -433,8 +433,8 @@ checked by `NavigateShape`: a many-to-one or one-to-one foreign-key name must be
 declaring entity and a one-to-many one a property of the list's element type, compared without
 regard to case; a many-to-many names its two keys on the junction type, and their names are not
 checked. `MetadataScanner.ValidateRelationKeyTypes` then compares the type of each key of a
-`[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and with no
-integer widening: the many-to-one key against the target's primary key, the one-to-many child key
+`[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and
+with no integer widening: the many-to-one key against the target's primary key, the one-to-many child key
 against the declaring entity's, the junction's parent key against the declaring entity's and its
 target key against the target's. The primary key is the one `PrimaryKeyName` resolves, as for
 `EntityDescriptor.IdProperty`; a key property or a primary key it cannot find, and a target that is
