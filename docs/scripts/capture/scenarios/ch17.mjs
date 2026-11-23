@@ -1,11 +1,24 @@
 // Chapter 17, roles and permissions. The editor signs in with a cookie session and sends the CSRF
 // header, so the refusal printed is the permission check and not the CSRF check. The reads of tag
 // are the unshown requests the prose describes; they run so the claim is checked against the host.
-import { PASSWORD_FIELD, STRIP_TRACE_ID, anonymous, read, setup } from './steps.mjs'
+import { PASSWORD_FIELD, STRIP_TRACE_ID, anonymous, check, must, read, setup } from './steps.mjs'
 
 const EDITOR = 'editor'
 const EFFECTIVE = '/api/users/{{editorId}}/effective-permissions'
 const EFFECTIVE_BLOCK = 'ch17-effective-permissions'
+const GRAPHQL = '/graphql'
+const FORBIDDEN = 'FORBIDDEN'
+const CATEGORY_DENIED = "Read not permitted on 'category'."
+
+// What chapter 14 says about a relation the caller cannot read. The editor reads article only: a sort
+// or filter path through category is refused with FORBIDDEN (200 on GraphQL, 403 in REST), and a
+// selected category comes back null without an error.
+const refusedThroughCategory = (json) => {
+  must('data' in json && json.data === null, 'the refused read answers with data null')
+  must(json.errors.length === 1 && json.errors[0].extensions.code === FORBIDDEN, 'one FORBIDDEN error')
+  must(json.errors[0].message === CATEGORY_DENIED, 'the message names category')
+}
+const editorGraphql = (name, query, assertion) => check(name, 'POST', GRAPHQL, 200, assertion, { as: EDITOR, body: { query } })
 
 export const ch17 = {
   name: 'chapter 17: roles and permissions',
@@ -31,6 +44,19 @@ export const ch17 = {
     },
     { name: 'the editor reads tag', as: EDITOR, method: 'GET', path: '/api/items/tag', expect: 403 },
     anonymous(undefined, 'GET', '/api/items/tag', 401, { name: 'an anonymous caller reads tag' }),
+    editorGraphql('the editor sorts by category through GraphQL', '{ articles(sort: ["category.name"]) { total } }', refusedThroughCategory),
+    editorGraphql(
+      'the editor filters through category through GraphQL',
+      '{ articles(filter: { category: { name: { eq: "Guides" } } }) { total } }',
+      refusedThroughCategory,
+    ),
+    editorGraphql('the editor selects category through GraphQL', '{ articles { items { id category { name } } } }', (json) => {
+      must(!('errors' in json), 'a selected relation the caller cannot read raises no error')
+      must(json.data.articles.items.length > 0 && json.data.articles.items.every((item) => item.category === null), 'category is null')
+    }),
+    check('the editor sorts by category through REST', 'GET', '/api/items/article?sort=category.name', 403, (json) => {
+      must(json.error.code === FORBIDDEN && json.error.message === CATEGORY_DENIED, 'REST refuses with FORBIDDEN')
+    }, { as: EDITOR }),
     setup('look up the admin role', 'GET', '/api/items/role?filter[name][_eq]=admin', 200, { save: { adminRoleId: 'data.0.id' } }),
     read(EFFECTIVE_BLOCK, EFFECTIVE, { print: { pretty: true } }),
     read(EFFECTIVE_BLOCK, `${EFFECTIVE}?roles={{adminRoleId}}`, { print: { pretty: true } }),

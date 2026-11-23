@@ -63,13 +63,14 @@ property twice is a `400` `BAD_USER_INPUT` on create and update; names that diff
 different properties.
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
-Both return `400` `BAD_USER_INPUT` with a generic message that names the collection, and GraphQL's
-`createFile` and `createUser` mutations get the same code and message, with status `200`. The
-refusal comes from the collection's `Creatable = false` flag ([Chapter
-5](05-collections.md#cmscollection-options)). A file is created by uploading it to `POST api/files`,
-and a user by `POST api/users`, which sets the password. The refusal comes before any check of the
-body, so a duplicate email is a `400` there, not a `409`. Reading, updating and deleting both
-collections still go through the generic routes.
+Both return `400` `BAD_USER_INPUT` with a generic message that names the collection. When their
+input passes the schema, GraphQL's `createFile` and `createUser` mutations get the same code and
+message, with status `200`; an input field the schema does not have is a request-level error with no
+code (see [Chapter 14](14-graphql.md)). The refusal comes from the collection's `Creatable = false`
+flag ([Chapter 5](05-collections.md#cmscollection-options)). A file is created by uploading it to
+`POST api/files`, and a user by `POST api/users`, which sets the password. The refusal comes before
+any check of the body, so a duplicate email is a `400` there, not a `409`. Reading, updating and
+deleting both collections still go through the generic routes.
 
 The complete rules for revisions and the trash — `DELETE`'s idempotent behavior, the details of
 `?purge=`, and a revision snapshot's field shape — are left to

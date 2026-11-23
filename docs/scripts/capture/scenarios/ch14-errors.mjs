@@ -41,6 +41,36 @@ function nestedParents(parents) {
   return '{ categories { items { ' + 'parent { '.repeat(parents) + 'name' + ' }'.repeat(parents) + ' } } }'
 }
 
+// Nest the given fields, ending in { id }. Fields are written as the sample schema names them.
+function nested(fields) {
+  return '{ ' + fields.map((field) => field + ' {').join(' ') + ' id ' + '}'.repeat(fields.length) + ' }'
+}
+
+// One field (Category.articles) repeated through two types: three times is allowed, four is not.
+const SAME_FIELD_PREFIX = ['categories', 'items']
+const THREE_TIMES = [...SAME_FIELD_PREFIX, 'articles', 'category', 'articles', 'category', 'articles']
+const FOUR_TIMES = [...THREE_TIMES, 'category', 'articles']
+// Deeper than the limit with no field more than three times: parent x3, children x3, then articles and
+// category alternating.
+const DEEP_NO_REPEAT = [
+  ...SAME_FIELD_PREFIX,
+  ...Array(3).fill('parent'),
+  ...Array(3).fill('children'),
+  'articles',
+  'category',
+  'articles',
+  'category',
+  'articles',
+  'category',
+]
+const DEEP_NO_REPEAT_DEPTH = DEEP_NO_REPEAT.length + 1
+// Eight relation hops inside the depth limit: the relation-depth cap (6) is what refuses it.
+const RELATION_HOPS = [...SAME_FIELD_PREFIX, ...Array(3).fill('parent'), ...Array(3).fill('children'), 'articles', 'category']
+const RELATION_DEPTH_LIMIT = 6
+const RELATION_PATH = 'category' + '.parent'.repeat(RELATION_DEPTH_LIMIT + 1) + '.name'
+const RELATION_PATH_MESSAGE = `Relation path '${RELATION_PATH}' exceeds the maximum depth of ${RELATION_DEPTH_LIMIT}.`
+const RELATION_NESTING_MESSAGE = `Relation nesting too deep (depth ${RELATION_DEPTH_LIMIT + 1}); the maximum is ${RELATION_DEPTH_LIMIT}.`
+
 // The same costly list field under many aliases (the amplification the cost rule exists for).
 function aliasBomb(count) {
   return '{ ' + Array.from({ length: count }, (_, index) => 'a' + index + ': articles { items { id } }').join(' ') + ' }'
@@ -81,6 +111,14 @@ function costExceeded(json) {
   must(first.extensions.maxFieldCost === FIELD_COST_LIMIT, 'the manual states the limit')
 }
 
+// Deeper than the limit and no field repeated: the depth error is the only one.
+function depthOnly(json) {
+  noData(json)
+  must(json.errors.length === 1 && codeOf(json.errors[0]) === undefined, 'a depth violation alone has one error, no code')
+  must(json.errors[0].extensions.detectedExecutionDepth === DEEP_NO_REPEAT_DEPTH, 'the detected depth')
+  must(json.errors[0].extensions.allowedExecutionDepth === DEPTH_LIMIT, 'the allowed depth')
+}
+
 function cycleExceeded(json) {
   noData(json)
   must(json.errors.length === 1 && codeOf(json.errors[0]) === CYCLE_CODE, `the cycle error carries ${CYCLE_CODE}`)
@@ -100,6 +138,8 @@ const REQUEST_LEVEL = [
   { label: 'a document over the depth limit', query: nestedParents(PARENTS_OVER_DEPTH), assertion: depthExceeded },
   { label: 'a document over the cost limit', query: aliasBomb(ALIAS_BOMB), assertion: costExceeded },
   { label: 'a self-reference nested four times', query: nestedParents(PARENTS_ALLOWED + 1), assertion: cycleExceeded },
+  { label: 'a field repeated four times through two types', query: nested(FOUR_TIMES), assertion: cycleExceeded },
+  { label: 'a depth violation with no repeated field', query: nested(DEEP_NO_REPEAT), assertion: depthOnly },
 ]
 
 // status by Accept: no header and */* answer 400, application/json answers 200.
@@ -126,6 +166,11 @@ const withinLimits = [1, 2, PARENTS_ALLOWED].flatMap((parents) =>
   [ACCEPT_ANY, ACCEPT_JSON].map((accept) =>
     anonymousQuery(`${parents} nested parent(s) with Accept ${accept}`, accept, nestedParents(parents), 200, resolverError),
   ),
+)
+
+// The same field three times through two types also passes validation.
+const sameFieldWithinLimit = [ACCEPT_ANY, ACCEPT_JSON].map((accept) =>
+  anonymousQuery('a field repeated three times with Accept ' + accept, accept, nested(THREE_TIMES), 200, resolverError),
 )
 
 const resolverLevel = ACCEPTS.map(({ accept, label }) =>
@@ -156,6 +201,18 @@ const tooManyLinks = (vars) =>
     query: `mutation { updateArticle(id: "${vars.articleAId}", input: { tags: ${JSON.stringify(UNIQUE_IDS)} }) { id } }`,
   })
 
+const TYPED_FILTER_PATH =
+  '{ articles(filter: { category: { ' + 'parent: { '.repeat(RELATION_DEPTH_LIMIT + 1) + 'name: { eq: "x" }' + ' }'.repeat(RELATION_DEPTH_LIMIT + 1) + ' } }) { total } }'
+
+// A refused write changes nothing: article A keeps its version and its links.
+const readArticleBefore = setup('read article A before the refused writes', 'GET', '/api/items/article/{{articleAId}}?deep=tags', 200, {
+  save: { versionBeforeRefusals: 'data.version' },
+})
+const readArticleAfter = check('article A after the refused writes', 'GET', '/api/items/article/{{articleAId}}?deep=tags', 200, (json, vars) => {
+  must(String(json.data.version) === vars.versionBeforeRefusals, 'the refused writes left the version alone')
+  must(json.data.tags.map((tag) => tag.name).join() === 'release', 'the refused writes left the links alone')
+})
+
 const sharedValidator = [
   asAdmin('offset over the cap', `{ articles(offset: ${MAX_OFFSET + 1}) { total } }`, sharedError(OFFSET_MESSAGE)),
   asAdmin('nested offset over the cap', `{ categories { items { articles(offset: ${MAX_OFFSET + 1}) { id } } } }`, sharedError(NESTED_OFFSET_MESSAGE)),
@@ -170,17 +227,38 @@ const sharedValidator = [
   asAdmin('sort by an unknown field', '{ articles(sort: ["bogus"]) { total } }', sharedError("Unknown field 'bogus' on collection 'article'.")),
   asAdmin('sort by an unknown relation', '{ articles(sort: ["bogus.name"]) { total } }', sharedError("Unknown relation 'bogus' on 'article'")),
   asAdmin('sort across a to-many relation', '{ articles(sort: ["tags.name"]) { total } }', sharedError("Sort across to-many relations is not supported: 'tags.name'.")),
-  asAdmin('a sort path past the relation depth', '{ articles(sort: ["category.parent.parent.parent.parent.parent.parent.parent.name"]) { total } }', sharedError('Relation path')),
+  asAdmin('a sort path past the relation depth', '{ articles(sort: ["' + RELATION_PATH + '"]) { total } }', sharedError(RELATION_PATH_MESSAGE)),
+  asAdmin('a typed filter path past the relation depth', TYPED_FILTER_PATH, sharedError(RELATION_PATH_MESSAGE)),
+  asAdmin('a selection nesting relations past the relation depth', nested(RELATION_HOPS), sharedError(RELATION_NESTING_MESSAGE)),
   asAdmin('an unknown field in a typed filter', '{ articles(filter: { bogus: { eq: "x" } }) { total } }', noCodeErrors, 400),
 ]
 
-// The same limits through REST answer 400.
+// The same limits through REST answer 400, with the same code and message.
+const restRefused = (message) => (json) =>
+  must(json.error.code === BAD_USER_INPUT && json.error.message.startsWith(message), 'REST refuses with BAD_USER_INPUT: ' + message)
+const USER_MESSAGE = "Items cannot be created in collection 'user' through the generic items API."
 const restCounterparts = [
-  setup('REST: offset over the cap', 'GET', '/api/items/article?offset=' + (MAX_OFFSET + 1), 400),
-  setup('POST .../query: offset over the cap', 'POST', '/api/items/article/query', 400, { body: { offset: MAX_OFFSET + 1 } }),
-  setup('REST: more _in values than the limit', 'GET', '/api/items/article?filter[status][_in]=' + IN_VALUES.join(','), 400),
-  setup('REST: creating a user through the generic API', 'POST', '/api/items/user', 400, { body: { email: 'x@example.com' } }),
-  setup('REST: more relation links than the limit', 'PUT', '/api/items/article/{{articleAId}}', 400, { body: { tags: UNIQUE_IDS } }),
+  check('REST: offset over the cap', 'GET', '/api/items/article?offset=' + (MAX_OFFSET + 1), 400, restRefused(OFFSET_MESSAGE)),
+  check('POST .../query: offset over the cap', 'POST', '/api/items/article/query', 400, restRefused(OFFSET_MESSAGE), {
+    body: { offset: MAX_OFFSET + 1 },
+  }),
+  check('REST: more _in values than the limit', 'GET', '/api/items/article?filter[status][_in]=' + IN_VALUES.join(','), 400, restRefused(IN_MESSAGE)),
+  check('REST: creating a user through the generic API', 'POST', '/api/items/user', 400, restRefused(USER_MESSAGE), {
+    body: { email: 'x@example.com' },
+  }),
+  check('REST: more relation links than the limit', 'PUT', '/api/items/article/{{articleAId}}', 400, restRefused(LINKS_MESSAGE), {
+    body: { tags: UNIQUE_IDS },
+  }),
+  check('REST: a filter path past the relation depth', 'GET', '/api/items/article?filter[' + RELATION_PATH + '][_eq]=x', 400, restRefused(RELATION_PATH_MESSAGE)),
 ]
 
-export const errorChecks = [...requestLevel, ...withinLimits, ...resolverLevel, ...sharedValidator, ...restCounterparts]
+export const errorChecks = [
+  ...requestLevel,
+  ...withinLimits,
+  ...sameFieldWithinLimit,
+  ...resolverLevel,
+  readArticleBefore,
+  ...sharedValidator,
+  ...restCounterparts,
+  readArticleAfter,
+]

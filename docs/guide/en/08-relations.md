@@ -156,8 +156,9 @@ The last two decide write and delete behavior:
 | `OnDelete` | `OnDelete` | `Restrict` | many-to-one only |
 | `Editable` | `bool` | `true` | whether the admin picker accepts input |
 
-There is no per-relation depth setting. The one cap that is enforced is the global
-`Query:MaxRelationDepth`; see "Reading related data with `deep`" below.
+There is no per-relation depth setting. The one cap enforced for REST `deep` and relation paths is
+the global `Query:MaxRelationDepth`; see "Reading related data with `deep`" below. A GraphQL
+selection set is also bound by the limits in [Chapter 14](14-graphql.md#depth-caps).
 
 ## Junction entities and payloads
 

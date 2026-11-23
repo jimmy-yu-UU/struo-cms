@@ -362,15 +362,16 @@ HTTP_STATUS:200
 ```
 
 回應狀態是 `200`，不是 `401`；資料是 `null`，錯誤本身在 `errors` 陣列裡，`extensions.code` 是
-`UNAUTHORIZED`。呼叫端得看每一則錯誤自己的 `extensions.code`，不能看狀態列。
+`UNAUTHORIZED`。對 resolver 層級的錯誤，呼叫端得看每一則錯誤自己的 `extensions.code`，不能看狀態列。
 
 `errors` 陣列裡的每一則錯誤還帶有 `extensions.traceId`，跟 REST 錯誤信封帶的是同一個請求 trace id（見
 [第 12 章](12-rest-conventions.md)），本節兩種錯誤都有。這裡的範例都省略了它。
 
 GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver 丟出的例外套進同一份對照表，蓋上一模
-一樣的穩定代碼字串，但傳輸層的狀態永遠留在 `200`。`SEARCH_UNAVAILABLE` 也一樣——REST 對應到 503，這
-裡一樣是 `200` 配這個代碼。沒有對照表可查的例外會被遮罩成固定的通用訊息，伺服器端照樣完整記錄，搜
-尋提供者失敗的訊息也是同一種遮罩。
+一樣的穩定代碼字串；resolver 丟出的例外，傳輸層的狀態永遠是 `200`，文件在 resolver 開始跑之前就
+出錯的情形見下一段。`SEARCH_UNAVAILABLE` 也一樣——REST 對應到 503，這裡是 `200` 配這個代碼。沒有
+對照表可查的例外會被遮罩成固定的通用訊息，伺服器端照樣完整記錄，搜尋提供者失敗的訊息也是同一種
+遮罩。
 
 還有一種失敗走另一條路。一個文件在任何 resolver 開始跑之前就出錯，不帶任何例外：文件指名了不存在
 的欄位時，這則錯誤沒有 `extensions.code`；超過深度上限的文件同樣沒有；剖析不了的文件帶 `HC0011`，
@@ -395,9 +396,10 @@ HTTP_STATUS:400
 ```
 
 錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——判斷一則 GraphQL 錯誤屬於哪一種，
-看的是 `extensions.code`，不是狀態碼：resolver 執行時丟出的例外是 `200` 配
-[第 12 章](12-rest-conventions.md#錯誤代碼)列出的穩定代碼，上面這幾種 request 層級的錯誤沒有這種
-代碼，狀態碼還隨 `Accept` 而變。
+看的是回應有沒有 `data` 鍵，不是狀態碼：resolver 丟出的錯誤與共用驗證器的錯誤，回應帶 `data`
+（`null`，或某個成員是 `null` 的物件），代碼是[第 12 章](12-rest-conventions.md#錯誤代碼)列出的
+穩定代碼，狀態碼是 `200`；文件在 resolver 開始跑之前就出錯時，回應沒有 `data` 鍵，錯誤沒有代碼，
+或只帶 GraphQL 伺服器自己的代碼，狀態碼隨 `Accept` 而變。
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
@@ -405,12 +407,13 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 的 body 因為其他原因讀不出來時，回該失敗的狀態 `400` 或 `408`，內容是一則 `BAD_USER_INPUT` 的錯誤，
 訊息是 `The request body could not be read.`。
 
-共用驗證器對 `sort` 引數與關聯路徑的訊息——未知欄位、未知關聯、跨多對多關聯的排序、超過
-`Query:MaxRelationDepth` 的路徑，內容見[第 10 章](10-query-basics.md)與
+共用驗證器對 `sort` 引數與關聯路徑的訊息——未知欄位、未知關聯、跨多對多或一對多關聯的排序、超過
+`Query:MaxRelationDepth` 的 `sort`／`filter` 路徑與選擇集，內容見[第 10 章](10-query-basics.md)與
 [第 11 章](11-query-advanced.md)——在 GraphQL 上一律標成 `BAD_USER_INPUT`，走的是第一種、`200` 配
 代碼的路。型別化的 `filter` 引數不走這條路：`filter` 裡寫了 schema 沒有的欄位，是上面那種沒有代碼
-的 request 層級錯誤。讀不到的關聯是例外：錯誤代碼是 `FORBIDDEN`，匿名呼叫端是 `UNAUTHORIZED`，但
-同樣走 `200` 配代碼這條路。
+的 request 層級錯誤。`sort` 或 `filter` 路徑穿過呼叫端讀不到的關聯，是例外：錯誤代碼是
+`FORBIDDEN`，同樣走 `200` 配代碼這條路（REST 回 `403`）；選取一個讀不到的關聯不是錯誤，那個欄位回
+`null`。
 
 ## 深度上限
 
@@ -420,7 +423,7 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 |---|---|---|
 | 執行深度（`GraphQl:MaxExecutionDepth`） | 預設 12 層 | 巢狀選擇集過深，introspection 欄位不算 |
 | Cost（`GraphQl:MaxFieldCost`／`GraphQl:MaxTypeCost`） | 預設 150 | alias 放大：同一昂貴欄位配多別名重複算 |
-| 自我參照深度（伺服器內建，專案沒有設定鍵） | 同一個自我參照欄位最多巢狀 3 層 | 沿著 `parent` 這類自我參照關聯一路往下寫 |
+| 欄位重複（GraphQL 伺服器內建） | 同一個欄位在一條路徑上最多 3 次 | 沿著 `parent` 這類來回的關聯一路往下寫 |
 | 關聯路徑深度（`Query:MaxRelationDepth`） | 預設 6 | 跨關聯篩選與巢狀展開，跟 REST 共用設定 |
 | 排序欄位（`Query:MaxSortFields`） | 預設 5 | 過長的排序，跟 REST 共用設定 |
 | 關聯節點（`Query:MaxDeepRelations`） | 預設 20 | 過寬的關聯展開，跟 REST 共用設定 |
@@ -436,11 +439,16 @@ execution depth of N which exceeds the max allowed execution depth of 12.`，N �
 allowed field cost was exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCost`。50 個別名各選一次
 `articles { items { id } }`，成本是 550，上限是預設的 150。
 
-自我參照深度是另一條獨立的規則，不屬於執行深度上限：在
-`{ categories { items { parent { parent { parent { name } } } } } }` 這樣的路徑上，`parent` 最多
-巢狀 3 層，第 4 層被拒絕。回應只有一則 `extensions.code` 為 `HC0087` 的錯誤，訊息是
-`Maximum allowed coordinate cycle depth was exceeded.`；一份文件同時超過執行深度上限與這條規則時，
-兩則錯誤都在回應裡。
+欄位重複是另一條獨立的規則，不屬於執行深度上限：GraphQL 伺服器內建這條規則，專案沒有為它提供設定鍵。
+同一個欄位（同一個型別上的同一個欄位名）在一條路徑上最多出現 3 次，第 4 次被拒絕。最簡單的情形是
+自我參照的 `parent`：在
+`{ categories { items { parent { parent { parent { name } } } } } }` 這樣的路徑上，`parent` 最多巢狀
+3 層。穿過兩個型別來回的路徑同樣受限，`Category.articles` 在
+`{ categories { items { articles { category { articles { category { articles { id } } } } } } } }`
+裡出現 3 次，可以通過驗證，再多一次就被拒絕。被拒絕的回應只有一則 `extensions.code` 為 `HC0087` 的
+錯誤，訊息是 `Maximum allowed coordinate cycle depth was exceeded.`；一份文件同時超過執行深度上限與
+這條規則時，兩則錯誤都在回應裡，沒有任何欄位重複過 3 次、但深度超過上限的文件，回應只有深度那一則
+錯誤。
 
 這三種錯誤都沒有 `data` 鍵；沒帶 `Accept` 或帶 `*/*` 時回 HTTP `400`，帶 `Accept: application/json`
 時回 `200`。

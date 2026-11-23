@@ -134,7 +134,9 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 | `OnDelete` | `OnDelete` | `Restrict` | 僅多對一 |
 | `Editable` | `bool` | `true` | 後台 picker 是否接受輸入 |
 
-沒有逐關聯設定深度的欄位。唯一生效的上限是全域的 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」一節。
+沒有逐關聯設定深度的欄位。REST 的 `deep` 與關聯路徑，唯一生效的上限是全域的
+`Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」一節；GraphQL 的選擇集另外受
+[第 14 章](14-graphql.md#深度上限)列出的上限限制。
 
 ## junction entity 與 payload
 

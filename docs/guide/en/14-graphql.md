@@ -444,17 +444,18 @@ HTTP_STATUS:200
 ```
 
 The response status is `200`, not `401`; `data` is `null`, and the error itself sits inside the
-`errors` array, with `extensions.code` at `UNAUTHORIZED`. A caller has to check each error's own
-`extensions.code`, never the status line.
+`errors` array, with `extensions.code` at `UNAUTHORIZED`. For an error raised in a resolver, a
+caller has to check the error's own `extensions.code`, never the status line.
 
 Every error in the `errors` array also carries `extensions.traceId`, the same request trace id the REST
 error envelope carries (see [Chapter 12](12-rest-conventions.md)), for the errors described in both
 parts of this section. The examples here leave it out.
 
 GraphQL's error filter is the counterpart of REST's exception handler: it folds whatever exception a
-resolver throws into the same lookup table, stamping on the identical stable code string, but the
-transport-layer status always stays at `200`. `SEARCH_UNAVAILABLE` works the same way — REST maps it
-to 503, and here it's still `200` paired with this code.
+resolver throws into the same lookup table, stamping on the identical stable code string; the
+transport-layer status of an exception a resolver throws is always `200`, and failures before any
+resolver runs are described in the next paragraphs. `SEARCH_UNAVAILABLE` works the same way — REST
+maps it to 503, and here it is `200` paired with this code.
 
 An exception with no entry in the lookup table is masked to a fixed, generic message, still fully
 logged server-side; a search-provider failure is masked the same way.
@@ -484,11 +485,12 @@ X-Content-Type-Options: nosniff
 HTTP_STATUS:400
 ```
 
-The error message names the unknown field `bogusThing`, but carries no `extensions.code` — the code,
-not the status, tells the two kinds of GraphQL error apart: an exception a resolver throws at
-execution time is `200` with one of the stable codes listed in
-[Chapter 12](12-rest-conventions.md#error-codes), while the request-level errors above carry none of
-those codes, and their status changes with `Accept`.
+The error message names the unknown field `bogusThing`, but carries no `extensions.code` — what
+tells the two kinds of GraphQL error apart is the `data` key, not the status: an error a resolver
+raises, or the shared validator raises, comes with `data` (`null`, or an object with a null member),
+carries one of the stable codes listed in [Chapter 12](12-rest-conventions.md#error-codes), and has
+status `200`; a document that fails before any resolver runs has no `data` key, carries no code or
+only a code of the GraphQL server itself, and its status changes with `Accept`.
 
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
@@ -498,12 +500,14 @@ be read for another reason answers with the status of that failure, `400` or `40
 with `BAD_USER_INPUT` and the message `The request body could not be read.`.
 
 The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
-field, an unknown relation, a sort across a to-many relation, a path past `Query:MaxRelationDepth`;
-see [Chapter 10](10-query-basics.md) and [Chapter 11](11-query-advanced.md) — are stamped
-`BAD_USER_INPUT` on GraphQL too, taking the first path: `200` paired with a code. A typed `filter`
-argument does not take that path: a field the schema does not have, written inside `filter`, is the
-request-level error above, with no code. An unreadable relation is the exception: its code is
-`FORBIDDEN`, or `UNAUTHORIZED` for an anonymous caller, on that same `200`-with-a-code path.
+field, an unknown relation, a sort across a to-many relation, a `sort` or `filter` path or a
+selection set past `Query:MaxRelationDepth`; see [Chapter 10](10-query-basics.md) and [Chapter
+11](11-query-advanced.md) — are stamped `BAD_USER_INPUT` on GraphQL too, taking the first path:
+`200` paired with a code. A typed `filter` argument does not take that path: a field the schema does
+not have, written inside `filter`, is the request-level error above, with no code. A `sort` or
+`filter` path through a relation the caller cannot read is the exception: its code is `FORBIDDEN`,
+on that same `200`-with-a-code path (REST answers `403`); a selected relation the caller cannot read
+is no error, and the field comes back `null`.
 
 ## Depth caps
 
@@ -513,7 +517,7 @@ Seven independent caps each guard their own concern:
 |---|---|---|
 | Execution depth (`GraphQl:MaxExecutionDepth`) | 12 by default | Selection sets nested too deep; introspection fields exempt |
 | Cost (`GraphQl:MaxFieldCost`/`GraphQl:MaxTypeCost`) | 150 by default | Alias amplification: one costly field under many aliases |
-| Self-reference depth (no setting key) | One self-referencing field: 3 levels | A query far down a relation such as `parent` |
+| Field repetition (built into the GraphQL server) | One field at most 3 times along a path | A query far down relations such as `parent` |
 | Relation path depth (`Query:MaxRelationDepth`) | 6 by default | Cross-relation filters and expansion; shared with REST |
 | Sort fields (`Query:MaxSortFields`) | 5 by default | Long sorts; shared with REST |
 | Relation nodes (`Query:MaxDeepRelations`) | 20 by default | Wide relation expansion; shared with REST |
@@ -530,11 +534,17 @@ A document over the cost limit is rejected the same way: `extensions.code` is Ho
 `fieldCost` and `maxFieldCost`. Fifty aliases of `articles { items { id } }` cost 550 against the
 default limit of 150.
 
-Self-reference depth is a separate rule, not part of the execution depth limit: on a path such as `{
-categories { items { parent { parent { parent { name } } } } } }`, `parent` nests 3 levels at most,
-and the fourth is rejected. The response holds one error with `extensions.code` `HC0087` and the
+Field repetition is a separate rule, not part of the execution depth limit: the GraphQL server
+builds it in, and the project provides no setting for it. The same field (the same field name on the
+same type) may appear at most 3 times along one path, and the fourth is rejected. The simplest case
+is the self-referencing `parent`: on a path such as `{ categories { items { parent { parent { parent
+{ name } } } } } }`, `parent` nests 3 levels at most. A path that goes back and forth through two
+types is bound the same way: `Category.articles` appears 3 times in `{ categories { items { articles
+{ category { articles { category { articles { id } } } } } } } }`, which passes validation, and one
+more is rejected. The rejected response holds one error with `extensions.code` `HC0087` and the
 message `Maximum allowed coordinate cycle depth was exceeded.` A document that exceeds both the
-execution depth limit and this rule has both errors in the response.
+execution depth limit and this rule has both errors in the response, and a document deeper than the
+limit that repeats no field more than 3 times has only the depth error.
 
 None of these three errors has a `data` key; without `Accept` or with `*/*` the status is `400`,
 with `Accept: application/json` it is `200`.
