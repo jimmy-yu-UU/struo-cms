@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applyTransforms, elideData, prettyJson, stripGraphQlTraceId, stripTraceId } from './transforms.mjs'
+import { applyTransforms, elideData, hasNothingToIndent, prettyJson, stripGraphQlTraceId, stripTraceId } from './transforms.mjs'
 
 const TRACE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
 
@@ -123,5 +123,14 @@ test('stripGraphQlTraceId fails when there is nothing to remove', () => {
 test('prettyJson names the true reason when the body has nothing to indent', () => {
   for (const body of ['{}', '[]', '7', '"text"', 'null']) {
     assert.throws(() => prettyJson(body), /nothing to indent/, body)
+  }
+})
+
+test('hasNothingToIndent: empty composites and scalars have nothing, any other body does', () => {
+  for (const body of ['{}', '{ }', '[\n]', '  []  ', '7', '  7  ', '"text"', 'null', 'true']) {
+    assert.equal(hasNothingToIndent(body), true, JSON.stringify(body))
+  }
+  for (const body of ['', '   ', '{"a":1}', '[1]', '{ "a": {} }', '[[]]']) {
+    assert.equal(hasNothingToIndent(body), false, JSON.stringify(body))
   }
 })

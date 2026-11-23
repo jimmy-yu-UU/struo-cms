@@ -19,10 +19,11 @@ import { prettyJson } from './transforms.mjs'
 // print something other than what the step says it prints.
 export function shownHeaders(response, selection) {
   if (!Array.isArray(selection)) return response.headers
-  const wanted = selection.map((name) => name.toLowerCase())
-  const absent = selection.filter((name) => !response.headers.some(([have]) => have.toLowerCase() === name.toLowerCase()))
+  const wanted = new Set(selection.map((name) => name.toLowerCase()))
+  const present = new Set(response.headers.map(([name]) => name.toLowerCase()))
+  const absent = selection.filter((name) => !present.has(name.toLowerCase()))
   if (absent.length > 0) throw new Error(`the response has no header named ${absent.join(', ')}`)
-  return response.headers.filter(([name]) => wanted.includes(name.toLowerCase()))
+  return response.headers.filter(([name]) => wanted.has(name.toLowerCase()))
 }
 
 function headerLines(response, selection) {

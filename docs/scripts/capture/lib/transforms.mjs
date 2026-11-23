@@ -219,7 +219,15 @@ function indentWhole(text) {
   return value.out
 }
 
-const NOTHING_TO_INDENT = /^\s*(?:[{[]\s*[}\]]\s*$|[^{[\s])/
+const EMPTY_COMPOSITE = /^[{[]\s*[}\]]$/
+const OPENERS = new Set(['{', '['])
+
+// Whether a body is a scalar or an empty object or array, which has no indentation to change.
+export function hasNothingToIndent(text) {
+  const trimmed = text.trim()
+  if (trimmed === '') return false
+  return !OPENERS.has(trimmed[0]) || EMPTY_COMPOSITE.test(trimmed)
+}
 
 // Re-indents a JSON body with two spaces per level, as the manual prints a pretty body.
 export function prettyJson(text) {
@@ -230,7 +238,7 @@ export function prettyJson(text) {
     if (error instanceof TransformError) throw notPretty()
     throw error
   }
-  if (result === text) throw new TransformError(NOTHING_TO_INDENT.test(text) ? PRETTY_NOTHING : PRETTY_INDENTED)
+  if (result === text) throw new TransformError(hasNothingToIndent(text) ? PRETTY_NOTHING : PRETTY_INDENTED)
   return result
 }
 

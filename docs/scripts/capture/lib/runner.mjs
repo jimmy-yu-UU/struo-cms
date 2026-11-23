@@ -453,7 +453,8 @@ function loadFixtures(steps, fixturesDir) {
 
 // The saved output of every command step whose file is written. Every one must have its result.
 function loadCommands(groups, selected, cliResults) {
-  const wanted = cliDescriptors(groups).filter((descriptor) => selected.includes(descriptor.file))
+  const files = new Set(selected)
+  const wanted = cliDescriptors(groups).filter((descriptor) => files.has(descriptor.file))
   if (wanted.length > 0 && !cliResults) {
     throw new CaptureError(`${wanted.map((item) => item.id).join(', ')}: the run needs the output of a command; pass --cli-results <dir>`)
   }
