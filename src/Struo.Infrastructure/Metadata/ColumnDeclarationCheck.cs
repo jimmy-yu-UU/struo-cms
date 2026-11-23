@@ -163,6 +163,18 @@ internal static class ColumnDeclarationCheck
                 $"Field '{name}' is {WithArticle(TypeName(property.PropertyType))} property with [SugarColumn(IsJson = true)], which holds a single value.",
                 "Remove IsJson, or declare a structured property (List<T>, Dictionary<K, V> or a class)",
                 "IsJson stores the value as JSON, and a single value comes back with an extra layer of quotes");
+
+        if (hasType) RequireColumnTypeFits(property, declaredType!, typeText, name);
+    }
+
+    private static void RequireColumnTypeFits(PropertyInfo property, string declaredType, string typeText, string name)
+    {
+        if (ColumnTypeFit.Find(property.PropertyType, declaredType) is not { } misfit) return;
+
+        throw Reject(
+            $"Field '{name}' has {typeText} and is {WithArticle(TypeName(property.PropertyType))} property.",
+            misfit.Fix,
+            misfit.Why);
     }
 
     private static void RequireShapeFitsType(PropertyInfo property, ColumnShape? shape, string name)
