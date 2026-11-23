@@ -531,7 +531,8 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
 
-        var ignored = isColumn && prop.GetCustomAttribute<SugarColumn>() is { IsIgnore: true };
+        var hasNoColumn = prop.GetCustomAttribute<SugarColumn>() is { IsIgnore: true };
+        var ignored = isColumn && hasNoColumn;
         if (ignored) RequireNoColumnQueryDeclaration(prop, attr);
         RequireTextColumnForSearch(prop, attr, isColumn);
 
@@ -542,7 +543,7 @@ public static class MetadataScanner
 
         IReadOnlyList<FieldMetadata>? childFields = null;
         if (attr.Interface == FieldInterface.Repeater)
-            childFields = BuildRepeaterChildFields(prop, prop.GetCustomAttribute<SugarColumn>() is not { IsIgnore: true });
+            childFields = BuildRepeaterChildFields(prop, !hasNoColumn);
 
         return new FieldMetadata
         {

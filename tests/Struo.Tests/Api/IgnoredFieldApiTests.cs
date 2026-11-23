@@ -64,7 +64,7 @@ public class IgnoredFieldApiTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task The_schema_still_lists_a_field_without_a_column_as_ignored()
+    public async Task The_schema_lists_a_field_without_a_column_as_ignored()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
 

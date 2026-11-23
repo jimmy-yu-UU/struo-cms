@@ -692,6 +692,7 @@ public class QueryValidatorTests
         resolved.Select(r => r.Kind).Should().Equal(FacetPathKind.OwnField, FacetPathKind.RelationLeaf);
         resolved[1].LeafField.Should().Be("name");
     }
+
     // A field without a column is selectable but is not a filter, sort, facet, aggregate or search target.
     private const string UnknownBadge = "Unknown field 'badge' on collection 'article'.";
 

@@ -476,7 +476,8 @@ internal sealed class CollectionSchemaBuilder(
     }
 
     // <Parent><Rel>JunctionFilterInput: one operator-input field per exposable junction payload
-    // field that is also filterable (IsFilterable — same allowlist as an own-field). Returns null
+    // field that is also filterable (IsFilterable — same allowlist as an own-field) and has a
+    // column (an Ignored field is selectable, never filterable). Returns null
     // when that set is empty, so the caller skips both this type AND the parent relation filter
     // input's "junction" field — a zero-field input type is rejected by HotChocolate at
     // schema-build time exactly like a zero-field object type (see HasExposablePayload's comment).
@@ -484,9 +485,13 @@ internal sealed class CollectionSchemaBuilder(
     {
         var name = SchemaTypeMapper.JunctionFilterInputName(meta.Name, descriptor.RelationName);
         var config = new InputObjectTypeConfiguration(name, null, typeof(IReadOnlyDictionary<string, object?>));
+        var junctionFields = descriptor.JunctionCollection is { } junctionCollection
+            ? metadataProvider.GetCollection(junctionCollection)?.Fields
+            : null;
         foreach (var (pf, iface, _) in ExposableJunctionFields(descriptor, metadataProvider))
         {
             if (!IsFilterable(iface)) continue;
+            if (junctionFields?.Any(f => f.Ignored && string.Equals(f.Name, pf.Name, StringComparison.OrdinalIgnoreCase)) == true) continue;
             var clr = descriptor.JunctionType.GetProperty(pf.Property)?.PropertyType;
             var opInput = FilterInputTranslator.OperatorInputTypeName(iface, clr);
             config.Fields.Add(new InputFieldConfiguration(pf.Name, null, TypeReference.Parse(opInput)));

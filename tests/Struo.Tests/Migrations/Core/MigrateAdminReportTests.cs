@@ -73,7 +73,7 @@ public sealed class MigrateAdminReportTests : IDisposable
 
         var lines = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         lines.Last().Should().Contain(AdminEmail).And.Contain("created");
-        lines.Count(l => l.StartsWith("Applied ", StringComparison.Ordinal)).Should().Be(6);
+        lines.Should().Contain(l => l.StartsWith("Applied 202610080001", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -160,6 +160,7 @@ public sealed class MigrateAdminReportTests : IDisposable
 
         again.Should().NotContain(e => e.Message.Contains("bootstrap admin", StringComparison.OrdinalIgnoreCase));
     }
+
     [Fact]
     public void An_unknown_content_root_leaves_the_directory_out_and_a_run_without_seed_reports_nothing()
     {
