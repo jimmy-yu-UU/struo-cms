@@ -222,6 +222,7 @@ envelope shape is the same as any other error, covered in
 Take `editor@example.com`, whose role is granted only `article` read, and use it to edit an
 article. The request body comes first, the response after:
 
+<!-- capture: ch17-put-article-editor-403 -->
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
 body:
@@ -284,6 +285,7 @@ all is simply absent from `permissions`.
 Take `editor@example.com` again, whose role only grants `article` read. First the result with no
 `roles=`, then the result with a hypothetical super-admin role swapped in:
 
+<!-- capture: ch17-effective-permissions -->
 ```text
 $ GET /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/effective-permissions
 {"success":true,"data":{"isSuperAdmin":false,"permissions":{"article":{"read":true,"write":false,"delete":false}}}}

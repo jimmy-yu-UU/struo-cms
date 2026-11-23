@@ -18,6 +18,7 @@
 //     bearer: '{{token}}',          // a bearer token instead of the cookie
 //     method: 'POST',
 //     path: '/api/items/x/{{xId}}', // {{name}} is replaced by a variable an earlier step saved
+//     upload: { field, fixture, contentType }, // a multipart file part from the fixtures directory
 //     body: { a: '{{xId}}' },       // an object is sent as compact JSON; a string is sent verbatim;
 //                                   // a function receives the variables and returns either
 //     expect: 201,                  // required: the status the manual shows
@@ -28,9 +29,13 @@
 //     deletes: 'revokes the token this run issued', // a DELETE of something the run did not create
 //     verify: (json, vars) => {},   // throws to stop the run
 //     transforms: ['stripTraceId'], // print transforms (lib/transforms.mjs)
-//     print: { requestBody, note, headers, responseOnly, path, mask },
+//     cli: { program, args, env, exit }, // a command the operator runs; the step sends nothing (lib/cli.mjs)
+//     print: { requestBody, note, headers, responseOnly, path, pretty, binary, mask },
 //                                   // how the exchange is shown. requestBody replaces the printed
-//                                   // body; mask: { name: '<placeholder>' } replaces every occurrence
+//                                   // body (a string, an object or a function of the variables); note and
+//                                   // path take {{name}}; headers: true or a list of names; pretty adds a
+//                                   // `pretty:` copy; binary: 'png' | true prints a summary of the bytes
+//                                   // instead of the body; mask: { name: '<placeholder>' } replaces every occurrence
 //                                   // of the secret registered under that name in the exchange text
 //   }
 //
@@ -42,14 +47,17 @@
 // secret value or a carriage return is refused; a DELETE must carry a whole path segment equal to an
 // id a 201 response of this run returned, or a declared `deletes` reason; and the run produces and
 // checks every block of every selected file before it replaces any file.
-import { renameSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { BinaryError, summarizeBinary } from './binary.mjs'
+import { cliBlock, cliDescriptors, readCliResult } from './cli.mjs'
 import { LOCALES, chapterProblems, declaredByFile, readTexts } from './check.mjs'
 import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
 import { CaptureError } from './errors.mjs'
 import { checkFresh } from './fresh.mjs'
 import { formatBlock, formatExchange } from './format.mjs'
 import { MarkerError, replaceBlock } from './markers.mjs'
+import { MultipartError, buildMultipart } from './multipart.mjs'
 import { inOrder } from './sequence.mjs'
 import { TransformError, applyTransforms } from './transforms.mjs'
 
@@ -73,10 +81,30 @@ function substitute(value, vars) {
   return value
 }
 
-function requestBody(step, vars) {
-  const raw = typeof step.body === 'function' ? step.body(vars) : step.body
+function renderBody(source, vars) {
+  const raw = typeof source === 'function' ? source(vars) : source
   if (raw === undefined || typeof raw === 'string') return raw
   return JSON.stringify(substitute(raw, vars))
+}
+
+const FIXTURE_NAME = /^[A-Za-z0-9_][\w.-]*$/
+
+function readFixture(dir, name) {
+  if (!dir) throw new Error('an upload step needs a fixtures directory')
+  if (!FIXTURE_NAME.test(name)) throw new Error(`fixture '${name}' is not a plain file name`)
+  return readFileSync(join(dir, name))
+}
+
+// The bytes and content type a step sends: an upload builds its multipart body from the fixture.
+function outgoing(step, vars, fixtures) {
+  if (!step.upload) {
+    const body = renderBody(step.body, vars)
+    const override = step.print?.requestBody
+    return { body, contentType: undefined, printed: override === undefined ? body : renderBody(override, vars) }
+  }
+  const { field, fixture, contentType: partType } = step.upload
+  const { body, contentType } = buildMultipart({ field, fileName: fixture, partType, content: fixtures.get(fixture) })
+  return { body, contentType, printed: renderBody(step.print?.requestBody, vars) }
 }
 
 function pick(json, dotted) {
@@ -92,7 +120,8 @@ function holdsSecret(text, secrets) {
   return [...secrets].some((secret) => secret !== '' && text.includes(secret))
 }
 
-const labelOf = (step) => step.capture ?? step.name ?? `${step.method} ${step.path}`
+const requestOf = (step) => (step.cli ? `command ${step.cli.args.join(' ')}` : `${step.method} ${step.path}`)
+const labelOf = (step) => step.capture ?? step.name ?? requestOf(step)
 
 // Longest first, so a secret that contains another is replaced whole.
 const longestFirst = (values) => [...values].sort((a, b) => b.length - a.length || a.localeCompare(b))
@@ -178,13 +207,14 @@ function requireDeletable(step, path, state) {
 
 // Sends one step: refuses an unsafe DELETE before anything is sent, registers the cookies the
 // response sets, and checks the declared status.
-async function send(client, step, state, { path, body }) {
+async function send(client, step, state, { path, body, contentType }) {
   requireDeletable(step, path, state)
   const response = await client.request({
     identity: step.as,
     method: step.method,
     path,
     body,
+    contentType,
     bearer: step.bearer === undefined ? undefined : substitute(step.bearer, state.vars),
     csrf: step.csrf,
     timeoutMs: step.timeoutMs,
@@ -211,33 +241,50 @@ function collect(state, step, response) {
   step.verify?.(json, state.vars)
 }
 
-function printExchange(state, step, { path, body }, response) {
+function printedBody(step, response) {
+  if (!step.print?.binary) return { body: applyTransforms(response.body, step.transforms), binary: undefined }
+  if ((step.transforms ?? []).length > 0) throw new Error('print.binary prints no body, so a transform on the same step cannot apply')
+  return { body: '', binary: summarizeBinary(response.bytes, step.print.binary) }
+}
+
+function printExchange(state, step, { path, printed }, response) {
+  const { body, binary } = printedBody(step, response)
+  const substituted = (value) => (value === undefined ? undefined : substitute(value, state.vars))
   const text = formatExchange({
     method: step.method,
     path,
-    requestBody: step.print?.requestBody ?? body,
-    printPath: step.print?.path,
-    note: step.print?.note,
+    requestBody: printed,
+    printPath: substituted(step.print?.path),
+    note: substituted(step.print?.note),
     headers: step.print?.headers,
     responseOnly: step.print?.responseOnly,
-    response: { ...response, body: applyTransforms(response.body, step.transforms) },
+    pretty: step.print?.pretty,
+    binary,
+    response: { ...response, body },
   })
   const masked = applyMask(text, step.print?.mask, state)
   state.exchanges.set(step.capture, [...(state.exchanges.get(step.capture) ?? []), masked])
 }
 
-async function execute(client, step, state) {
-  const request = { path: substitute(step.path, state.vars), body: requestBody(step, state.vars) }
+async function execute(client, step, state, context) {
+  const request = { path: substitute(step.path, state.vars), ...outgoing(step, state.vars, context.fixtures) }
   const response = await send(client, step, state, request)
   collect(state, step, response)
   if (step.capture) printExchange(state, step, request, response)
 }
 
+// A command step sends nothing: its block comes from the result files read before the run.
+function recordCommand(state, step, context) {
+  const text = context.commands.get(step.capture)
+  if (text !== undefined) state.exchanges.set(step.capture, [text])
+}
+
 // Every failure of a step leaves as a CaptureError that says which capture, file and request it was.
 async function runStep(client, step, state, context) {
-  const where = `${labelOf(step)} (${context.file ?? context.group}, step ${context.index}: ${step.method} ${step.path})`
+  const where = `${labelOf(step)} (${context.file ?? context.group}, step ${context.index}: ${requestOf(step)})`
   try {
-    await execute(client, step, state)
+    if (step.cli) recordCommand(state, step, context)
+    else await execute(client, step, state, context)
   } catch (error) {
     throw new CaptureError(`${where}: ${redact(error.message ?? String(error), state.secrets)}`, {
       capture: step.capture,
@@ -315,6 +362,8 @@ function operational(error) {
   return (
     error instanceof MarkerError ||
     error instanceof TransformError ||
+    error instanceof BinaryError ||
+    error instanceof MultipartError ||
     error instanceof HostUnreachableError ||
     error instanceof ConnectionError ||
     error instanceof RequestTimeoutError ||
@@ -323,7 +372,7 @@ function operational(error) {
 }
 
 // Reads the selected chapter files and checks their markers against the run, before any request.
-function prepare({ groups, guideDir, only }) {
+function prepare({ groups, guideDir, only, fixturesDir, cliResults }) {
   const declared = declaredByFile(groups)
   const selected = only ?? [...declared.keys()]
   const loaded = selected.map((file) => {
@@ -338,20 +387,49 @@ function prepare({ groups, guideDir, only }) {
   const steps = groups.flatMap((group) =>
     group.steps.map((step) => ({ step, group: group.name, file: step.file ?? group.file })),
   )
-  for (const { step } of steps) {
+  for (const { step } of steps.filter(({ step: candidate }) => !candidate.cli)) {
     if (!Number.isInteger(step.expect)) throw new CaptureError(`${labelOf(step)}: the step declares no expected status`)
   }
-  return { declared, loaded, steps }
+  const fixtures = loadFixtures(steps, fixturesDir)
+  const commands = loadCommands(groups, selected, cliResults)
+  return { declared, loaded, steps, fixtures, commands }
 }
 
-function newState(vars) {
-  const password = vars.adminPassword
+// The fixture files the upload steps name, read before any request is sent.
+function loadFixtures(steps, fixturesDir) {
+  const fixtures = new Map()
+  for (const { step } of steps.filter(({ step: candidate }) => candidate.upload)) {
+    const name = step.upload.fixture
+    try {
+      fixtures.set(name, readFixture(fixturesDir, name))
+    } catch (error) {
+      throw new CaptureError(`${labelOf(step)}: ${error.message}`)
+    }
+  }
+  return fixtures
+}
+
+// The saved output of every command step whose file is written. Every one must have its result.
+function loadCommands(groups, selected, cliResults) {
+  const wanted = cliDescriptors(groups).filter((descriptor) => selected.includes(descriptor.file))
+  if (wanted.length > 0 && !cliResults) {
+    throw new CaptureError(`${wanted.map((item) => item.id).join(', ')}: the run needs the output of a command; pass --cli-results <dir>`)
+  }
+  return new Map(wanted.map((descriptor) => [descriptor.id, cliBlock(descriptor, readCliResult(cliResults, descriptor))]))
+}
+
+function newState(vars, secretVars) {
+  const declared = secretVars.map((name) => {
+    if (typeof vars[name] !== 'string' || vars[name] === '') throw new CaptureError(`secretVars names '${name}', which no run variable holds`)
+    return [name, vars[name]]
+  })
+  const named = [...(vars.adminPassword ? [['adminPassword', vars.adminPassword]] : []), ...declared]
   return {
     vars: { ...vars },
     exchanges: new Map(),
     created: new Set(),
-    secrets: new Set([password].filter(Boolean)),
-    secretByName: new Map(password ? [['adminPassword', password]] : []),
+    secrets: new Set(named.map(([, value]) => value)),
+    secretByName: new Map(named),
   }
 }
 
@@ -365,13 +443,13 @@ async function guarded(guard, args) {
 }
 
 // Runs the guard and then every step, strictly one after another.
-async function play({ baseUrl, vars, steps, guard, freshCollections }) {
+async function play({ baseUrl, vars, steps, guard, freshCollections, secretVars, fixtures, commands }) {
   const client = createClient({ baseUrl })
-  const state = newState(vars)
+  const state = newState(vars, secretVars)
   try {
     await guarded(guard, { client, vars, collections: freshCollections })
     registerSessions(state, client)
-    await inOrder(steps, ({ step, group, file }, index) => runStep(client, step, state, { group, file, index: index + 1 }))
+    await inOrder(steps, ({ step, group, file }, index) => runStep(client, step, state, { group, file, index: index + 1, fixtures, commands }))
   } finally {
     client.close()
   }
@@ -395,7 +473,7 @@ function assemble({ declared, loaded, blocks, guideDir }) {
 
 async function run(options) {
   const prepared = prepare(options)
-  const state = await play({ ...options, steps: prepared.steps })
+  const state = await play({ ...options, steps: prepared.steps, fixtures: prepared.fixtures, commands: prepared.commands })
   const blocks = new Map([...state.exchanges].map(([id, exchanges]) => [id, formatBlock(exchanges)]))
   const fileOf = new Map([...prepared.declared].flatMap(([file, ids]) => [...ids.keys()].map((id) => [id, file])))
   refuseUnsafeBlocks(blocks, state.secrets, fileOf)
@@ -413,10 +491,13 @@ export async function runCapture({
   only,
   guard = checkFresh,
   freshCollections = [],
+  secretVars = [],
+  fixturesDir,
+  cliResults,
   io = DEFAULT_IO,
 }) {
   try {
-    return await run({ baseUrl, vars, groups, guideDir, write, only, guard, freshCollections, io })
+    return await run({ baseUrl, vars, groups, guideDir, write, only, guard, freshCollections, secretVars, fixturesDir, cliResults, io })
   } catch (error) {
     if (error instanceof CaptureError || !operational(error)) throw error
     throw new CaptureError(error.message)

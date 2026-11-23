@@ -79,6 +79,7 @@ The example below uses the Blog sample's `article` collection (revisions on) to 
 returning `200` rather than `204`; the ids that appear are specific to this batch of test data, and
 your own environment will differ:
 
+<!-- capture: ch13-trash-and-restore -->
 ```text
 $ DELETE /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c
 
@@ -199,6 +200,7 @@ The `POST` takes `{ "emails": [...] }`, one to 100 addresses, each non-blank and
 anything else returns `400` `BAD_USER_INPUT`, and a caller without read on `user` gets `403`. It answers
 one entry per address, in the order sent, so an address sent twice is answered twice:
 
+<!-- capture: ch13-login-locks-query -->
 ```text
 $ POST /api/login-locks/query
 body:
@@ -274,6 +276,7 @@ only `Retry-After` differs, because the two windows aren't the same length.
 
 An actual login, followed by a read of `me`:
 
+<!-- capture: ch13-login-and-me -->
 ```text
 $ POST /api/auth/login
 body:

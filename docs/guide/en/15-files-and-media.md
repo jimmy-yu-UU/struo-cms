@@ -88,6 +88,7 @@ grant; without it the response is `Write not permitted.`.
 Success is `201`, with `Location` pointing at the file just created, and a body that's the
 projected row:
 
+<!-- capture: ch15-upload-swatch-201 -->
 ```text
 $ POST /api/files  (multipart: file=@swatch.png; type=image/png)
 HTTP/1.1 201 Created
@@ -238,6 +239,7 @@ unpublished" grant flag — this rule is derived from the same three grant flags
 already has. Listing the library (`GET /api/items/file`) is a separate matter and needs the
 ordinary `file` read grant.
 
+<!-- capture: ch15-get-draft-anon-404 -->
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
@@ -247,6 +249,7 @@ HTTP_STATUS:404
 The error examples in this manual leave out `traceId`, which every error response carries; see
 [Chapter 12](12-rest-conventions.md#the-response-envelope).
 
+<!-- capture: ch15-get-draft-admin -->
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 {"success":true,"data":{"id":"27327d5a-6cb0-40e3-b288-6d1186db6ab9","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
@@ -388,6 +391,7 @@ may use gets `503` with the `IMAGE_TRANSFORM_BUSY` code and a `Retry-After` head
 
 ### Examples
 
+<!-- capture: ch15-content-width5000-png -->
 ```text
 $ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
 HTTP/1.1 200 OK
@@ -542,6 +546,7 @@ reference the same way trashing does.
 Only `true` triggers the permanent delete, case-insensitively; a spelling like `?purge=1` doesn't
 work:
 
+<!-- capture: ch15-delete-purge-1-400 -->
 ```text
 $ DELETE /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9?purge=1
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"purge","message":"The value '1' is not valid."}]}}

@@ -246,6 +246,7 @@ are in [Chapter 12: REST API Conventions](12-rest-conventions.md).
 
 Issue a token for `editor@example.com`, read once with it, revoke it, then read again:
 
+<!-- capture: ch16-token-flow -->
 ```text
 $ POST /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
 {"success":true,"data":{"token":"Lg9y_o7xrCFg2nGIQzeOPPluSndpdNQ-Hr9YtfNW7Pc"}}
@@ -331,6 +332,7 @@ Every layer returns `429` when it blocks, with the envelope code always `TOO_MAN
 ten failed logins in a row against the same never-used email, and the eleventh trips the
 throttle — the response shown is one more request sent after the throttle engaged:
 
+<!-- capture: ch16-login-429-after-lock -->
 ```text
 $ POST /api/auth/login (-i, the attempt after the first 429)
 body:
@@ -362,6 +364,7 @@ still a locked door. There are three ways to open it sooner:
   sign-in only.
 - Run `auth:unlock` on the server. It is the way in when nobody can sign in at all.
 
+<!-- capture: ch16-cli-unlock-cleared -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: cleared the login lock for the given account, if it had one.
@@ -380,6 +383,7 @@ connection string, and exits `1`.
 Without Redis, each API process counts attempts in its own memory, which a separate command cannot
 reach. The command says so and exits `1`, so a script does not take it for success:
 
+<!-- capture: ch16-cli-unlock-no-redis -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.

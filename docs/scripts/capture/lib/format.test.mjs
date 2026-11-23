@@ -82,3 +82,30 @@ test('a block joins several exchanges with a blank line', () => {
   assert.equal(formatBlock(['a\nb', 'c']), 'a\nb\n\nc')
   assert.equal(formatBlock(['solo']), 'solo')
 })
+
+test('pretty appends a pretty: line and an indented copy after the status, leaving the raw line alone', () => {
+  const text = formatExchange({
+    method: 'GET',
+    path: '/x',
+    pretty: true,
+    response: response({ body: '{"a":{"b":[1]},"c":{}}' }),
+  })
+  assert.equal(
+    text,
+    ['$ GET /x', '{"a":{"b":[1]},"c":{}}', 'HTTP_STATUS:200', 'pretty:', '{', '  "a": {', '    "b": [', '      1', '    ]', '  },', '  "c": {}', '}'].join('\n'),
+  )
+})
+
+test('a binary response prints its summary lines in place of the body, after the chosen headers', () => {
+  const text = formatExchange({
+    method: 'GET',
+    path: '/img',
+    headers: ['content-type'],
+    binary: ['# body: 3 bytes (binary, not shown)'],
+    response: response({ body: '���' }),
+  })
+  assert.equal(
+    text,
+    ['$ GET /img', 'HTTP/1.1 200 OK', 'Content-Type: application/json; charset=utf-8', '', '# body: 3 bytes (binary, not shown)', 'HTTP_STATUS:200'].join('\n'),
+  )
+})

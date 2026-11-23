@@ -73,6 +73,7 @@ not permitted.`。
 
 成功是 `201`，`Location` 指向剛建立的檔案，body 是投影過的一列：
 
+<!-- capture: ch15-upload-swatch-201 -->
 ```text
 $ POST /api/files  (multipart: file=@swatch.png; type=image/png)
 HTTP/1.1 201 Created
@@ -195,6 +196,7 @@ allowed.`。
 權。沒有另一個「讀取未發布」的授權旗標，這條規則就是從每個集合都有的那三個既有旗標推出來
 的。列出媒體庫（`GET /api/items/file`）是另一回事，需要一般的 `file` 讀取授權。
 
+<!-- capture: ch15-get-draft-anon-404 -->
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
@@ -204,6 +206,7 @@ HTTP_STATUS:404
 本手冊的錯誤範例省略了每個錯誤回應都帶有的 `traceId`，
 見[第 12 章](12-rest-conventions.md#回應信封)。
 
+<!-- capture: ch15-get-draft-admin -->
 ```text
 $ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
 {"success":true,"data":{"id":"27327d5a-6cb0-40e3-b288-6d1186db6ab9","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
@@ -312,6 +315,7 @@ cover 高度。
 
 ### 例子
 
+<!-- capture: ch15-content-width5000-png -->
 ```text
 $ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
 HTTP/1.1 200 OK
@@ -434,6 +438,7 @@ null，指向這個檔案的多對多連接資料列會被移除。blob 的清�
 
 只有 `true` 會觸發永久刪除，大小寫不拘；`?purge=1` 這種寫法不行：
 
+<!-- capture: ch15-delete-purge-1-400 -->
 ```text
 $ DELETE /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9?purge=1
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"purge","message":"The value '1' is not valid."}]}}

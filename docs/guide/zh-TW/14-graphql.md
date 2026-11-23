@@ -182,6 +182,7 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 跟對應的輸入型別一起省略。送出的 `junction` 篩選攤平成 REST 的 `_junction.<欄位>`。下面這個查詢示範
 同一列量詞（`some` 配 `junction`）跟 `tagsLinks` 的讀取形狀：
 
+<!-- capture: ch14-some-junction -->
 ```text
 $ POST /graphql
 body:
@@ -290,6 +291,7 @@ tagsLinks: [ArticleTagsLink!]
 樣；整組附加介面只要 payload 欄位全部隱藏或無法對應，就一起省略。下面是實際送出 `tagsLinks` 之後的
 回應：
 
+<!-- capture: ch14-update-tagslinks -->
 ```text
 $ POST /graphql
 body:
@@ -342,6 +344,7 @@ Blog 樣板的 `article` 開了這個選項：`articleRevisions` 回一份由新
 
 匿名呼叫端送一個沒有讀取授權的查詢，會發生這一章讀者最容易意外的事：
 
+<!-- capture: ch14-anon-users -->
 ```text
 $ POST /graphql (no cookie)
 body:
@@ -372,6 +375,7 @@ GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver
 resolver 開始跑之前就出錯，不帶任何例外，也就沒有 `extensions.code`，HotChocolate 直接回 HTTP
 `400`：
 
+<!-- capture: ch14-bogus-field-400 -->
 ```text
 $ POST /graphql
 body:

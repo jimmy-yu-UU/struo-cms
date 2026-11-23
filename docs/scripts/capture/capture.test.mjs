@@ -93,3 +93,27 @@ test('an unknown chapter number exits 1', () => {
   assert.equal(result.status, 1)
   assert.match(result.stderr, /no scenario for chapter 99/)
 })
+
+test('--list-cli prints every command the scenario needs as JSON, with no network and no password', () => {
+  const result = run(['--list-cli'], join(dirname(CLI), '..', '..'))
+  assert.equal(result.status, 0, result.stderr)
+  const list = JSON.parse(result.stdout)
+  assert.ok(list.length >= 2)
+  for (const item of list) {
+    assert.match(item.id, /^[\w.-]+$/)
+    assert.ok(Array.isArray(item.args) && item.args.length > 0)
+    assert.equal(typeof item.env, 'object')
+    assert.ok(Number.isInteger(item.exit))
+  }
+})
+
+test('a --cli-results directory outside the working directory is refused', () => {
+  const root = makeGuide('# a\n', '# a\n')
+  try {
+    const result = run([BASE_URL_FLAG, DEAD_HOST, '--guide-dir', root, '--cli-results', tmpdir()], root, { STRUO_CAPTURE_ADMIN_PASSWORD: FIXTURE_PASSWORD })
+    assert.equal(result.status, 1)
+    assert.match(result.stderr, /outside the working directory/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

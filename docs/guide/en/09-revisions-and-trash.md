@@ -149,6 +149,7 @@ version are left as they were, and the usual save-conflict banner is not shown.
 For an item that was created and then updated once, listing its revisions returns only metadata,
 no snapshot content, newest first:
 
+<!-- capture: ch9-list-revisions -->
 ```text
 $ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
 {"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
@@ -305,6 +306,7 @@ Here is a complete trash round-trip: trash it, find it with `?deleted=only`, the
 list also narrows to this one row with `filter[id][_eq]`, because the development database still
 holds other trashed articles):
 
+<!-- capture: ch9-trash-round-trip -->
 ```text
 $ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
 

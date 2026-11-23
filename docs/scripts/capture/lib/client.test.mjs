@@ -233,3 +233,33 @@ test('a POST the server processed and then reset is never sent twice, and the st
     })
   }
 })
+
+test('a response keeps its raw bytes next to the decoded text', async () => {
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00])
+  await withStub(
+    () => ({ status: 200, headers: { 'Content-Type': 'image/png' }, body: bytes }),
+    async (_stub, client) => {
+      const res = await client.request({ identity: undefined, method: 'GET', path: '/img' })
+      assert.deepEqual(res.bytes, bytes)
+      assert.equal(typeof res.body, 'string')
+    },
+  )
+})
+
+test('a Buffer body is sent byte for byte with the content type the step names', async () => {
+  const body = Buffer.from([0x00, 0xff, 0x0d, 0x0a, 0x41])
+  await withStub(
+    () => ({ status: 201, body: '{}' }),
+    async (stub, client) => {
+      await client.request({
+        identity: 'admin',
+        method: 'POST',
+        path: '/up',
+        body,
+        contentType: 'multipart/form-data; boundary=zz',
+      })
+      assert.equal(stub.requests[0].headers['content-type'], 'multipart/form-data; boundary=zz')
+      assert.deepEqual(stub.requests[0].rawBody, body)
+    },
+  )
+})

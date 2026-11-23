@@ -332,6 +332,7 @@ still succeeds with no expansion and no error.
 A one-to-many expansion looks like this, with `articles` an array of full item projections, each
 carrying its `translations` because `article` has a translation sidecar:
 
+<!-- capture: ch8-deep-category-articles -->
 ```text
 $ GET /api/items/category/01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1?deep=articles
 {"success":true,"data":{"id":"01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1","version":0,"name":"Tutorials","createdAt":"2026-11-19T10:33:47.3768579Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.3773908Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","articles":[{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}]}}
@@ -351,6 +352,7 @@ name, and it's reachable only through `deep`.
 A many-to-many expansion with payload looks like this, with each of `tags`' entries gaining a
 `_junction`:
 
+<!-- capture: ch8-deep-article-tags -->
 ```text
 $ GET /api/items/article/01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b?deep=tags
 {"success":true,"data":{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","tags":[{"id":"01a1f35e-a088-7ce7-9813-aa98d6dca224","version":0,"name":"howto","createdAt":"2026-11-19T10:33:47.4015639Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4016547Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","_junction":{"note":"primary tag"}}],"translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}}

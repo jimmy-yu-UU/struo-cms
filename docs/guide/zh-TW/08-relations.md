@@ -273,6 +273,7 @@ junction 順序——關聯沒有宣告 `SortField`、或該欄位不是數字�
 一對多展開長這樣，`articles` 是一個陣列，元素是完整的項目投影；`article` 有翻譯 sidecar，所以
 每一列都帶 `translations`：
 
+<!-- capture: ch8-deep-category-articles -->
 ```text
 $ GET /api/items/category/01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1?deep=articles
 {"success":true,"data":{"id":"01a1f35e-a06e-7517-a5cb-2ff0ef41e2d1","version":0,"name":"Tutorials","createdAt":"2026-11-19T10:33:47.3768579Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.3773908Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","articles":[{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}]}}
@@ -289,6 +290,7 @@ HTTP_STATUS:200
 
 帶 payload 的多對多展開長這樣，`tags` 的每一筆多一個 `_junction`：
 
+<!-- capture: ch8-deep-article-tags -->
 ```text
 $ GET /api/items/article/01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b?deep=tags
 {"success":true,"data":{"id":"01a1f35e-a0a5-72bc-9e34-2cb79ef1b01b","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-19T10:33:47.4302385Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4303142Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","tags":[{"id":"01a1f35e-a088-7ce7-9813-aa98d6dca224","version":0,"name":"howto","createdAt":"2026-11-19T10:33:47.4015639Z","createdBy":"01a1f35e-9d25-7123-9032-ae662763c48e","updatedAt":"2026-11-19T10:33:47.4016547Z","updatedBy":"01a1f35e-9d25-7123-9032-ae662763c48e","_junction":{"note":"primary tag"}}],"translations":{"en":{"title":"Getting started with StruoCMS","body":"<p>Run the API and the admin SPA.</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null},"zh-TW":{"title":"開始使用 StruoCMS","body":"<p>先把 API 與後台跑起來。</p>","seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}}

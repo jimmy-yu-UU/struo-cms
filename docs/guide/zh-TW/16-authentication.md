@@ -178,6 +178,7 @@ CSRF 的完整說明見[第 12 章：REST API 慣例](12-rest-conventions.md)。
 
 替 `editor@example.com` 核發一支權杖、拿它讀一次、撤銷、再讀一次：
 
+<!-- capture: ch16-token-flow -->
 ```text
 $ POST /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
 {"success":true,"data":{"token":"Lg9y_o7xrCFg2nGIQzeOPPluSndpdNQ-Hr9YtfNW7Pc"}}
@@ -248,6 +249,7 @@ bearer 標頭讓這支請求降級成匿名，而這個環境的 `article` 沒�
 裡因此無法分辨。下面這段示範對同一個沒用過的 email 連續打了十次錯誤登入，第十一次觸發節流；貼出
 來的回應，是節流生效之後再送一次的樣子：
 
+<!-- capture: ch16-login-429-after-lock -->
 ```text
 $ POST /api/auth/login (-i, the attempt after the first 429)
 body:
@@ -273,6 +275,7 @@ HTTP_STATUS:429
 
 - 另一位超級管理員照上面說的解除。只有 `user` 寫入授權的人做不到，因為鎖定在超級管理員帳號上。
 
+<!-- capture: ch16-cli-unlock-cleared -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: cleared the login lock for the given account, if it had one.
@@ -288,6 +291,7 @@ email 依登入的做法去頭尾空白並轉小寫。`--email` 缺少、空白�
 沒有 Redis 時，每個 API 行程各自在記憶體裡計數，另一個命令碰不到。命令會這樣說並以 `1` 結束，
 腳本才不會把它當成成功：
 
+<!-- capture: ch16-cli-unlock-no-redis -->
 ```text
 $ dotnet Struo.Api.dll auth:unlock --email Admin@Example.com
 auth:unlock: no Redis is configured, so the login attempt count lives in the memory of the API process, which this command cannot reach. Restart the API to clear every login lock.

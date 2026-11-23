@@ -76,12 +76,14 @@ function attempt(url, options, body, timeoutMs) {
       res.on('end', () => {
         const headers = []
         for (let i = 0; i < res.rawHeaders.length; i += 2) headers.push([res.rawHeaders[i], res.rawHeaders[i + 1]])
+        const bytes = Buffer.concat(chunks)
         finish(resolve, {
           status: res.statusCode,
           statusMessage: res.statusMessage,
           httpVersion: res.httpVersion,
           headers,
-          body: Buffer.concat(chunks).toString('utf8'),
+          bytes,
+          body: bytes.toString('utf8'),
         })
       })
     })
@@ -108,10 +110,10 @@ export function createClient({ baseUrl, csrfValue = 'capture', timeoutMs = DEFAU
   const agents = { 'http:': new http.Agent({ keepAlive: true }), 'https:': new https.Agent({ keepAlive: true }) }
 
   // identity: the name of a cookie jar, or undefined for a request with no cookie at all.
-  async function request({ identity, method, path, body, bearer, csrf = true, timeoutMs: stepTimeout }) {
+  async function request({ identity, method, path, body, contentType, bearer, csrf = true, timeoutMs: stepTimeout }) {
     const jar = identity === undefined ? null : (jars.get(identity) ?? jars.set(identity, new Map()).get(identity))
     const headers = {}
-    if (body !== undefined) headers['Content-Type'] = 'application/json'
+    if (body !== undefined) headers['Content-Type'] = contentType ?? 'application/json'
     if (bearer !== undefined) {
       headers.Authorization = `Bearer ${bearer}`
     } else if (jar && jar.size > 0) {

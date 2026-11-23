@@ -65,6 +65,7 @@ JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `40
 以下用 Blog 樣板的 `article`（有開版本紀錄）示範復原回 `200` 而不是 `204`；下面出現的 id 都是這
 批測試資料本身的，讀者環境會不同：
 
+<!-- capture: ch13-trash-and-restore -->
 ```text
 $ DELETE /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c
 
@@ -169,6 +170,7 @@ role collection is required.`。寫入超級管理員角色或 `public` 角色�
 `BAD_USER_INPUT`，沒有 `user` 讀取授權的呼叫端回 `403`。它依送出的順序，每個位址回一筆，同一個位址送兩次
 就回兩次：
 
+<!-- capture: ch13-login-locks-query -->
 ```text
 $ POST /api/login-locks/query
 body:
@@ -236,6 +238,7 @@ body 是 `{ brandName, logoFileId? }`，回應是 `{ brandName, brandLogoUrl }`�
 
 登入接著讀 `me` 的一次實際回應：
 
+<!-- capture: ch13-login-and-me -->
 ```text
 $ POST /api/auth/login
 body:

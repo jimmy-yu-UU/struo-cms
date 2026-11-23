@@ -41,6 +41,7 @@ required.`，`403` 是 `Forbidden.`，`404` 是 `Resource not found.`，`409` �
 
 一個 `201` 建立，帶完整回應標頭：
 
+<!-- capture: ch12-create-tag-201 -->
 ```text
 $ POST /api/items/tag
 body:
@@ -161,6 +162,7 @@ public sealed class QuotaExceededException(string message)
 執行之前。另一個來源是缺必填翻譯的 `BAD_USER_INPUT`，見後面。陣列裡一個項目對應一項驗證失敗，不是一個欄位一項——同一個欄位若同時違反兩項檢查，會產生
 兩筆共用同一個 `field` 的項目。ASP.NET Core 沒給訊息時，退回固定的 `Invalid value.`。
 
+<!-- capture: ch12-users-validation-400 -->
 ```text
 $ POST /api/users
 body:
@@ -187,6 +189,7 @@ HTTP_STATUS:400
 全部資訊。例外是三種翻譯錯誤（缺必填翻譯、翻譯值無效（含型別不對、違反格式規則與超過
 `MaxLength`）、locale 重複），其中第一種見後面：
 
+<!-- capture: ch12-users-short-password-400 -->
 ```text
 $ POST /api/users
 body:
@@ -237,6 +240,7 @@ GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這
 
 替目前這個帳號申請一個權杖、用它讀一次、再撤銷它：
 
+<!-- capture: ch12-token-flow -->
 ```text
 $ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
 {"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
@@ -275,6 +279,7 @@ cookie 也一樣豁免。
 這道檢查涵蓋每一個非安全方法的路徑，不只是 `/api/*`：`POST /graphql` 也是非安全方法，一個用 cookie
 認證的 GraphQL 請求，查詢或 mutation 都一樣要帶這個標頭。少了它，回應是：
 
+<!-- capture: ch12-query-no-csrf-403 -->
 ```text
 $ POST /api/items/article/query (no CSRF header)
 body:
@@ -293,6 +298,7 @@ HTTP_STATUS:403
 body 也可以把讀到的值原樣送回；伺服器拿這個值去比對目前存好的那一列，一致才會真的寫入，不一致就
 整個拒絕：
 
+<!-- capture: ch12-put-version-conflict-409 -->
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
 body:
@@ -339,6 +345,7 @@ body 也從不讀它。
 一個局部的 `PUT` 因此不會不小心清掉伺服器自己在管、呼叫端根本沒送的欄位。以下幾種常見的 body 錯誤
 都是實際跑出來的訊息：
 
+<!-- capture: ch12-put-published-at-empty-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'publishedAt' has an invalid value."}}
 HTTP_STATUS:400
@@ -350,6 +357,7 @@ HTTP_STATUS:400
 
 `file` 集合要走專屬的上傳端點，對它送 `POST /api/items/file` 一律被拒絕，不管 body 寫什麼：
 
+<!-- capture: ch12-post-file-collection-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Items cannot be created in collection 'file' through the generic items API."}}
 HTTP_STATUS:400
@@ -364,6 +372,7 @@ HTTP_STATUS:400
 
 以下是實際的寫入與回應，`tags` 的陣列裡一個純 id、一個帶 payload 的物件：
 
+<!-- capture: ch12-put-tags-mixed-200 -->
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
 body:
@@ -377,6 +386,7 @@ HTTP_STATUS:200
 
 payload 欄位驗證失敗時，訊息會標明是哪個關聯、哪個目標，方便一次改好幾筆連結的表單定位問題：
 
+<!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a08f92-396e-7bf7-a77c-149c9aa732b1': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
@@ -388,6 +398,7 @@ HTTP_STATUS:400
 一個物件元素送到沒有宣告 payload 的關聯，或陣列裡出現布林、陣列、`null`、非整數、不是目標主鍵型別的
 id 這些不合法的形狀，一律得到同一句泛用訊息：
 
+<!-- capture: ch12-put-tags-invalid-ids-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}
 HTTP_STATUS:400

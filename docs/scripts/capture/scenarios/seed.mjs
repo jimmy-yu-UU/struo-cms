@@ -1,20 +1,15 @@
-// The data set the query chapters read: category Guides, tags howto and release, and articles A, B
-// and C created in that order (the default list order is newest first, so the manual shows C, B, A).
-// Every step here is setup; nothing is printed. The runner's fresh-database guard has already logged
-// in as the admin, so the steps use that session.
+// The data set the chapters read: category Guides, tags howto and release, articles A, B and C
+// created in that order (the default list order is newest first, so the manual shows C, B, A), and
+// the editor role (read on article only) with one user who holds it. Every step here is setup;
+// nothing is printed. The runner's fresh-database guard has already logged in as the admin, so the
+// steps use that session. The password of the editor user is a run variable and a registered secret.
+import { PASSWORD_FIELD, create, setup } from './steps.mjs'
+
 const GUIDES = '{{guidesId}}'
-const create = (name, collection, body, save) => ({
-  name,
-  as: 'admin',
-  method: 'POST',
-  path: `/api/items/${collection}`,
-  body,
-  expect: 201,
-  save,
-})
+const EDITOR_EMAIL = 'editor@example.com'
 
 export const seed = {
-  name: 'seed: the Guides data set',
+  name: 'seed: the Guides data set and the editor',
   steps: [
     create('create category Guides', 'category', { name: 'Guides' }, { guidesId: 'data.id' }),
     create('create tag howto', 'tag', { name: 'howto' }, { howtoId: 'data.id' }),
@@ -38,5 +33,14 @@ export const seed = {
       categoryId: GUIDES,
       translations: { en: { title: 'Draft piece' } },
     }, { articleCId: 'data.id' }),
+    create('create role editor', 'role', { name: 'editor' }, { editorRoleId: 'data.id' }),
+    setup('grant the editor read on article', 'PUT', '/api/roles/{{editorRoleId}}/permissions', 200, {
+      body: [{ collection: 'article', canRead: true, canWrite: false, canDelete: false }],
+    }),
+    setup('create the editor user', 'POST', '/api/users', 201, {
+      body: (vars) => JSON.stringify({ email: EDITOR_EMAIL, name: 'Editor', [PASSWORD_FIELD]: vars.editorPassword }),
+      save: { editorId: 'id' },
+    }),
+    create('give the editor user the editor role', 'userRole', { userId: '{{editorId}}', roleId: '{{editorRoleId}}' }),
   ],
 }

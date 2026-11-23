@@ -50,6 +50,7 @@ When the controller attaches its own message text, that text replaces the defaul
 
 A `201` create, with the complete set of response headers:
 
+<!-- capture: ch12-create-tag-201 -->
 ```text
 $ POST /api/items/tag
 body:
@@ -192,6 +193,7 @@ corresponds to one validation failure, not one field: a field that violates two 
 produces two entries sharing the same `field`. When ASP.NET Core gives no message of its own, it
 falls back to the fixed `Invalid value.`.
 
+<!-- capture: ch12-users-validation-400 -->
 ```text
 $ POST /api/users
 body:
@@ -221,6 +223,7 @@ translation errors (a missing required translation, an invalid translation value
 a format violation or a value over its `MaxLength`, and a duplicate locale), of which the first is shown
 below:
 
+<!-- capture: ch12-users-short-password-400 -->
 ```text
 $ POST /api/users
 body:
@@ -280,6 +283,7 @@ rules is left to the authentication chapter.
 
 Issue a token for the current account, read once with it, then revoke it:
 
+<!-- capture: ch12-token-flow -->
 ```text
 $ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
 {"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
@@ -322,6 +326,7 @@ This check covers every unsafe-method path, not just `/api/*` — `POST /graphql
 method too, so a GraphQL request authenticated with a cookie needs this header whether it's a
 query or a mutation. Without it, the response is:
 
+<!-- capture: ch12-query-no-csrf-403 -->
 ```text
 $ POST /api/items/article/query (no CSRF header)
 body:
@@ -343,6 +348,7 @@ A collection with `version` returns it on every read and list response, and an u
 that value back for the server to compare against the row's current value; the write lands only when
 the two match, and is rejected whole when they don't:
 
+<!-- capture: ch12-put-version-conflict-409 -->
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
 body:
@@ -403,6 +409,7 @@ its many-to-one foreign keys alike — and that presence check is case-insensiti
 therefore never accidentally clears a server-managed field the caller never sent. A few common body
 mistakes and the messages they actually produce:
 
+<!-- capture: ch12-put-published-at-empty-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Field 'publishedAt' has an invalid value."}}
 HTTP_STATUS:400
@@ -415,6 +422,7 @@ sending `{"name":null}` against a required field produces `Field 'name' is requi
 The `file` collection has to go through its own dedicated upload endpoint — sending
 `POST /api/items/file` against it is always refused, whatever the body says:
 
+<!-- capture: ch12-post-file-collection-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Items cannot be created in collection 'file' through the generic items API."}}
 HTTP_STATUS:400
@@ -433,6 +441,7 @@ looks like written into a `PUT` body.
 Here is an actual write and response, with one bare id and one payload-carrying object in the
 `tags` array:
 
+<!-- capture: ch12-put-tags-mixed-200 -->
 ```text
 $ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
 body:
@@ -448,6 +457,7 @@ chapter. The first target is only linked; the second target's `note` is replaced
 When a payload field fails validation, the message names the relation and the target, so a form
 editing several links at once can pin down exactly where the problem is:
 
+<!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a08f92-396e-7bf7-a77c-149c9aa732b1': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
@@ -461,6 +471,7 @@ An object element sent to a relation that has no declared payload, or an invalid
 array — a boolean, an array, `null`, a non-integer, an id that is not of the target's key type —
 always gets the same general-purpose message:
 
+<!-- capture: ch12-put-tags-invalid-ids-400 -->
 ```text
 {"success":false,"error":{"code":"BAD_USER_INPUT","message":"One or more ids in 'tags' are not valid."}}
 HTTP_STATUS:400

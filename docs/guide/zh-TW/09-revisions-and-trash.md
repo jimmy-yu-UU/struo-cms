@@ -124,6 +124,7 @@ GraphQL 從同一個開關加出對應的三個介面，不需要逐集合寫任
 
 建立後更新過一次的項目，列出它的版本紀錄只回傳 metadata，不含快照內容，由新到舊排序：
 
+<!-- capture: ch9-list-revisions -->
 ```text
 $ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
 {"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
@@ -256,6 +257,7 @@ payload 完全一樣，因此除了項目本身，也要有 junction collection 
 以下是完整的一次垃圾桶往返：丟進垃圾桶、用 `?deleted=only` 找到它、再復原（列表額外用
 `filter[id][_eq]` 收斂到這一筆，因為開發用的資料庫裡還留著其他已經丟進垃圾桶的文章）：
 
+<!-- capture: ch9-trash-round-trip -->
 ```text
 $ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
 

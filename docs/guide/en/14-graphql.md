@@ -232,6 +232,7 @@ field and its input type are omitted together.
 A submitted `junction` filter flattens down to REST's `_junction.<field>`. The query below shows
 both a same-row quantifier (`some` paired with `junction`) and `tagsLinks`' own read shape:
 
+<!-- capture: ch14-some-junction -->
 ```text
 $ POST /graphql
 body:
@@ -359,6 +360,7 @@ Selecting `<rel>Links` triggers the same expansion selecting `<rel>` would, even
 the `node` sub-field; the whole extra field pair is omitted as soon as every payload field is hidden
 or unmappable. Below is the actual response after sending `tagsLinks`:
 
+<!-- capture: ch14-update-tagslinks -->
 ```text
 $ POST /graphql
 body:
@@ -423,6 +425,7 @@ returns the item itself, reverted.
 An anonymous caller sending a query with no read grant hits the thing this chapter's readers find
 most surprising:
 
+<!-- capture: ch14-anon-users -->
 ```text
 $ POST /graphql (no cookie)
 body:
@@ -459,6 +462,7 @@ all, names a field that doesn't exist, or violates the depth or cost rules fails
 resolver ever runs, carries no exception, and so has no `extensions.code` — HotChocolate returns
 plain HTTP `400`:
 
+<!-- capture: ch14-bogus-field-400 -->
 ```text
 $ POST /graphql
 body:
