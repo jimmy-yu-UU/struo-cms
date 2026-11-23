@@ -394,15 +394,18 @@ captured blocks are printed and no file changes. `--base-url` and `--email` over
 above, and `--guide-dir` points at another manual root inside the working directory.
 
 **Command blocks.** The tool does not run commands. A scenario step with `cli: { program, args,
-env, exit }` declares a command line (`$ <program> <args>`), the environment it needs on top of the
-host's, and its exit code. `node scripts/capture/capture.mjs --list-cli` prints those steps as JSON
-(`id`, `file`, `program`, `args`, `env`, `exit`) without a network. The operator runs each one where
-the host runs, for example `docker exec -e NAME=value <api container> dotnet Struo.Api.dll ...`,
-and saves the merged stdout and stderr as `<id>.out` and the exit code as `<id>.exit` in one
-directory. The run takes that directory through `--cli-results <dir>`, which lies inside the working
-directory. Before the first request it refuses to run when a command of a selected file has no
-result file or ended with another exit code, and it prints the saved output as the block. The
-`auth:unlock` blocks set `Struo__Logging__ConsoleEnabled=false` so host log lines stay out of the
+env, exit }` declares a command line (`$ <program> <args>`, the program one word), the environment
+it needs on top of the host's, and its exit code. `node scripts/capture/capture.mjs --list-cli`
+prints those steps as JSON (`id`, `file`, `program`, `args`, `env`, `exit`) without a network. The
+operator runs each one inside the container or environment the host runs in, with the listed
+environment added, and saves the merged stdout and stderr as `<id>.out` and the exit code as
+`<id>.exit` in one directory, as UTF-8 without a byte-order mark (a result with a byte-order mark
+or a NUL byte is refused). The run takes that directory through `--cli-results <dir>`, which lies
+inside the working directory. Before the first request it refuses to run when a command of a
+selected file has no result file or ended with another exit code, and it prints the saved output as
+the block. The environment is never printed: the two `auth:unlock` blocks have the same `$` line
+although the second runs without the Redis connection string, and the chapter's prose says when
+that happens. They set `Struo__Logging__ConsoleEnabled=false` so host log lines stay out of the
 output, and the second one sets `Redis__ConnectionString` to an empty value.
 
 **The login lock** (chapter 16) sends ten failed logins, the first refused one and the printed
@@ -439,16 +442,24 @@ The docs build runs it.
   variable); every occurrence in that exchange, the `$` line included, is replaced by the text
   before the check runs.
 - How an exchange is shown is set by `print`: `headers: true` prints the status line and every
-  response header, `headers: ['Name', ...]` only the named ones; `note` and `path` take
-  `{{variables}}` and add to the `$` line; `responseOnly` leaves the request out; `pretty: true`
+  response header, `headers: ['Name', ...]` only the named ones (a name the response lacks fails
+  the step); a step that transforms the body cannot show `Content-Length`, because the length is
+  the server's and the body is not, so it names the headers it shows; `note` and `path` take
+  `{{variables}}` and add to the `$` line after one space; `responseOnly` leaves the request out;
+  `pretty: true`
   keeps the raw line and appends `pretty:` with an indented copy; `binary: 'png'` prints the
   decoded PNG size and the byte count in place of a binary body (`binary: true` the byte count
   only) and cannot be combined with a transform. Steps that share a capture id make one block.
 - A step can also upload a fixture as one multipart file part (`upload: { field, fixture,
   contentType }`), send a bearer token (`bearer`), omit the CSRF header (`csrf: false`), or run as
-  an identity with its own cookie jar (`as`); a step with no `as` sends no cookie, which a login
-  needs. `verify(json, vars)` and `verifyResponse(response)` check what the prose says about a
-  request the manual does not show; a throw stops the run.
+  an identity with its own cookie jar (`as`). An upload's body is never printed; the `$` line gets
+  the note `(multipart: file=@<fixture>; type=<contentType>)` from the declaration, before any
+  `print.note`. A step with no `as` sends no cookie at all. A login runs under an identity of its
+  own whose jar holds no cookie yet (chapters 13, 16 and 17): the session cookie it receives is kept
+  in that jar and registered as the secret `session_<identity>`. A cookie set on a step with no
+  `as` is registered as `session_anonymous`. `verify(json, vars)` and `verifyResponse(response)`
+  check what the prose says about a request the manual does not show; a throw stops the run, after
+  the step's secrets are registered, so a message that quotes the response is redacted.
 - Ids and timestamps change on every capture, so a re-capture rewrites every block of the files
   it selects. Ids quoted outside a marked block (a JSON sample, a sentence) are updated by hand from
   the same run; scan the chapter files for UUID-shaped text outside the marked blocks.

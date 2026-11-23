@@ -1,7 +1,7 @@
 // Chapter 10, query basics. Every exchange is a read by the admin session; the three error
 // responses drop the traceId member, as the manual states. The checks at the end send the requests
 // the prose describes without showing them.
-import { check, must, read, STRIP_TRACE_ID } from './steps.mjs'
+import { check, must, read, setup, STRIP_TRACE_ID } from './steps.mjs'
 
 const ARTICLES = '/api/items/article'
 const titles = (json) => json.data.map((row) => row.translations.en?.title).sort((a, b) => a.localeCompare(b))
@@ -49,6 +49,6 @@ export const ch10 = {
           'the Chinese title matches one article and only zh-TW is returned',
         ),
     ),
-    check('a to-one sort path', 'GET', `${ARTICLES}?sort=category.name`, 200, () => {}),
+    setup('a to-one sort path', 'GET', `${ARTICLES}?sort=category.name`, 200),
   ],
 }

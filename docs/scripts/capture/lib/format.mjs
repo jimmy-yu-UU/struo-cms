@@ -14,11 +14,19 @@
 
 import { prettyJson } from './transforms.mjs'
 
+// The response headers a block shows: all of them (selection true) or the named ones, in server
+// order. A named header the response lacks is an error: a declared setting that shows nothing would
+// print something other than what the step says it prints.
+export function shownHeaders(response, selection) {
+  if (!Array.isArray(selection)) return response.headers
+  const wanted = selection.map((name) => name.toLowerCase())
+  const absent = selection.filter((name) => !response.headers.some(([have]) => have.toLowerCase() === name.toLowerCase()))
+  if (absent.length > 0) throw new Error(`the response has no header named ${absent.join(', ')}`)
+  return response.headers.filter(([name]) => wanted.includes(name.toLowerCase()))
+}
+
 function headerLines(response, selection) {
-  const wanted = Array.isArray(selection) ? new Set(selection.map((name) => name.toLowerCase())) : null
-  const shown = response.headers
-    .filter(([name]) => wanted === null || wanted.has(name.toLowerCase()))
-    .map(([name, value]) => `${name}: ${value}`)
+  const shown = shownHeaders(response, selection).map(([name, value]) => `${name}: ${value}`)
   return [`HTTP/${response.httpVersion} ${response.status} ${response.statusMessage}`, ...shown, '']
 }
 

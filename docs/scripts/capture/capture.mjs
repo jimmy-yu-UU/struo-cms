@@ -28,6 +28,7 @@ import { CaptureError } from './lib/errors.mjs'
 import { runCapture } from './lib/runner.mjs'
 import { selectFiles, summarize } from './lib/select.mjs'
 import { CONTENT_COLLECTIONS, GROUPS } from './scenarios/index.mjs'
+const CLI_RESULTS = 'cli-results'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_GUIDE = join(HERE, '..', '..', 'guide')
@@ -71,7 +72,7 @@ async function main() {
       email: { type: 'string' },
       'guide-dir': { type: 'string' },
       'list-cli': { type: 'boolean', default: false },
-      'cli-results': { type: 'string' },
+      [CLI_RESULTS]: { type: 'string' },
     },
   })
   const guideOption = values['guide-dir'] ?? DEFAULT_GUIDE
@@ -102,7 +103,7 @@ async function main() {
     vars: runVariables(adminEmail, adminPassword),
     secretVars: SECRET_VARS,
     fixturesDir: FIXTURES,
-    cliResults: values['cli-results'] === undefined ? undefined : confinedDirectory(values['cli-results']),
+    cliResults: values[CLI_RESULTS] === undefined ? undefined : confinedDirectory(values[CLI_RESULTS]),
     groups: GROUPS,
     only,
     freshCollections: CONTENT_COLLECTIONS,

@@ -142,13 +142,13 @@ nested to-many list with its own `sort`/`limit` arguments; later examples reuse 
 data — the id is data-specific, and your own environment will differ:
 
 ```graphql
-query { article(id: "01a2073e-dd4b-728a-87b2-65f64f224d35") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
+query { article(id: "01a2075a-ad04-79da-9b3d-e60cf97340c1") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
 ```
 
 The actual response:
 
 ```json
-{"data":{"article":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
+{"data":{"article":{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
 ```
 
 `article` with only `id` returns that same item; `category` is many-to-one, straight to an object
@@ -237,7 +237,7 @@ both a same-row quantifier (`some` paired with `junction`) and `tagsLinks`' own 
 $ POST /graphql
 body:
 {"query": "query { articles(filter: { tags: { some: { name: { eq: \"howto\" }, junction: { note: { eq: \"hero\" } } } } }) { total items { id status tagsLinks { node { name } junction { note } } } } }"}
-{"data":{"articles":{"total":1,"items":[{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
+{"data":{"articles":{"total":1,"items":[{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
 HTTP_STATUS:200
 ```
 
@@ -364,12 +364,14 @@ or unmappable. Below is the actual response after sending `tagsLinks`:
 ```text
 $ POST /graphql
 body:
-{"query": "mutation { updateArticle(id: \"01a2073e-dd4b-728a-87b2-65f64f224d35\", input: { tagsLinks: [{ id: \"01a2073e-dd41-76af-9dc7-7d0b6a9fd22a\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
-{"data":{"updateArticle":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
+{"query": "mutation { updateArticle(id: \"01a2075a-ad04-79da-9b3d-e60cf97340c1\", input: { tagsLinks: [{ id: \"01a2075a-ace9-7a9b-a197-e5f4b96c88da\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
+{"data":{"updateArticle":{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
 HTTP_STATUS:200
 ```
 
-The `release` tag gets linked, with the note "editor pick." Sending the mutation again, this time
+`tagsLinks` replaces the article's whole set of tag links: the response lists only `release`, with
+the note "editor pick," and the `howto` link, which the sent array does not mention, is gone.
+Sending the mutation again, this time
 with both `tags: ["<howto's id>"]` and `tagsLinks: null`, results in `tagsLinks`' `null` winning —
 the link stays unchanged, and nothing from the `tags` array's content is ever applied.
 
@@ -431,9 +433,8 @@ $ POST /graphql (no cookie)
 body:
 {"query":"{ users { total } }"}
 HTTP/1.1 200 OK
-Content-Length: 157
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:11:31 GMT
+Date: Mon, 23 Nov 2026 07:41:54 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff
@@ -469,9 +470,8 @@ $ POST /graphql
 body:
 {"query": "query { bogusThing { id } }"}
 HTTP/1.1 400 Bad Request
-Content-Length: 322
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:11:31 GMT
+Date: Mon, 23 Nov 2026 07:41:54 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff

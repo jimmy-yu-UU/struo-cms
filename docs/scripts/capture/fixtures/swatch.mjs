@@ -1,6 +1,6 @@
 // The PNG the upload scenario sends, generated deterministically: a 64x48 colour gradient, RGB,
-// no interlacing. `node swatch.mjs` writes swatch.png next to this file; a test proves the
-// committed bytes are what makeSwatchPng() returns.
+// no interlacing. `node swatch.mjs` writes swatch.png next to this file, the documented way to make it;
+// a test checks the committed file by its header and pixels, not by the bytes one zlib version deflates to.
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -21,7 +21,7 @@ function chunk(type, data) {
   return Buffer.concat([head, body, crc])
 }
 
-function pixels() {
+export function swatchPixels() {
   const rowLength = 1 + SWATCH_WIDTH * 3
   const raw = Buffer.alloc(SWATCH_HEIGHT * rowLength)
   for (let y = 0; y < SWATCH_HEIGHT; y += 1) {
@@ -44,7 +44,7 @@ export function makeSwatchPng() {
   return Buffer.concat([
     SIGNATURE,
     chunk('IHDR', header),
-    chunk('IDAT', deflateSync(pixels(), { level: 9 })),
+    chunk('IDAT', deflateSync(swatchPixels(), { level: 9 })),
     chunk('IEND', Buffer.alloc(0)),
   ])
 }

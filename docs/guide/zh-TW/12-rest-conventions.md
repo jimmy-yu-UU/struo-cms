@@ -48,13 +48,13 @@ body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:11:30 GMT
+Date: Mon, 23 Nov 2026 07:41:53 GMT
 Server: Kestrel
-Location: /api/items/tag/01a2073e-e0fe-7278-a844-edbc364b3687
+Location: /api/items/tag/01a2075a-b367-736f-aaab-f74a1bd2b288
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a2073e-e0fe-7278-a844-edbc364b3687","version":0,"name":"launch","createdAt":"2026-11-23T07:11:31.0709675Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:31.071087Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
+{"success":true,"data":{"id":"01a2075a-b367-736f-aaab-f74a1bd2b288","version":0,"name":"launch","createdAt":"2026-11-23T07:41:54.408311Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:54.4085365Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d"}}
 HTTP_STATUS:201
 ```
 
@@ -242,19 +242,19 @@ GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這
 
 <!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a2073e-a1e4-78c5-a710-357e78fafae8/access-token
+$ POST /api/users/01a2075a-3711-7219-aa1c-99effe26912d/access-token
 {"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <token>
-{"success":true,"data":[{"id":"01a2073e-ddad-74a9-8ec7-bfa57153a51c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.221537Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:30.221696Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1 Authorization: Bearer <token>
+{"success":true,"data":[{"id":"01a2075a-ae08-7b40-8780-bc00ac868ab6","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:41:53.033534Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:53.033773Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a2073e-a1e4-78c5-a710-357e78fafae8/access-token
+$ DELETE /api/users/01a2075a-3711-7219-aa1c-99effe26912d/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  Authorization: Bearer <revoked token>
+$ GET /api/items/article?limit=1 Authorization: Bearer <revoked token>
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
@@ -300,7 +300,7 @@ body 也可以把讀到的值原樣送回；伺服器拿這個值去比對目前
 
 <!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a2073e-dd4b-728a-87b2-65f64f224d35
+$ PUT /api/items/article/01a2075a-ad04-79da-9b3d-e60cf97340c1
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -374,10 +374,10 @@ HTTP_STATUS:400
 
 <!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a2073e-dd4b-728a-87b2-65f64f224d35
+$ PUT /api/items/article/01a2075a-ad04-79da-9b3d-e60cf97340c1
 body:
-{"tags":["01a2073e-dd38-7fe7-94be-c35549fe1f6c",{"id":"01a2073e-dd41-76af-9dc7-7d0b6a9fd22a","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.124392Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:31.22264Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
+{"tags":["01a2075a-acd4-74df-8790-989a965e0ff0",{"id":"01a2075a-ace9-7a9b-a197-e5f4b96c88da","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:41:52.773997Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:54.579245Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d"}}
 HTTP_STATUS:200
 ```
 
@@ -388,7 +388,7 @@ payload 欄位驗證失敗時，訊息會標明是哪個關聯、哪個目標，
 
 <!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2073e-dd41-76af-9dc7-7d0b6a9fd22a': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2075a-ace9-7a9b-a197-e5f4b96c88da': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 

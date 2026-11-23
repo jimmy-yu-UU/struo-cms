@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { formatBlock, formatExchange } from './format.mjs'
+const STATUS_200 = 'HTTP_STATUS:200'
 
 const response = (over = {}) => ({
   status: 200,
@@ -21,13 +22,14 @@ test('a bodyless exchange prints the request line, the raw response and the stat
 })
 
 test('a request body prints after a body: line, exactly as sent', () => {
+  const sent = String.raw`{"a": 1,"b":"é"}`
   const text = formatExchange({
     method: 'POST',
     path: '/api/x',
-    requestBody: '{"a": 1,"b":"\\u00e9"}',
+    requestBody: sent,
     response: response({ status: 400, body: '{"e":1}' }),
   })
-  assert.equal(text, '$ POST /api/x\nbody:\n{"a": 1,"b":"\\u00e9"}\n{"e":1}\nHTTP_STATUS:400')
+  assert.equal(text, `$ POST /api/x\nbody:\n${sent}\n{"e":1}\nHTTP_STATUS:400`)
 })
 
 test('a note follows the path after one space', () => {
@@ -47,7 +49,7 @@ test('headers true prints the status line and every header in server order, then
       'Server: Kestrel',
       '',
       '{"success":true}',
-      'HTTP_STATUS:200',
+      STATUS_200,
     ].join('\n'),
   )
 })
@@ -92,7 +94,7 @@ test('pretty appends a pretty: line and an indented copy after the status, leavi
   })
   assert.equal(
     text,
-    ['$ GET /x', '{"a":{"b":[1]},"c":{}}', 'HTTP_STATUS:200', 'pretty:', '{', '  "a": {', '    "b": [', '      1', '    ]', '  },', '  "c": {}', '}'].join('\n'),
+    ['$ GET /x', '{"a":{"b":[1]},"c":{}}', STATUS_200, 'pretty:', '{', '  "a": {', '    "b": [', '      1', '    ]', '  },', '  "c": {}', '}'].join('\n'),
   )
 })
 
@@ -106,6 +108,13 @@ test('a binary response prints its summary lines in place of the body, after the
   })
   assert.equal(
     text,
-    ['$ GET /img', 'HTTP/1.1 200 OK', 'Content-Type: application/json; charset=utf-8', '', '# body: 3 bytes (binary, not shown)', 'HTTP_STATUS:200'].join('\n'),
+    ['$ GET /img', 'HTTP/1.1 200 OK', 'Content-Type: application/json; charset=utf-8', '', '# body: 3 bytes (binary, not shown)', STATUS_200].join('\n'),
+  )
+})
+
+test('a header list naming a header the response lacks is an error that names it', () => {
+  assert.throws(
+    () => formatExchange({ method: 'GET', path: '/x', headers: ['content-type', 'X-Missing'], response: response() }),
+    /X-Missing/,
   )
 })

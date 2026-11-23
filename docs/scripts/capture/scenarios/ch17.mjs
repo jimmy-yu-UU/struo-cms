@@ -1,7 +1,7 @@
 // Chapter 17, roles and permissions. The editor signs in with a cookie session and sends the CSRF
 // header, so the refusal printed is the permission check and not the CSRF check. The reads of tag
 // are the unshown requests the prose describes; they run so the claim is checked against the host.
-import { PASSWORD_FIELD, STRIP_TRACE_ID, anonymous, exchange, read, setup } from './steps.mjs'
+import { PASSWORD_FIELD, STRIP_TRACE_ID, anonymous, read, setup } from './steps.mjs'
 
 const EDITOR = 'editor'
 const EFFECTIVE = '/api/users/{{editorId}}/effective-permissions'

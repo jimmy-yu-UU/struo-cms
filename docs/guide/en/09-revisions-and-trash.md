@@ -151,8 +151,8 @@ no snapshot content, newest first:
 
 <!-- capture: ch9-list-revisions -->
 ```text
-$ GET /api/items/article/01a2073e-efab-745d-8232-4feef56d89cf/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T07:11:34.935982Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T07:11:34.877077Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","sourceRevisionNumber":null}]}
+$ GET /api/items/article/01a2075a-c428-7f98-b225-9598e9525ba1/revisions
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T07:41:58.843342Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T07:41:58.767591Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -308,22 +308,22 @@ with it):
 
 <!-- capture: ch9-trash-round-trip -->
 ```text
-$ DELETE /api/items/article/01a2073e-efeb-7fc3-a008-4336067d3a4e
+$ DELETE /api/items/article/01a2075a-c483-7871-b509-94da4bbc6a08
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2073e-efeb-7fc3-a008-4336067d3a4e
-{"success":true,"data":[{"id":"01a2073e-efeb-7fc3-a008-4336067d3a4e","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:34.89177Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:34.891778Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2075a-c483-7871-b509-94da4bbc6a08
+{"success":true,"data":[{"id":"01a2075a-c483-7871-b509-94da4bbc6a08","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:41:58.787303Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:58.787317Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
-$ POST /api/items/article/01a2073e-efeb-7fc3-a008-4336067d3a4e/restore
-{"success":true,"data":{"id":"01a2073e-efeb-7fc3-a008-4336067d3a4e","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:34.89177Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:34.891778Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
+$ POST /api/items/article/01a2075a-c483-7871-b509-94da4bbc6a08/restore
+{"success":true,"data":{"id":"01a2075a-c483-7871-b509-94da4bbc6a08","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:41:58.787303Z","createdBy":"01a2075a-3711-7219-aa1c-99effe26912d","updatedAt":"2026-11-23T07:41:58.787317Z","updatedBy":"01a2075a-3711-7219-aa1c-99effe26912d"}}
 HTTP_STATUS:200
 ```
 
-Trashing the item makes its version 1, and the `restore` response carries version 2. `deletedAt` never appears in the
-projection at any point: trash state is only ever discoverable through `?deleted=`, never by
-reading the item itself.
+Trashing the item makes its version 1, and the `restore` response carries version 2.
+`deletedAt` never appears in the projection at any point: trash state is only ever discoverable
+through `?deleted=`, never by reading the item itself.
 
 ## The `deleted=` filter and permissions
 

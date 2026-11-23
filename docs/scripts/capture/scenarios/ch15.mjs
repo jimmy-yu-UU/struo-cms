@@ -15,7 +15,7 @@ export const ch15 = {
     exchange('ch15-upload-swatch-201', 'POST', FILES, 201, {
       upload: { field: 'file', fixture: 'swatch.png', contentType: 'image/png' },
       save: { swatchFileId: 'data.id' },
-      print: { headers: true, note: '(multipart: file=@swatch.png; type=image/png)' },
+      print: { headers: true },
     }),
     setup('upload the text file', 'POST', FILES, 201, {
       upload: { field: 'file', fixture: 'note.txt', contentType: 'text/plain' },

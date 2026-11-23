@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { FIXTURE_PASSWORD } from './test-support/fixtures.mjs'
 import { fileURLToPath } from 'node:url'
+const GUIDE_DIR_FLAG = '--guide-dir'
 
 const BASE_URL_FLAG = '--base-url'
 const DEAD_HOST = 'http://127.0.0.1:9'
@@ -31,7 +32,7 @@ function makeGuide(zh, en) {
 test('--check on a guide that lacks the scenario files exits 1 and names them', () => {
   const root = makeGuide('# a\n', '# a\n')
   try {
-    const result = run(['--check', '--guide-dir', root], root)
+    const result = run(['--check', GUIDE_DIR_FLAG, root], root)
     assert.equal(result.status, 1)
     assert.match(result.stderr, /10-query-basics.md: has captures in the scenario but no file/)
   } finally {
@@ -43,7 +44,7 @@ test('--check exits 1 and prints the id and file of a block that differs between
   const block = (body) => `<!-- capture: q -->\n\`\`\`text\n${body}\n\`\`\`\n`
   const root = makeGuide(block('a'), block('b'))
   try {
-    const result = run(['--check', '--guide-dir', root], root)
+    const result = run(['--check', GUIDE_DIR_FLAG, root], root)
     assert.equal(result.status, 1)
     assert.match(result.stderr, /q: block differs between zh-TW/)
   } finally {
@@ -110,7 +111,7 @@ test('--list-cli prints every command the scenario needs as JSON, with no networ
 test('a --cli-results directory outside the working directory is refused', () => {
   const root = makeGuide('# a\n', '# a\n')
   try {
-    const result = run([BASE_URL_FLAG, DEAD_HOST, '--guide-dir', root, '--cli-results', tmpdir()], root, { STRUO_CAPTURE_ADMIN_PASSWORD: FIXTURE_PASSWORD })
+    const result = run([BASE_URL_FLAG, DEAD_HOST, GUIDE_DIR_FLAG, root, '--cli-results', tmpdir()], root, { STRUO_CAPTURE_ADMIN_PASSWORD: FIXTURE_PASSWORD })
     assert.equal(result.status, 1)
     assert.match(result.stderr, /outside the working directory/)
   } finally {

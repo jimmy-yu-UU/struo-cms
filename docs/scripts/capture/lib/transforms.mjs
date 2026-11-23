@@ -158,10 +158,42 @@ export function elideData(text) {
 }
 
 const PRETTY_ERROR = 'prettyJson: the body is not a single JSON value'
+const PRETTY_NOTHING = 'prettyJson: the body is a scalar or an empty object or array, which has nothing to indent'
+const PRETTY_INDENTED = 'prettyJson: the body is already indented as it would be, so the transform changes nothing'
 const INDENT = '  '
 
-function closes(char) {
-  return char === '}' || char === ']'
+const notPretty = () => new TransformError(PRETTY_ERROR)
+
+// The key token of an object member that starts at `start`, with `: ` after it, and the index of its value.
+function readKey(text, start) {
+  if (text[start] !== '"') throw notPretty()
+  const keyEnd = skipString(text, start)
+  const colon = skipWhitespace(text, keyEnd)
+  if (text[colon] !== ':') throw notPretty()
+  return { label: `${text.slice(start, keyEnd)}: `, valueAt: skipWhitespace(text, colon + 1) }
+}
+
+// The index after the comma that follows a member, or the member's end when the closer follows.
+function afterMember(text, end, close) {
+  const i = skipWhitespace(text, end)
+  if (text[i] === ',') return skipWhitespace(text, i + 1)
+  if (text[i] !== close) throw notPretty()
+  return i
+}
+
+// The indented lines of the members of the object or array whose first member starts at `start`.
+function indentMembers(text, start, { isObject, close, depth }) {
+  const pad = INDENT.repeat(depth + 1)
+  const parts = []
+  let i = start
+  while (i < text.length && text[i] !== close) {
+    const key = isObject ? readKey(text, i) : { label: '', valueAt: i }
+    const member = indent(text, key.valueAt, depth + 1)
+    parts.push(pad + key.label + member.out)
+    i = afterMember(text, member.end, close)
+  }
+  if (text[i] !== close) throw notPretty()
+  return { parts, end: i + 1 }
 }
 
 // The text of the JSON value that starts at `start` re-indented with two spaces; every string and
@@ -173,44 +205,32 @@ function indent(text, start, depth) {
     return { out: text.slice(start, end), end }
   }
   const close = first === '{' ? '}' : ']'
-  let i = skipWhitespace(text, start + 1)
-  if (text[i] === close) return { out: first + close, end: i + 1 }
-  const pad = INDENT.repeat(depth + 1)
-  const parts = []
-  while (i < text.length && !closes(text[i])) {
-    let key = ''
-    if (first === '{') {
-      if (text[i] !== '"') throw new TransformError(PRETTY_ERROR)
-      const keyEnd = skipString(text, i)
-      key = `${text.slice(i, keyEnd)}: `
-      i = skipWhitespace(text, keyEnd)
-      if (text[i] !== ':') throw new TransformError(PRETTY_ERROR)
-      i = skipWhitespace(text, i + 1)
-    }
-    const member = indent(text, i, depth + 1)
-    parts.push(pad + key + member.out)
-    i = skipWhitespace(text, member.end)
-    if (text[i] === ',') i = skipWhitespace(text, i + 1)
-    else if (text[i] !== close) throw new TransformError(PRETTY_ERROR)
-  }
-  if (text[i] !== close) throw new TransformError(PRETTY_ERROR)
-  return { out: [first, parts.join(',\n'), INDENT.repeat(depth) + close].join('\n'), end: i + 1 }
+  const firstMember = skipWhitespace(text, start + 1)
+  if (text[firstMember] === close) return { out: first + close, end: firstMember + 1 }
+  const { parts, end } = indentMembers(text, firstMember, { isObject: first === '{', close, depth })
+  return { out: [first, parts.join(',\n'), INDENT.repeat(depth) + close].join('\n'), end }
 }
+
+function indentWhole(text) {
+  const start = skipWhitespace(text, 0)
+  if (start >= text.length) throw notPretty()
+  const value = indent(text, start, 0)
+  if (skipWhitespace(text, value.end) !== text.length) throw notPretty()
+  return value.out
+}
+
+const NOTHING_TO_INDENT = /^\s*([{[]\s*[}\]]|[^{[\s][\s\S]*)\s*$/
 
 // Re-indents a JSON body with two spaces per level, as the manual prints a pretty body.
 export function prettyJson(text) {
   let result
   try {
-    const start = skipWhitespace(text, 0)
-    if (start >= text.length) throw new TransformError(PRETTY_ERROR)
-    const value = indent(text, start, 0)
-    if (skipWhitespace(text, value.end) !== text.length) throw new TransformError(PRETTY_ERROR)
-    result = value.out
+    result = indentWhole(text)
   } catch (error) {
-    if (error instanceof TransformError) throw new TransformError(error.message.startsWith('prettyJson') ? error.message : PRETTY_ERROR)
+    if (error instanceof TransformError) throw notPretty()
     throw error
   }
-  if (result === text) throw new TransformError('prettyJson: the body is already indented, so the transform changes nothing')
+  if (result === text) throw new TransformError(NOTHING_TO_INDENT.test(text) ? PRETTY_NOTHING : PRETTY_INDENTED)
   return result
 }
 

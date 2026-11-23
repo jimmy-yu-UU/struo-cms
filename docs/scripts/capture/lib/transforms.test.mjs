@@ -15,7 +15,7 @@ test('stripTraceId keeps JSON escapes exactly as received', () => {
 })
 
 test('stripTraceId leaves a traceId text inside a string value alone', () => {
-  const inner = `a ,\\"traceId\\":\\"${TRACE}\\" b`
+  const inner = String.raw`a ,\"traceId\":\"${TRACE}\" b`
   const body = `{"success":false,"error":{"code":"C","message":"${inner}","traceId":"${TRACE}"}}`
   assert.equal(stripTraceId(body), `{"success":false,"error":{"code":"C","message":"${inner}"}}`)
 })
@@ -43,12 +43,12 @@ test('elideData replaces the top-level data array with [...] and touches the res
 })
 
 test('elideData ignores a data key nested deeper and one that appears only in a string', () => {
-  assert.throws(() => elideData('{"meta":{"data":[1]},"note":"\\"data\\":[1]"}'), /no top-level data/)
+  assert.throws(() => elideData(String.raw`{"meta":{"data":[1]},"note":"\"data\":[1]"}`), /no top-level data/)
 })
 
 test('elideData handles an empty array and brackets inside strings', () => {
   assert.equal(elideData('{"data":[],"meta":{}}'), '{"data":[...],"meta":{}}')
-  assert.equal(elideData('{"data":["a\\"]","]"],"meta":{}}'), '{"data":[...],"meta":{}}')
+  assert.equal(elideData(String.raw`{"data":["a\"]","]"],"meta":{}}`), '{"data":[...],"meta":{}}')
 })
 
 test('elideData fails when data is not an array', () => {
@@ -95,7 +95,6 @@ test('prettyJson fails when the text is not JSON or is already indented as it wo
   assert.throws(() => prettyJson('{"a":1'), /prettyJson/)
   assert.throws(() => prettyJson('{"a":1} trailing'), /prettyJson/)
   assert.throws(() => prettyJson('{\n  "a": 1\n}'), /changes nothing/)
-  assert.throws(() => prettyJson('7'), /changes nothing/)
 })
 
 test('prettyJson is a declared transform', () => {
@@ -119,4 +118,10 @@ test('stripGraphQlTraceId fails when there is nothing to remove', () => {
   assert.throws(() => stripGraphQlTraceId('{"data":{}}'), /no errors array/)
   assert.throws(() => stripGraphQlTraceId('{"errors":[{"message":"m","extensions":{"code":"X"}}]}'), /no error has a traceId/)
   assert.throws(() => stripGraphQlTraceId(`{"errors":[{"extensions":{"traceId":"short"}}]}`), /not a 32-digit hex/)
+})
+
+test('prettyJson names the true reason when the body has nothing to indent', () => {
+  for (const body of ['{}', '[]', '7', '"text"', 'null']) {
+    assert.throws(() => prettyJson(body), /nothing to indent/, body)
+  }
 })

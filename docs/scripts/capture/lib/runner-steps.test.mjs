@@ -1,70 +1,24 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { FIXTURE_PASSWORD, FIXTURE_TOKEN } from '../test-support/fixtures.mjs'
-import { startStub } from '../test-support/stub-server.mjs'
-import { CaptureError, runCapture } from './runner.mjs'
-
-const DEMO = '01-demo.md'
-const OTHER = '02-other.md'
-const BLOCK = (id) => `<!-- capture: ${id} -->\n\`\`\`text\nold\n\`\`\`\n`
-const noGuard = async () => {}
-const OK = () => ({ status: 200, body: '{"ok":true}' })
+import { DEMO, OK, OTHER, inRoot, run } from '../test-support/run-helpers.mjs'
+import { CaptureError } from './runner.mjs'
+const BEARER_ID = 'demo-bearer'
+const PRETTY_ID = 'demo-pretty'
 const PNG_HEAD = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 64, 0, 0, 0, 48, 1, 2, 3]
 const TOKEN_REPLY = JSON.stringify({ data: { token: FIXTURE_TOKEN } })
 const tokenHandler = (request) => (request.path === '/token' ? { status: 200, body: TOKEN_REPLY } : { status: 200, body: '{}' })
 
-function makeRoot(ids) {
-  const root = mkdtempSync(join(tmpdir(), 'struo-steps-'))
-  const text = ids.map(BLOCK).join('\n')
-  for (const dir of ['zh-TW', 'en']) {
-    mkdirSync(join(root, dir))
-    for (const name of [DEMO, OTHER]) writeFileSync(join(root, dir, name), text)
-  }
-  mkdirSync(join(root, 'fixtures'))
-  writeFileSync(join(root, 'fixtures', 'note.txt'), 'twelve bytes')
-  return root
-}
-
-async function run(root, steps, over = {}, handler = OK) {
-  const stub = await startStub(handler)
-  try {
-    const result = await runCapture({
-      baseUrl: stub.baseUrl,
-      vars: { adminPassword: FIXTURE_PASSWORD, lockEmail: 'probe@example.com' },
-      groups: [{ name: 'g', file: DEMO, steps }],
-      guideDir: root,
-      fixturesDir: join(root, 'fixtures'),
-      write: false,
-      guard: noGuard,
-      ...over,
-    })
-    return { ...result, stub }
-  } catch (error) {
-    error.stub = stub
-    throw error
-  } finally {
-    await stub.close()
-  }
-}
-
-async function inRoot(ids, fn) {
-  const root = makeRoot(ids)
-  try {
-    return await fn(root)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
-  }
-}
 
 const upload = { field: 'file', fixture: 'note.txt', contentType: 'text/plain' }
 const NOTE = '(multipart: file=@note.txt; type=text/plain)'
 
 test('an upload step sends the fixture as one multipart file part with the declared part type', () =>
   inRoot(['demo-up'], async (root) => {
-    const step = { capture: 'demo-up', method: 'POST', path: '/files', upload, expect: 201, print: { note: NOTE } }
+    const step = { capture: 'demo-up', method: 'POST', path: '/files', upload, expect: 201 }
     const result = await run(root, [step], {}, () => ({ status: 201, body: '{"success":true}' }))
     const request = result.stub.requests[0]
     assert.match(request.headers['content-type'], /^multipart\/form-data; boundary=/)
@@ -114,44 +68,44 @@ test('print.binary refuses a transform on the same step and a body that is not t
   }))
 
 test('print.pretty appends the indented copy; the raw line stays what the server sent', () =>
-  inRoot(['demo-pretty'], async (root) => {
-    const step = { capture: 'demo-pretty', method: 'GET', path: '/p', expect: 200, print: { pretty: true } }
+  inRoot([PRETTY_ID], async (root) => {
+    const step = { capture: PRETTY_ID, method: 'GET', path: '/p', expect: 200, print: { pretty: true } }
     const result = await run(root, [step], {}, () => ({ status: 200, body: '{"a":{"b":1}}' }))
     assert.equal(
-      result.blocks.get('demo-pretty'),
+      result.blocks.get(PRETTY_ID),
       '$ GET /p\n{"a":{"b":1}}\nHTTP_STATUS:200\npretty:\n{\n  "a": {\n    "b": 1\n  }\n}',
     )
   }))
 
 test('print.pretty on a body that cannot be re-indented fails the step', () =>
-  inRoot(['demo-pretty'], async (root) => {
-    const step = { capture: 'demo-pretty', method: 'GET', path: '/p', expect: 200, print: { pretty: true } }
+  inRoot([PRETTY_ID], async (root) => {
+    const step = { capture: PRETTY_ID, method: 'GET', path: '/p', expect: 200, print: { pretty: true } }
     await assert.rejects(run(root, [step], {}, () => ({ status: 200, body: 'plain text' })), /demo-pretty/)
   }))
 
 test('the printed note takes {{variables}}, and a mask turns the secret in it into its placeholder', () =>
-  inRoot(['demo-bearer'], async (root) => {
+  inRoot([BEARER_ID], async (root) => {
     const steps = [
       { method: 'POST', path: '/token', expect: 200, secret: { token: 'data.token' } },
       {
-        capture: 'demo-bearer',
+        capture: BEARER_ID,
         method: 'GET',
         path: '/read',
         bearer: '{{token}}',
         expect: 200,
-        print: { note: ' Authorization: Bearer {{token}}', mask: { token: '<token>' } },
+        print: { note: 'Authorization: Bearer {{token}}', mask: { token: '<token>' } },
       },
     ]
     const result = await run(root, steps, {}, tokenHandler)
-    assert.equal(result.blocks.get('demo-bearer').split('\n')[0], '$ GET /read  Authorization: Bearer <token>')
+    assert.equal(result.blocks.get(BEARER_ID).split('\n')[0], '$ GET /read Authorization: Bearer <token>')
     assert.equal(result.stub.requests[1].headers.authorization, `Bearer ${FIXTURE_TOKEN}`)
   }))
 
 test('a printed note that holds a secret is refused unless it is masked', () =>
-  inRoot(['demo-bearer'], async (root) => {
+  inRoot([BEARER_ID], async (root) => {
     const steps = [
       { method: 'POST', path: '/token', expect: 200, secret: { token: 'data.token' } },
-      { capture: 'demo-bearer', method: 'GET', path: '/read', bearer: '{{token}}', expect: 200, print: { note: 'Bearer {{token}}' } },
+      { capture: BEARER_ID, method: 'GET', path: '/read', bearer: '{{token}}', expect: 200, print: { note: 'Bearer {{token}}' } },
     ]
     await assert.rejects(run(root, steps, {}, tokenHandler), (error) => {
       assert.match(error.message, /secret/)
@@ -186,7 +140,7 @@ test('a run variable named in secretVars is a secret: refused in a block, and an
 
 const cliStep = (over = {}) => ({
   capture: 'demo-cli',
-  cli: { program: 'dotnet Host.dll', args: ['cmd', '--x', 'y'], env: {}, exit: 0, ...over },
+  cli: { program: 'dotnet', args: ['Host.dll', 'cmd', '--x', 'y'], env: {}, exit: 0, ...over },
 })
 
 async function withResults(files, fn) {

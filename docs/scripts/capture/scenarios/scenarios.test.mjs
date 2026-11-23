@@ -4,10 +4,14 @@ import { FIXTURE_EDITOR, FIXTURE_PASSWORD } from '../test-support/fixtures.mjs'
 import { startStub } from '../test-support/stub-server.mjs'
 import { runCapture } from '../lib/runner.mjs'
 import { TRANSFORMS } from '../lib/transforms.mjs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { checkGuide } from '../lib/check.mjs'
+import { unmarkedTranscriptBlocks } from '../test-support/transcripts.mjs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ch14First, ch14Rest } from './ch14.mjs'
 import { GROUPS } from './index.mjs'
+const GRAPHQL_FILE = '14-graphql.md'
 
 const GUIDE = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'guide')
 const ARTICLES = '/api/items/article'
@@ -74,50 +78,81 @@ test('the seed creates the category, two tags, the three articles in order A, B,
 })
 
 const CAPTURED_CHAPTERS = /^(0[7-9]|1[0-7])-.*\.md$/
-const TRANSCRIPT_LINE = /^(\$ |HTTP_STATUS:)/
+const LANGUAGES = ['zh-TW', 'en']
+
+test('the transcript scan sees indented and tilde fences and a marker only directly above', () => {
+  const text = [
+    '<!-- capture: ok -->',
+    '```text',
+    '$ GET /a',
+    '```',
+    '',
+    '   ~~~text',
+    '   $ GET /b',
+    '   ~~~',
+    '',
+    '```text',
+    '  HTTP_STATUS:200',
+    '```',
+    '',
+    '```text',
+    'plain text',
+    '```',
+  ].join('\n')
+  assert.deepEqual(unmarkedTranscriptBlocks(text), [6, 10])
+})
 
 // Every fenced block of chapters 7 to 17 that looks like a transcript sits directly under a marker.
-test('no hand-written transcript block is left in chapters 7 to 17', async () => {
-  const { readFileSync, readdirSync } = await import('node:fs')
-  const unmarked = []
-  for (const locale of ['zh-TW', 'en']) {
-    const files = readdirSync(join(GUIDE, locale)).filter((name) => CAPTURED_CHAPTERS.test(name))
-    for (const name of files) {
-      const lines = readFileSync(join(GUIDE, locale, name), 'utf8').split('\n')
-      let index = 0
-      while (index < lines.length) {
-        const fence = /^(`{3,})/.exec(lines[index])
-        if (!fence) {
-          index += 1
-          continue
-        }
-        let close = index + 1
-        while (close < lines.length && !lines[close].startsWith(fence[1])) close += 1
-        const marked = index > 0 && /^<!-- capture: [\w.-]+ -->$/.test(lines[index - 1])
-        if (!marked && lines.slice(index + 1, close).some((line) => TRANSCRIPT_LINE.test(line))) {
-          unmarked.push(`${locale}/${name}:${index + 1}`)
-        }
-        index = close + 1
-      }
-    }
-  }
+test('no hand-written transcript block is left in chapters 7 to 17', () => {
+  const unmarked = LANGUAGES.flatMap((locale) =>
+    readdirSync(join(GUIDE, locale))
+      .filter((name) => CAPTURED_CHAPTERS.test(name))
+      .flatMap((name) =>
+        unmarkedTranscriptBlocks(readFileSync(join(GUIDE, locale, name), 'utf8')).map((line) => `${locale}/${name}:${line}`),
+      ),
+  )
   assert.deepEqual(unmarked, [])
 })
 
-test('the run keeps the order the shared data needs', () => {
-  const names = GROUPS.map((group) => group.file ?? group.name)
-  const at = (file, nth = 0) => names.map((name, index) => (name === file ? index : -1)).filter((index) => index >= 0)[nth]
-  const order = [
-    '10-query-basics.md',
-    '11-query-advanced.md',
-    '14-graphql.md',
-    '12-rest-conventions.md',
-    '13-rest-endpoints.md',
-  ].map((file) => at(file))
+const fileOrder = () => GROUPS.map((group) => group.file ?? group.name)
+const firstAt = (names, name) => names.indexOf(name)
+const lastAt = (names, name) => names.lastIndexOf(name)
+
+test('the run starts with the seed and keeps the order the shared data needs', () => {
+  const names = fileOrder()
+  assert.ok(names[0].startsWith('seed: the Guides'))
+  const chapters = ['10-query-basics.md', '11-query-advanced.md', GRAPHQL_FILE, '12-rest-conventions.md', '13-rest-endpoints.md']
+  const order = chapters.map((file) => firstAt(names, file))
   assert.deepEqual(order, [...order].sort((a, b) => a - b))
-  assert.ok(at('14-graphql.md', 1) > at('13-rest-endpoints.md'))
-  const later = ['15-files-and-media.md', '16-authentication.md', '17-roles-and-permissions.md', '07-i18n.md', '08-relations.md', '09-revisions-and-trash.md']
-  const positions = later.map((file) => at(file))
-  assert.deepEqual(positions, [...positions].sort((a, b) => a - b))
-  assert.ok(positions[0] > at('14-graphql.md', 1))
+  assert.ok(lastAt(names, GRAPHQL_FILE) > firstAt(names, '13-rest-endpoints.md'))
+})
+
+test('chapters 15 to 17 come before the Tutorials data, which comes before chapters 7, 8 and 9', () => {
+  const names = fileOrder()
+  const tutorials = names.findIndex((name) => name.startsWith('seed: the Tutorials'))
+  const before = ['15-files-and-media.md', '16-authentication.md', '17-roles-and-permissions.md'].map((file) => firstAt(names, file))
+  const after = ['07-i18n.md', '08-relations.md', '09-revisions-and-trash.md'].map((file) => firstAt(names, file))
+  assert.deepEqual(before, [...before].sort((a, b) => a - b))
+  assert.ok(before[0] > lastAt(names, GRAPHQL_FILE))
+  assert.ok(tutorials > before[2])
+  assert.ok(after.every((position) => position > tutorials))
+  assert.deepEqual(after, [...after].sort((a, b) => a - b))
+})
+
+const ch14Step = (capture) => [ch14First, ch14Rest].flatMap((group) => group.steps).find((step) => step.capture === capture)
+const bodyOf = (step, vars) => (typeof step.body === 'function' ? step.body(vars) : step.body)
+
+// The request text the manual's chapter 14 blocks print, byte for byte.
+test('the chapter 14 request bodies are exactly the text the manual prints', () => {
+  const vars = { articleAId: 'aaaa', releaseId: 'rrrr' }
+  assert.equal(
+    bodyOf(ch14Step('ch14-some-junction'), vars),
+    String.raw`{"query": "query { articles(filter: { tags: { some: { name: { eq: \"howto\" }, junction: { note: { eq: \"hero\" } } } } }) { total items { id status tagsLinks { node { name } junction { note } } } } }"}`,
+  )
+  assert.equal(
+    bodyOf(ch14Step('ch14-update-tagslinks'), vars),
+    String.raw`{"query": "mutation { updateArticle(id: \"aaaa\", input: { tagsLinks: [{ id: \"rrrr\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}`,
+  )
+  assert.equal(bodyOf(ch14Step('ch14-anon-users'), vars), '{"query":"{ users { total } }"}')
+  assert.equal(bodyOf(ch14Step('ch14-bogus-field-400'), vars), '{"query": "query { bogusThing { id } }"}')
 })

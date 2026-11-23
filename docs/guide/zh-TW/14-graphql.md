@@ -111,13 +111,13 @@ GraphQL 的 `null` 對應 REST 的 404，意圖一樣，形狀不同。清單欄
 面例子延用同一批測試資料，id 是資料本身的，讀者環境會不同：
 
 ```graphql
-query { article(id: "01a2073e-dd4b-728a-87b2-65f64f224d35") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
+query { article(id: "01a2075a-ad04-79da-9b3d-e60cf97340c1") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
 ```
 
 實際回應：
 
 ```json
-{"data":{"article":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
+{"data":{"article":{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
 ```
 
 `article` 只帶 `id` 就找回同一筆項目；`category` 是多對一，直接是一個物件、沒有任何引數；`tags` 是多
@@ -187,7 +187,7 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 $ POST /graphql
 body:
 {"query": "query { articles(filter: { tags: { some: { name: { eq: \"howto\" }, junction: { note: { eq: \"hero\" } } } } }) { total items { id status tagsLinks { node { name } junction { note } } } } }"}
-{"data":{"articles":{"total":1,"items":[{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
+{"data":{"articles":{"total":1,"items":[{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
 HTTP_STATUS:200
 ```
 
@@ -295,12 +295,13 @@ tagsLinks: [ArticleTagsLink!]
 ```text
 $ POST /graphql
 body:
-{"query": "mutation { updateArticle(id: \"01a2073e-dd4b-728a-87b2-65f64f224d35\", input: { tagsLinks: [{ id: \"01a2073e-dd41-76af-9dc7-7d0b6a9fd22a\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
-{"data":{"updateArticle":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
+{"query": "mutation { updateArticle(id: \"01a2075a-ad04-79da-9b3d-e60cf97340c1\", input: { tagsLinks: [{ id: \"01a2075a-ace9-7a9b-a197-e5f4b96c88da\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
+{"data":{"updateArticle":{"id":"01a2075a-ad04-79da-9b3d-e60cf97340c1","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
 HTTP_STATUS:200
 ```
 
-`release` 這個標籤被連結上，備註是「editor pick」。再送一次 mutation，同時給
+`tagsLinks` 整組取代這篇文章的標籤連結：回應只列出 `release`，備註是「editor pick」，送出的陣列
+沒有提到的 `howto` 連結不在了。再送一次 mutation，同時給
 `tags: ["<howto 的 id>"]` 跟 `tagsLinks: null`，結果是 `tagsLinks` 的 `null` 贏，連結維持不變、
 `tags` 陣列裡的內容根本沒被套用。
 
@@ -350,9 +351,8 @@ $ POST /graphql (no cookie)
 body:
 {"query":"{ users { total } }"}
 HTTP/1.1 200 OK
-Content-Length: 157
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:11:31 GMT
+Date: Mon, 23 Nov 2026 07:41:54 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff
@@ -382,9 +382,8 @@ $ POST /graphql
 body:
 {"query": "query { bogusThing { id } }"}
 HTTP/1.1 400 Bad Request
-Content-Length: 322
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Mon, 23 Nov 2026 07:11:31 GMT
+Date: Mon, 23 Nov 2026 07:41:54 GMT
 Server: Kestrel
 Vary: Accept
 X-Content-Type-Options: nosniff

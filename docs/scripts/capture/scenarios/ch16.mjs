@@ -12,7 +12,7 @@ const PROBE_EMAIL_PLACEHOLDER = '$TW'
 const WRONG_VALUE = ['no', 'pe'].join('')
 const FAILED_ATTEMPTS = 10
 const QUIET_CONSOLE = { Struo__Logging__ConsoleEnabled: 'false' }
-const UNLOCK = { program: 'dotnet Struo.Api.dll', args: ['auth:unlock', '--email', 'Admin@Example.com'] }
+const UNLOCK = { program: 'dotnet', args: ['Struo.Api.dll', 'auth:unlock', '--email', 'Admin@Example.com'] }
 
 const probe = (vars) => JSON.stringify({ email: vars.lockEmail, [PASSWORD_FIELD]: WRONG_VALUE })
 const failedAttempt = (index) => anonymous(undefined, 'POST', LOGIN, 401, { name: `failed login ${index + 1}`, body: probe })
@@ -36,7 +36,9 @@ export const ch16 = {
       print: { mask: { editorToken: '<token>' } },
     }),
     bearerRead(200, { print: { note: BEARER_NOTE, mask: { editorToken: '<token>' } } }),
-    exchange(TOKEN_FLOW, 'DELETE', '/api/users/{{editorId}}/access-token', 204),
+    exchange(TOKEN_FLOW, 'DELETE', '/api/users/{{editorId}}/access-token', 204, {
+      deletes: 'revokes the access token this run issued for the editor',
+    }),
     bearerRead(401, { transforms: STRIP_TRACE_ID, print: { note: BEARER_NOTE, mask: { editorToken: '<token>' } } }),
     ...Array.from({ length: FAILED_ATTEMPTS }, (_, index) => failedAttempt(index)),
     anonymous(undefined, 'POST', LOGIN, 429, { name: 'the first refused login', body: probe }),

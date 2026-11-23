@@ -14,7 +14,7 @@ export const ch13 = {
     exchange(TRASH_AND_RESTORE, 'DELETE', '/api/items/article/{{articleCId}}', 204),
     exchange(TRASH_AND_RESTORE, 'POST', '/api/items/article/{{articleCId}}/restore', 200),
     exchange('ch13-login-locks-query', 'POST', '/api/login-locks/query', 200, {
-      body: { emails: ['admin@admin.com', 'nobody@example.com'] },
+      body: (vars) => JSON.stringify({ emails: [vars.adminEmail, 'nobody@example.com'] }),
     }),
     {
       capture: LOGIN_AND_ME,

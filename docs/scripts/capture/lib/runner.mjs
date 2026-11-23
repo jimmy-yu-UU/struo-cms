@@ -41,8 +41,9 @@
 //   }
 //
 // Secrets: the admin password (name adminPassword), every value a step saves with `secret`, and the
-// cookie an identity holds (name session_<identity>; the guard's login included) are registered. An
-// exchange that holds any of them is refused unless the step masks every one it holds.
+// cookie an identity holds (name session_<identity>; session_anonymous for a step with no identity;
+// the guard's login included) are registered. An exchange that holds any of them is refused unless
+// the step masks every one it holds.
 //
 // Rules the runner keeps: the fresh-database guard runs before the first step; a block that holds a
 // secret value or a carriage return is refused; a DELETE must carry a whole path segment equal to an
@@ -56,7 +57,7 @@ import { LOCALES, chapterProblems, declaredByFile, readTexts } from './check.mjs
 import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
 import { CaptureError } from './errors.mjs'
 import { checkFresh } from './fresh.mjs'
-import { formatBlock, formatExchange } from './format.mjs'
+import { formatBlock, formatExchange, shownHeaders } from './format.mjs'
 import { MarkerError, replaceBlock } from './markers.mjs'
 import { MultipartError, buildMultipart } from './multipart.mjs'
 import { inOrder } from './sequence.mjs'
@@ -66,6 +67,7 @@ export { CaptureError }
 
 const VARIABLE = /\{\{(\w+)\}\}/g
 const EXCERPT = 300
+const ANONYMOUS = 'anonymous'
 const DEFAULT_IO = { writeFileSync, renameSync, rmSync }
 
 function substitute(value, vars) {
@@ -88,7 +90,7 @@ function renderBody(source, vars) {
   return JSON.stringify(substitute(raw, vars))
 }
 
-const FIXTURE_NAME = /^[A-Za-z0-9_][\w.-]*$/
+const FIXTURE_NAME = /^\w[\w.-]*$/
 
 function readFixture(dir, name) {
   if (!dir) throw new Error('an upload step needs a fixtures directory')
@@ -166,12 +168,12 @@ function registerSessions(state, client) {
 // The session cookie a response sets is a live credential: it is registered as a secret under
 // session_<identity> the moment it arrives.
 function registerCookies(state, identity, headers) {
-  if (identity === undefined) return
+  const holder = identity ?? ANONYMOUS
   for (const [name, value] of headers) {
     if (name.toLowerCase() !== 'set-cookie') continue
     const pair = value.split(';')[0]
     const cookie = pair.slice(pair.indexOf('=') + 1).trim()
-    if (cookie !== '') registerSecret(state, `session_${identity}`, cookie)
+    if (cookie !== '') registerSecret(state, `session_${holder}`, cookie)
   }
 }
 
@@ -228,22 +230,44 @@ async function send(client, step, state, { path, body, contentType }) {
 }
 
 // Takes the values a step saves from its JSON response and runs its verify hook.
-function collect(state, step, response) {
-  step.verifyResponse?.(response)
-  if (!step.save && !step.secret && !step.verify) return
-  let json
+function parseJson(state, response) {
   try {
-    json = JSON.parse(response.body)
+    return JSON.parse(response.body)
   } catch {
     throw new Error(`the response is not JSON: ${excerpt(response.body, state)}`)
   }
-  const created = response.status === 201
-  save(state, step.save, json, { secret: false, created })
-  save(state, step.secret, json, { secret: true, created })
+}
+
+// Values the step saves, and the secrets it registers, are taken before any hook runs, so a hook that
+// throws with the response in its message is redacted with them.
+function collect(state, step, response) {
+  const needsJson = Boolean(step.save || step.secret || step.verify)
+  const json = needsJson ? parseJson(state, response) : undefined
+  if (needsJson) {
+    const created = response.status === 201
+    save(state, step.save, json, { secret: false, created })
+    save(state, step.secret, json, { secret: true, created })
+  }
+  step.verifyResponse?.(response)
   step.verify?.(json, state.vars)
 }
 
+// A step that changes the body it prints cannot also print the length the server sent for the
+// original body: the two would disagree on the page.
+function refuseStaleLength(step, response) {
+  if ((step.transforms ?? []).length === 0 || !step.print?.headers) return
+  const shown = shownHeaders(response, step.print.headers)
+  if (shown.some(([name]) => name.toLowerCase() === 'content-length')) {
+    throw new Error('the step transforms the body and shows Content-Length, which would not match the printed body; name the headers to show without it')
+  }
+}
+
+function uploadNote(step) {
+  return step.upload ? `(multipart: file=@${step.upload.fixture}; type=${step.upload.contentType})` : undefined
+}
+
 function printedBody(step, response) {
+  refuseStaleLength(step, response)
   if (!step.print?.binary) return { body: applyTransforms(response.body, step.transforms), binary: undefined }
   if ((step.transforms ?? []).length > 0) throw new Error('print.binary prints no body, so a transform on the same step cannot apply')
   return { body: '', binary: summarizeBinary(response.bytes, step.print.binary) }
@@ -257,7 +281,7 @@ function printExchange(state, step, { path, printed }, response) {
     path,
     requestBody: printed,
     printPath: substituted(step.print?.path),
-    note: substituted(step.print?.note),
+    note: [uploadNote(step), substituted(step.print?.note)].filter(Boolean).join(' ') || undefined,
     headers: step.print?.headers,
     responseOnly: step.print?.responseOnly,
     pretty: step.print?.pretty,
@@ -308,7 +332,6 @@ function rewrite(file, texts, declared, blocks) {
     }),
   )
 }
-
 
 function refuseUnsafeBlocks(blocks, secrets, files) {
   for (const [id, text] of blocks) {

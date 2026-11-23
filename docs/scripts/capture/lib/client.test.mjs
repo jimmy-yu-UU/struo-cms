@@ -2,11 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
 import { startStub } from '../test-support/stub-server.mjs'
+const CONTENT_TYPE = 'Content-Type'
 
 const SET_COOKIE = 'Set-Cookie'
 const login = (request) =>
   request.path === '/login'
-    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', 'Content-Type': 'application/json' }, body: '{"ok":true}' }
+    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', [CONTENT_TYPE]: 'application/json' }, body: '{"ok":true}' }
     : { status: 200, body: 'plain' }
 
 async function withStub(handler, fn) {
@@ -32,7 +33,7 @@ test('a response comes back raw, with the status text and the headers in server 
     assert.equal(res.body, '{"ok":true}')
     assert.deepEqual(res.headers.slice(0, 2), [
       [SET_COOKIE, 'sess=abc; path=/; httponly'],
-      ['Content-Type', 'application/json'],
+      [CONTENT_TYPE, 'application/json'],
     ])
   })
 })
@@ -237,7 +238,7 @@ test('a POST the server processed and then reset is never sent twice, and the st
 test('a response keeps its raw bytes next to the decoded text', async () => {
   const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00])
   await withStub(
-    () => ({ status: 200, headers: { 'Content-Type': 'image/png' }, body: bytes }),
+    () => ({ status: 200, headers: { [CONTENT_TYPE]: 'image/png' }, body: bytes }),
     async (_stub, client) => {
       const res = await client.request({ identity: undefined, method: 'GET', path: '/img' })
       assert.deepEqual(res.bytes, bytes)

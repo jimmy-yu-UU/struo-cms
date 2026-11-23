@@ -6,12 +6,12 @@ import { test } from 'node:test'
 import { cliBlock, cliDescriptors, readCliResult } from './cli.mjs'
 import { CaptureError } from './errors.mjs'
 
-const PROGRAM = 'dotnet Host.dll'
+const PROGRAM = 'dotnet'
 const OUT = 'demo-cli.out'
 const EXIT = 'demo-cli.exit'
 const step = (over = {}) => ({
   capture: 'demo-cli',
-  cli: { program: PROGRAM, args: ['cmd', '--flag', 'v'], env: { A: 'b' }, exit: 0, ...over },
+  cli: { program: PROGRAM, args: ['Host.dll', 'cmd', '--flag', 'v'], env: { A: 'b' }, exit: 0, ...over },
 })
 const groups = (steps) => [{ name: 'g', file: '01-demo.md', steps }]
 
@@ -28,7 +28,7 @@ function withDir(files, fn) {
 test('the descriptors list every command step with its id, file, arguments, environment and exit code', () => {
   const list = cliDescriptors(groups([{ method: 'GET', path: '/x', expect: 200 }, step()]))
   assert.deepEqual(list, [
-    { id: 'demo-cli', file: '01-demo.md', program: PROGRAM, args: ['cmd', '--flag', 'v'], env: { A: 'b' }, exit: 0 },
+    { id: 'demo-cli', file: '01-demo.md', program: PROGRAM, args: ['Host.dll', 'cmd', '--flag', 'v'], env: { A: 'b' }, exit: 0 },
   ])
 })
 
@@ -37,6 +37,7 @@ test('a step names its own file; an argument with white space or a missing exit 
   assert.throws(() => cliDescriptors(groups([step({ args: ['a b'] })])), /white space/)
   assert.throws(() => cliDescriptors(groups([step({ exit: undefined })])), /exit code/)
   assert.throws(() => cliDescriptors(groups([step({ program: '' })])), /program/)
+  assert.throws(() => cliDescriptors(groups([step({ program: 'dotnet Host.dll' })])), /one word/)
 })
 
 test('a result is read from <id>.out and <id>.exit', () => {
@@ -65,4 +66,10 @@ test('an empty output and an output with a carriage return are refused', () => {
 test('a block is the command line as printed, then the output', () => {
   const [descriptor] = cliDescriptors(groups([step()]))
   assert.equal(cliBlock(descriptor, 'done'), '$ dotnet Host.dll cmd --flag v\ndone')
+})
+
+test('an output with a byte-order mark or a NUL byte is refused with a message that says so', () => {
+  const [descriptor] = cliDescriptors(groups([step()]))
+  withDir({ [OUT]: '﻿line\n', [EXIT]: '0' }, (dir) => assert.throws(() => readCliResult(dir, descriptor), /byte-order mark/))
+  withDir({ [OUT]: 'a\0b\n', [EXIT]: '0' }, (dir) => assert.throws(() => readCliResult(dir, descriptor), /NUL/))
 })
