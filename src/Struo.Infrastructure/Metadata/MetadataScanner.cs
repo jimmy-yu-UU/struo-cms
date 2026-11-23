@@ -78,6 +78,7 @@ public static class MetadataScanner
         ValidateReservedNames(collections);
         ValidateJunctionCollections(collections, typeList);
         ValidateJunctionPrimaryKeys(collections, typeList);
+        ValidateRelationKeyTypes(collections, typeList);
         return ResolveJunctionPayloadFields(collections, typeList);
     }
 
@@ -189,6 +190,82 @@ public static class MetadataScanner
     }
 
     /// <summary>
+    /// Fail-fast: the key a <c>[CmsRelation]</c> names must have the type of the primary key it points at
+    /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
+    /// junction keys. Every path that reads or writes the key hands it over as the type of that primary key,
+    /// so a key of another type reads back empty or fails at the first request. A key property or a target
+    /// the scan cannot resolve is left to the checks that already cover it. Runs for both
+    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// </summary>
+    private static void ValidateRelationKeyTypes(List<CollectionMetadata> collections, IEnumerable<Type> types)
+    {
+        var names = collections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var type in types)
+        {
+            if (!names.Contains(CollectionNameOf(type))) continue;
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) continue;
+                foreach (var pair in RelationKeyPairs(type, prop, nav))
+                    if (names.Contains(CollectionNameOf(pair.Target))) RequireKeyType(type, prop, pair);
+            }
+        }
+    }
+
+    private readonly record struct RelationKeyPair(Type KeyOwner, string Key, Type Target);
+
+    // The key holder, the key name and the entity whose primary key it holds, for each key a relation declares.
+    private static IEnumerable<RelationKeyPair> RelationKeyPairs(Type owner, PropertyInfo prop, NavigateShape nav)
+    {
+        if (!NavigateShape.IsListProperty(prop))
+        {
+            var target = prop.PropertyType;
+            yield return new RelationKeyPair(owner, nav.ForeignKey, Nullable.GetUnderlyingType(target) ?? target);
+            yield break;
+        }
+
+        var element = prop.PropertyType.GetGenericArguments()[0];
+        if (nav.IsJunction)
+        {
+            yield return new RelationKeyPair(nav.JunctionType!, nav.ParentKey, owner);
+            yield return new RelationKeyPair(nav.JunctionType!, nav.TargetKey, element);
+        }
+        else
+        {
+            yield return new RelationKeyPair(element, nav.ForeignKey, owner);
+        }
+    }
+
+    private static void RequireKeyType(Type owner, PropertyInfo relation, RelationKeyPair pair)
+    {
+        var key = PropertyNamed(pair.KeyOwner, pair.Key);
+        var primaryKey = PropertyNamed(pair.Target, PrimaryKeyName(pair.Target));
+        if (key is null || primaryKey is null) return;
+
+        var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
+        var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
+        if (keyType == primaryKeyType) return;
+
+        var keyName = $"{key.DeclaringType?.Name}.{key.Name}";
+        throw new MetadataException(
+            $"Relation '{owner.Name}.{relation.Name}' uses the key '{keyName}', " +
+            $"{ColumnDeclarationCheck.WithArticle(ColumnDeclarationCheck.TypeName(key.PropertyType))} property, " +
+            $"but it points at the primary key '{primaryKey.DeclaringType?.Name}.{primaryKey.Name}', " +
+            $"{ColumnDeclarationCheck.WithArticle(ColumnDeclarationCheck.TypeName(primaryKey.PropertyType))} property. " +
+            $"Declare '{keyName}' as {ColumnDeclarationCheck.TypeName(primaryKeyType)}: a relation key is read and " +
+            "written as the type of the primary key it points at. A column that already exists in another type needs a migration.");
+    }
+
+    private static PropertyInfo? PropertyNamed(Type type, string name) =>
+        type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    // The property carrying [SugarColumn(IsPrimaryKey = true)] (the last when several do), else "Id".
+    private static string PrimaryKeyName(Type type) =>
+        type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .LastOrDefault(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })?.Name ?? "Id";
+
+    /// <summary>
     /// Single source of every M2M relation's junction payload field list (spec U2b §3.1): once all
     /// collections are known, each relation whose junction is itself a [CmsCollection] gets
     /// <see cref="RelationMetadata.JunctionPayloadFields"/> = the junction's non-system, non-readonly fields
@@ -246,13 +323,8 @@ public static class MetadataScanner
     private static EntityDescriptor DescribeEntity(Type type)
     {
         var fieldToProp = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var idProperty = "Id";
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
             fieldToProp[Camel(prop.Name)] = prop.Name;
-            if (prop.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
-                idProperty = prop.Name;
-        }
 
         // Also map each declared many-to-one relation's local FK (camelCase -> CLR
         // property name) so the WHERE/sort column resolver (ConditionalModelTranslator.Column)
@@ -267,7 +339,7 @@ public static class MetadataScanner
             fieldToProp[Camel(nav.ForeignKey)] = nav.ForeignKey;
         }
 
-        return new EntityDescriptor(type, fieldToProp, idProperty) { NotNullProperties = NotNullColumns.PropertyNames(type) };
+        return new EntityDescriptor(type, fieldToProp, PrimaryKeyName(type)) { NotNullProperties = NotNullColumns.PropertyNames(type) };
     }
 
     // The [CmsCollection] lookup runs on every type of a scanned assembly, so an attribute that cannot be

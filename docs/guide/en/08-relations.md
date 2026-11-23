@@ -37,7 +37,22 @@ one-to-one, a property of the entity that declares the relation; for one-to-many
 list's element type. When none matches, startup fails with a message naming the relation, the
 foreign key and the type to look in. The keys of a many-to-many are not part of this check.
 
-The check applies to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
+A key must have the type of the primary key it points at, each without `?`: `long?` matches `long`,
+and `int` against `long` does not. Four keys are compared:
+
+| Relation | Key property | Must have the type of |
+|---|---|---|
+| Many-to-one | The foreign key on the declaring entity | The target's primary key |
+| One-to-many | The foreign key on the list's element type | The declaring entity's primary key |
+| Many-to-many | The junction's parent key | The declaring entity's primary key |
+| Many-to-many | The junction's target key | The target's primary key |
+
+Any other pairing stops startup. The message names the relation, the key and its type, the primary
+key and its type, and the type to declare. A column that already exists in another type needs a
+migration. A key property or a target the scan cannot find is left to the checks above. With
+another type, the relation reads back empty or fails at the first request.
+
+The checks above apply to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
 relation and is ignored; a many-to-many one is read only for its junction type, to check that a
 junction collection exposes both keys as writable fields and that every junction type declares one
 primary key.

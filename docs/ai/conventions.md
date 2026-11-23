@@ -431,9 +431,17 @@ none of them runs when the `Repeater` property carries `[SugarColumn(IsIgnore = 
 rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsRelation]` property's `[Navigate]` is
 checked by `NavigateShape`: a many-to-one or one-to-one foreign-key name must be a property of the
 declaring entity and a one-to-many one a property of the list's element type, compared without
-regard to case; a many-to-many names its two keys on the junction type, and they are not checked.
-`InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests` and
-`NavigateForeignKeyTests` pin these.
+regard to case; a many-to-many names its two keys on the junction type, and their names are not
+checked. `MetadataScanner.ValidateRelationKeyTypes` then compares the type of each key of a
+`[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and with no
+integer widening: the many-to-one key against the target's primary key, the one-to-many child key
+against the declaring entity's, the junction's parent key against the declaring entity's and its
+target key against the target's. The primary key is the one `PrimaryKeyName` resolves, as for
+`EntityDescriptor.IdProperty`; a key property or a primary key it cannot find, and a target that is
+not a collection, are skipped and left to the checks that already cover them. A mismatch throws a
+`MetadataException` naming `Class.Property` of the relation, the key and the primary key with their
+types. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
+`NavigateForeignKeyTests` and `RelationKeyTypeCheckTests` pin these.
 
 `WritableInput.RequireAny` (`src/Struo.Api/GraphQl/WritableInput.cs`) stops the host at startup,
 with a message that names the collection, when its GraphQL create input type would have no field,
