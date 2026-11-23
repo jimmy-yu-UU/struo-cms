@@ -60,7 +60,8 @@
 - `FieldMetadata.Ignored` is `true` for a `[CmsField]` on a property with
   `[SugarColumn(IsIgnore = true)]`, and `GET /api/schema` lists it as `ignored` on every field
   ([Chapter 5](05-collections.md)).
-- New public members: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`.
+- New public members: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`,
+  `CoreSeedData.ContentRootPath`.
 
 ### Fixed
 

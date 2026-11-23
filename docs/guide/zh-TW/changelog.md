@@ -50,7 +50,8 @@
   （見 [第 20 章](20-deployment.md)）。
 - `[CmsField]` 所在屬性帶 `[SugarColumn(IsIgnore = true)]` 時，`FieldMetadata.Ignored` 為 `true`，
   `GET /api/schema` 在每個欄位上列出 `ignored`（見 [第 5 章](05-collections.md)）。
-- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`、`FieldMetadata.Ignored`。
+- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`、`FieldMetadata.Ignored`、
+  `CoreSeedData.ContentRootPath`。
 
 ### 修正
 
