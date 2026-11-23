@@ -3,11 +3,13 @@ import { test } from 'node:test'
 import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
 import { startStub } from '../test-support/stub-server.mjs'
 const CONTENT_TYPE = 'Content-Type'
+const LOWER_TYPE = 'content-type'
+const JSON_TYPE = 'application/json'
 
 const SET_COOKIE = 'Set-Cookie'
 const login = (request) =>
   request.path === '/login'
-    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', [CONTENT_TYPE]: 'application/json' }, body: '{"ok":true}' }
+    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', [CONTENT_TYPE]: JSON_TYPE }, body: '{"ok":true}' }
     : { status: 200, body: 'plain' }
 
 async function withStub(handler, fn) {
@@ -33,7 +35,7 @@ test('a response comes back raw, with the status text and the headers in server 
     assert.equal(res.body, '{"ok":true}')
     assert.deepEqual(res.headers.slice(0, 2), [
       [SET_COOKIE, 'sess=abc; path=/; httponly'],
-      [CONTENT_TYPE, 'application/json'],
+      [CONTENT_TYPE, JSON_TYPE],
     ])
   })
 })
@@ -84,7 +86,7 @@ test('a JSON body is sent byte for byte with a JSON content type', async () => {
   await withStub(login, async (stub, client) => {
     await client.request({ method: 'POST', path: '/x', body: '{"a": 1 }' })
     assert.equal(stub.requests[0].body, '{"a": 1 }')
-    assert.match(stub.requests[0].headers['content-type'], /application\/json/)
+    assert.match(stub.requests[0].headers[LOWER_TYPE], /application\/json/)
   })
 })
 
@@ -259,7 +261,7 @@ test('a Buffer body is sent byte for byte with the content type the step names',
         body,
         contentType: 'multipart/form-data; boundary=zz',
       })
-      assert.equal(stub.requests[0].headers['content-type'], 'multipart/form-data; boundary=zz')
+      assert.equal(stub.requests[0].headers[LOWER_TYPE], 'multipart/form-data; boundary=zz')
       assert.deepEqual(stub.requests[0].rawBody, body)
     },
   )
@@ -269,9 +271,9 @@ test('extra request headers are sent as given and the headers the client owns ca
   await withStub(
     () => ({ status: 200, body: '{}' }),
     async (stub, client) => {
-      await client.request({ identity: undefined, method: 'GET', path: '/x', headers: { Accept: 'application/json' } })
-      assert.equal(stub.requests[0].headers.accept, 'application/json')
-      for (const name of ['content-type', 'Cookie', 'AUTHORIZATION', 'X-Struo-CSRF']) {
+      await client.request({ identity: undefined, method: 'GET', path: '/x', headers: { Accept: JSON_TYPE } })
+      assert.equal(stub.requests[0].headers.accept, JSON_TYPE)
+      for (const name of [LOWER_TYPE, 'Cookie', 'AUTHORIZATION', 'X-Struo-CSRF']) {
         await assert.rejects(
           client.request({ identity: undefined, method: 'GET', path: '/x', headers: { [name]: 'v' } }),
           new RegExp(name, 'i'),

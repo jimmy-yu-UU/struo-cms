@@ -33,8 +33,8 @@ const ACCEPT_JSON = 'application/json'
 // The two request-level errors the prose names as measured: a document that does not parse and a field
 // the schema does not have. They fail before any resolver runs.
 const REQUEST_LEVEL_QUERIES = [
-  { label: 'a document that does not parse', query: 'query {' },
-  { label: 'an unknown field', query: 'query { bogusThing { id } }' },
+  { label: 'a document that does not parse', query: 'query {', assertion: parserCode },
+  { label: 'an unknown field', query: 'query { bogusThing { id } }', assertion: noCodeErrors },
 ]
 
 // The same anonymous request under a chosen Accept header: only the status depends on it.
@@ -44,6 +44,13 @@ const acceptCheck = (name, accept, query, expect, assertion) =>
 function noCodeErrors(json) {
   must(Array.isArray(json.errors) && json.errors.length > 0, 'a request-level failure answers with an errors array')
   must(json.errors.every((error) => error.extensions?.code === undefined), 'a request-level failure has no extensions.code')
+}
+
+// A document that does not parse carries the parser's own code (HC0011 and its kin), not one of the
+// stable codes of the chapter.
+function parserCode(json) {
+  must(Array.isArray(json.errors) && json.errors.length > 0, 'a parse failure answers with an errors array')
+  must(json.errors.every((error) => /^HC\d+$/.test(error.extensions?.code ?? '')), 'a parse failure carries an HC code')
 }
 
 function codedError(json) {
@@ -117,9 +124,9 @@ export const ch14Rest = {
       { body: { query: NULL_WINS } },
     ),
     check('the links after tagsLinks null', 'GET', '/api/items/article/{{articleAId}}?deep=tags', 200, onlyReleaseLinked),
-    ...REQUEST_LEVEL_QUERIES.flatMap(({ label, query }) => [
-      acceptCheck(`${label} with Accept */*`, ACCEPT_ANY, query, 400, noCodeErrors),
-      acceptCheck(`${label} with Accept application/json`, ACCEPT_JSON, query, 200, noCodeErrors),
+    ...REQUEST_LEVEL_QUERIES.flatMap(({ label, query, assertion }) => [
+      acceptCheck(`${label} with Accept */*`, ACCEPT_ANY, query, 400, assertion),
+      acceptCheck(`${label} with Accept application/json`, ACCEPT_JSON, query, 200, assertion),
     ]),
     acceptCheck('a resolver error with Accept application/json', ACCEPT_JSON, '{ users { total } }', 200, codedError),
   ],

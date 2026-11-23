@@ -372,10 +372,10 @@ GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver
 裡一樣是 `200` 配這個代碼。沒有對照表可查的例外會被遮罩成固定的通用訊息，伺服器端照樣完整記錄，搜
 尋提供者失敗的訊息也是同一種遮罩。
 
-還有一種失敗走另一條路。一個文件本身剖析不了、指名了不存在的欄位，或違反深度／cost 規則，在任何
-resolver 開始跑之前就出錯，不帶任何例外，也就沒有 `extensions.code`。剖析失敗與不存在的欄位，在
-請求沒帶 `Accept` 或帶 `*/*` 時，HotChocolate 回 HTTP `400`；帶 `Accept: application/json` 時，同
-一份錯誤以 `200` 回應。下面的請求沒帶 `Accept`：
+還有一種失敗走另一條路。一個文件在任何 resolver 開始跑之前就出錯，不帶任何例外：指名了不存在的
+欄位，這則錯誤沒有 `extensions.code`；剖析不了的文件，帶的是 HotChocolate 自己的代碼，例如
+`HC0011`。兩種錯誤在請求沒帶 `Accept` 或帶 `*/*` 時，HotChocolate 回 HTTP `400`；帶
+`Accept: application/json` 時，同一份錯誤以 `200` 回應。下面的請求沒帶 `Accept`：
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -394,8 +394,8 @@ HTTP_STATUS:400
 ```
 
 錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——判斷一則 GraphQL 錯誤屬於哪一種，
-看的是有沒有 `extensions.code`，不是狀態碼：request 層級的結構性錯誤沒有代碼，resolver 執行時丟出
-的例外是 `200` 配代碼。
+看的是 `extensions.code`，不是狀態碼：resolver 執行時丟出的例外是 `200` 配本章列出的穩定代碼，
+request 層級的錯誤，例如不存在的欄位，沒有這種代碼，狀態碼還隨 `Accept` 而變。
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
