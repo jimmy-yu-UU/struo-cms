@@ -58,10 +58,13 @@ A published build uses `dotnet Struo.Api.dll <command>`; that is the API image's
 
 The commands read the same configuration as the API: appsettings plus `Section__Key` environment
 variables, and configuration keys may also follow the command, e.g. `--Database:ConnectionString=…`.
-Exit code `0` is success, `1` failure, `2` a usage error.
+The appsettings files are read from the content root, which is the current working directory unless
+`--contentRoot <directory>` names another one. Exit code `0` is success, `1` failure, `2` a usage
+error.
 
 `migrate` first prints FluentMigrator's log line for every step, then one `Applied <version>  <name>`
-line per migration it applied; with nothing pending it prints only `Nothing to migrate.`.
+line per migration it applied; the run that applies the seed migration adds a last line that says
+whether the admin was created. With nothing pending it prints only `Nothing to migrate.`.
 `migrate:status` prints one line per migration:
 
 ```

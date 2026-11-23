@@ -156,7 +156,8 @@ dotnet run --project src/Struo.Api
 ```
 
 `MigrateOnStartup` 是 `false` 時，這幾行前面沒有任何資料庫的紀錄；設成 `true` 時，前面是
-FluentMigrator 自己的紀錄，加上每套用一支 migration 一行 `Applied migration <version> <name>.`。
+FluentMigrator 自己的紀錄，加上每套用一支 migration 一行 `Applied migration <version> <name>.`；
+套用到植入 migration 的那一次，再多一行說明有沒有建立管理員。
 
 啟動失敗時，log 會印一筆 Fatal，並以結束碼 1 結束。漏了上一步，訊息是這樣（堆疊追蹤省略）：
 

@@ -60,7 +60,7 @@
 - `FieldMetadata.Ignored` is `true` for a `[CmsField]` on a property with
   `[SugarColumn(IsIgnore = true)]`, and `GET /api/schema` lists it as `ignored` on every field
   ([Chapter 5](05-collections.md)).
-- New public member: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`.
+- New public members: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`.
 
 ### Fixed
 
@@ -79,9 +79,9 @@
 - In 0.31.0, filtering, sorting, faceting or aggregating by a `[CmsField]` on a property with
   `[SugarColumn(IsIgnore = true)]`, or ending a relation path in one, answered `500`
   `INTERNAL_SERVER_ERROR`, and the same filter in GraphQL answered `INTERNAL_SERVER_ERROR`. REST now
-  answers `400` with `Unknown field '<name>' on collection '<collection>'.`, and the GraphQL filter
-  input type has no entry for the field, so the request is a `400` error with no `data` key;
-  `fields=` still selects it ([Chapter 10](10-query-basics.md)).
+  answers `400` with the message of an unknown field, and the GraphQL filter input type has no
+  entry for the field, so the request is rejected before it runs and the answer has no `data` key;
+  `fields=` selects it ([Chapter 10](10-query-basics.md)).
 
 ## 0.31.0 — 2026-11-23
 

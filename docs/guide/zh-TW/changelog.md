@@ -64,11 +64,10 @@
 - 0.31.0 中，上傳請求的本文在伺服器讀取 multipart 表單時逾時，會回 `500` `INTERNAL_SERVER_ERROR`。
   現在回 `408`，代碼 `BAD_USER_INPUT`，訊息 `The request body could not be read.`，伺服器記一則警告
   （見 [第 15 章](15-files-and-media.md)）。
-- 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、分組或彙總，或讓
-  關聯路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回
-  `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息
-  `Unknown field '<名稱>' on collection '<集合>'.`；
-  GraphQL 的篩選輸入型別沒有這個欄位，請求是沒有 `data` 鍵的 `400` 錯誤；`fields=` 仍選得到它
+- 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、做 facet 或彙總，
+  或讓關聯路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回
+  `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息與未知欄位的相同；GraphQL 的篩選輸入型別沒有
+  這個欄位，請求在執行前就被拒絕，回應沒有 `data` 鍵；`fields=` 選得到它
   （見 [第 10 章](10-query-basics.md)）。
 
 ## 0.31.0 — 2026-11-23

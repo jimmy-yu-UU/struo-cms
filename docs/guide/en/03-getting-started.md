@@ -175,7 +175,8 @@ A successful start shows:
 
 With `MigrateOnStartup` set to `false`, nothing about the database is logged before these lines;
 with `true`, they come after FluentMigrator's own log and one `Applied migration <version> <name>.`
-line per migration applied.
+line per migration applied; the start that applies the seed migration adds one line that says
+whether the admin was created.
 
 If startup fails, the log prints a single Fatal entry and the process exits with code 1. Skipping
 the previous step looks like this (stack trace omitted):

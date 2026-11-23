@@ -192,7 +192,7 @@ mutation 回 `200` 配 `BAD_USER_INPUT` 錯誤，`/api/schema` 回報 `creatable
 表頭能不能點著排序；查詢語法的 `sort` 不看這個旗標，任何已知欄位都排得動。
 
 屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 沒有欄位。`fields=` 選得到它，但不能拿來
-篩選、排序、分組、彙總、搜尋，也不能當關聯路徑的最後一段；GraphQL 的篩選輸入型別也沒有它。這種
+篩選、排序、做 facet、彙總、搜尋，也不能當關聯路徑的最後一段；GraphQL 的篩選輸入型別也沒有它。這種
 屬性上設 `Searchable = true` 或 `Sortable = true`，主機啟動時就停下並丟出 `MetadataException`，
 訊息點名屬性；拿掉旗標，或拿掉 `IsIgnore` 讓屬性有自己的欄位。
 
