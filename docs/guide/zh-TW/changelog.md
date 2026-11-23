@@ -31,6 +31,11 @@
   - 其他組合照常通過，包含 `decimal` 配 `decimal(18,4)` 與 `numeric(18,4)`；`bool` 配 `bit`、
     `boolean`、`tinyint` 與整數型別；`float4[]`、`text[]` 這類陣列型別；以及 `double` 或 `float`
     屬性配浮點欄位。
+- 當屬性帶 `[SugarColumn(IsIgnore = true)]`，又在 `[CmsField]` 上設 `Searchable = true` 或
+  `Sortable = true`，掃描器就讓主機在啟動時失敗，丟出 `MetadataException`，訊息點名「類別.屬性」。
+  這種屬性沒有欄位；主機原本能啟動，依它篩選或排序的請求回 `500`。把屬性上的 `Searchable` 或
+  `Sortable` 拿掉，或拿掉 `IsIgnore` 讓它存進欄位；加欄位時，已存在的表需要 migration
+  （見 [第 5 章](05-collections.md)）。
 :::
 
 ### 新增
@@ -42,7 +47,9 @@
   `migrate` 在 `Applied` 各行之後多印一行：管理員的 email，或 `Auth:BootstrapAdmin:Email` 沒設、
   設定檔是從哪個目錄讀的。啟動則把同樣的文字寫進記錄，建了用 `Information`，沒建用 `Warning`。
   結束代碼不變，`--contentRoot <目錄>` 改讀另一個目錄的設定檔（見 [第 20 章](20-deployment.md)）。
-- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`。
+- `[CmsField]` 所在屬性帶 `[SugarColumn(IsIgnore = true)]` 時，`FieldMetadata.Ignored` 為 `true`，
+  `GET /api/schema` 在每個欄位上列出 `ignored`（見 [第 5 章](05-collections.md)）。
+- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`、`FieldMetadata.Ignored`。
 
 ### 修正
 
@@ -56,6 +63,11 @@
 - 0.31.0 中，上傳請求的本文在伺服器讀取 multipart 表單時逾時，會回 `500` `INTERNAL_SERVER_ERROR`。
   現在回 `408`，代碼 `BAD_USER_INPUT`，訊息 `The request body could not be read.`，伺服器記一則警告
   （見 [第 15 章](15-files-and-media.md)）。
+
+- 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、分組或彙總，或讓關聯
+  路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回 `INTERNAL_SERVER_ERROR`。
+  REST 現在回 `400`，訊息 `Unknown field '<名稱>' on collection '<集合>'.`；GraphQL 的篩選輸入型別沒有
+  這個欄位，請求是沒有 `data` 鍵的 `400` 錯誤；`fields=` 仍選得到它（見 [第 10 章](10-query-basics.md)）。
 
 ## 0.31.0 — 2026-11-23
 

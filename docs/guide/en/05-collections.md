@@ -215,6 +215,12 @@ so the scan refuses `Searchable` on one in the same way; remove it. `Sortable` d
 the admin list header can be clicked to sort; the query DSL's `sort` ignores the flag — any known
 field can be sorted on.
 
+A `[CmsField]` on a property with `[SugarColumn(IsIgnore = true)]` has no column. `fields=` can
+select it, but it can't be filtered, sorted, faceted, aggregated, searched or used as the last
+segment of a relation path, and the GraphQL filter input type has no entry for it. `Searchable = true`
+or `Sortable = true` on such a property stops the host at start with a `MetadataException` that
+names the property; remove the flag, or remove `IsIgnore` so the property gets a column.
+
 A field's external key is the camelCase form of the CLR property name. A label that falls back
 to the PascalCase property name gets no inserted spaces and no case changes.
 

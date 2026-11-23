@@ -36,6 +36,12 @@
   - Every other pair passes, including `decimal(18,4)` and `numeric(18,4)` on a `decimal`;
     `bit`, `boolean`, `tinyint` and the integer types on a `bool`; the array types such as
     `float4[]` and `text[]`; and a `double` or `float` property on a floating-point column.
+- The scanner stops the host at start, with a `MetadataException` that names "Class.Property", when a
+  `[CmsField]` with `Searchable = true` or `Sortable = true` sits on a property with
+  `[SugarColumn(IsIgnore = true)]`. Such a property has no column; the host used to start, and a
+  request that filtered or sorted by it answered `500`. Remove `Searchable` or `Sortable` from the
+  property, or remove `IsIgnore` so it is stored in a column; a table that exists needs a migration
+  when a column is added ([Chapter 5](05-collections.md)).
 :::
 
 ### Added
@@ -50,7 +56,10 @@
   were read from. The start writes the same text to the log, at `Information` when the admin was
   created and at `Warning` when it was not. Exit codes are unchanged, and `--contentRoot <directory>`
   reads the configuration files from another directory ([Chapter 20](20-deployment.md)).
-- New public member: `GraphQlOptions.MaxFieldCycleDepth`.
+- `FieldMetadata.Ignored` is `true` for a `[CmsField]` on a property with
+  `[SugarColumn(IsIgnore = true)]`, and `GET /api/schema` lists it as `ignored` on every field
+  ([Chapter 5](05-collections.md)).
+- New public member: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`.
 
 ### Fixed
 
@@ -66,6 +75,13 @@
   answered with `500` `INTERNAL_SERVER_ERROR`. It is `408` with `BAD_USER_INPUT` and the message
   `The request body could not be read.`, and the server logs a warning
   ([Chapter 15](15-files-and-media.md)).
+
+- In 0.31.0, filtering, sorting, faceting or aggregating by a `[CmsField]` on a property with
+  `[SugarColumn(IsIgnore = true)]`, or ending a relation path in one, answered `500`
+  `INTERNAL_SERVER_ERROR`, and the same filter in GraphQL answered `INTERNAL_SERVER_ERROR`. REST now
+  answers `400` with `Unknown field '<name>' on collection '<collection>'.`, and the GraphQL filter
+  input type has no entry for the field, so the request is a `400` error with no `data` key;
+  `fields=` still selects it ([Chapter 10](10-query-basics.md)).
 
 ## 0.31.0 — 2026-11-23
 

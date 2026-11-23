@@ -450,6 +450,11 @@ collection's own non-hidden `[CmsField]`s, plus any declared many-to-one foreign
 `categoryId` can therefore be filtered even though it carries no `[CmsField]` of its own. `id` is
 always valid, even though it isn't in the field list.
 
+A `[CmsField]` on a property with `[SugarColumn(IsIgnore = true)]` has no column, so the allowlist
+leaves it out of `filter`, `sort`, `facets`, `aggregate`, the last segment of a relation path and a
+`_junction` field; each of them answers as for an unknown field, and `search` skips it. `fields=` still
+selects it, and the GraphQL filter input type has no entry for it.
+
 `Sortable` has no bearing on this allowlist: `[CmsField]`'s `Sortable` only decides whether the
 admin list screen's column header can be clicked to sort — a separate concern from the `sort=`
 allowlist here.
