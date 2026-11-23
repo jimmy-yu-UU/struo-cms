@@ -10,25 +10,54 @@ internal static class ColumnTypeFit
 {
     internal readonly record struct Misfit(string Fix, string Why);
 
+    private const string SameOnEveryBackend = "and the check is the same on every backend";
     private const string ZoneFix = "Declare [ColumnShape(ColumnShape.TimestampWithTimeZone)] and remove ColumnDataType";
     private const string ZoneWhy =
         "only the shape makes the framework read and write the column as a UTC instant on PostgreSQL and SQL Server, " +
         "and without it a facet of the column and a facet of a zone-less DateTime column fail each other on SQL Server";
     private const string WidthWhy =
         "on SQL Server a facet of this column fails when a facet of a column of the property's own width ran first, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
     private const string BooleanFix = "Write tinyint without its length, or remove ColumnDataType";
     private const string BooleanWhy =
         "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
-        "and the check is the same on every backend";
+        SameOnEveryBackend;
+    private const string DecimalFix =
+        "Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType";
+    private const string DecimalWhy =
+        "a single-precision type returns 12345.6789 as 12345.68 or 12345.7, " +
+        "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
+        "and filters, facets and sums on the column then go wrong, " +
+        SameOnEveryBackend;
+    private const string BareDecimalFix = "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType";
+    private const string BareDecimalWhy =
+        "a decimal type written with no precision gets scale 0 on MySQL and MariaDB (decimal(10,0)) and, " +
+        "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
+        SameOnEveryBackend;
+    private const string BoolStringFix =
+        "Remove ColumnDataType, or declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
+    private const string BoolStringWhy =
+        "a string column is not read back as a bool, so where the database accepts the write, " +
+        "reading the row and a facet of the column then fail, " +
+        SameOnEveryBackend;
 
-    // One type name as written in a column type: the words it is made of, and for a one-word name the length
-    // or precision that must follow it (null when any, or none, matches).
-    private sealed record Entry(string[] Words, string? FirstArgument = null);
+    // One type name as written in a column type: the words it is made of, for a one-word name the length
+    // or precision that must follow it (null when any, or none, matches), a word that may follow the name
+    // without changing it ("double precision" is "double", "character varying" is "character"), whether
+    // "unsigned" and "zerofill" after the name leave it the same type, and whether the name must have no
+    // length or precision at all.
+    private sealed record Entry(
+        string[] Words, string? FirstArgument = null, string? OptionalNext = null, bool IgnoresSign = false,
+        bool NoArgument = false);
 
     private sealed record Rule(Type Clr, Entry[] Entries, Misfit Misfit);
 
-    private static Entry Name(string words, string? firstArgument = null) => new(words.Split(' '), firstArgument);
+    private static Entry Name(
+        string words, string? firstArgument = null, string? optionalNext = null, bool ignoresSign = false,
+        bool noArgument = false) =>
+        new(words.Split(' '), firstArgument, optionalNext, ignoresSign, noArgument);
+
+    private static Entry Bare(string word) => Name(word, ignoresSign: true, noArgument: true);
 
     private static readonly Rule[] Rules =
     [
@@ -39,6 +68,21 @@ internal static class ColumnTypeFit
         new(typeof(long), [Name("smallint")], new("Remove ColumnDataType, or declare the column as bigint", WidthWhy)),
         new(typeof(int), [Name("tinyint", "1")], new(BooleanFix, BooleanWhy)),
         new(typeof(long), [Name("tinyint", "1")], new(BooleanFix, BooleanWhy)),
+        new(
+            typeof(decimal),
+            [
+                Name("real", ignoresSign: true), Name("float", ignoresSign: true), Name("float4"), Name("float8"),
+                Name("double", optionalNext: "precision", ignoresSign: true),
+            ],
+            new(DecimalFix, DecimalWhy)),
+        new(typeof(decimal), [Bare("decimal"), Bare("numeric"), Bare("dec"), Bare("fixed")], new(BareDecimalFix, BareDecimalWhy)),
+        new(
+            typeof(bool),
+            [
+                Name("varchar"), Name("nvarchar"), Name("char"), Name("nchar"), Name("character", optionalNext: "varying"),
+                Name("bpchar"), Name("text"), Name("ntext"), Name("tinytext"), Name("mediumtext"), Name("longtext"),
+            ],
+            new(BoolStringFix, BoolStringWhy)),
     ];
 
     /// <summary>
@@ -72,14 +116,16 @@ internal static class ColumnTypeFit
         for (var i = 0; i < count; i++)
             if (tokens[i].Word != entry.Words[i]) return false;
         if (entry.FirstArgument is not null && tokens[0].Argument != entry.FirstArgument) return false;
+        if (entry.NoArgument && tokens[0].Argument is not null) return false;
+        if (entry.OptionalNext is not null && tokens.Count > count && tokens[count].Word == entry.OptionalNext) count++;
 
-        // "unsigned", "zerofill" and an array suffix turn the name into another type; any other trailing word is
-        // a column modifier.
-        return tokens.Count == count || !MakesAnotherType(tokens[count].Word);
+        // An array suffix turns any name into another type, and "unsigned" and "zerofill" do for a name whose
+        // entry does not ignore them; any other trailing word is a column modifier.
+        return tokens.Count == count || !MakesAnotherType(tokens[count].Word, entry.IgnoresSign);
     }
 
-    private static bool MakesAnotherType(string word) =>
-        word is "unsigned" or "zerofill" or "array" || word.StartsWith('[') || word.StartsWith("array[", StringComparison.Ordinal);
+    private static bool MakesAnotherType(string word, bool ignoresSign) =>
+        word == "array" || word.Contains('[') || (!ignoresSign && word is "unsigned" or "zerofill");
 
     // Lower-case words split at whitespace and at a parenthesised group; the group's text, without spaces,
     // is the argument of the word before it. A word wrapped whole in brackets, double quotes or backticks keeps

@@ -78,6 +78,112 @@ public sealed class ColumnDataTypeFitTests
         { typeof(int?), "TINYINT(1)" },
         { typeof(long), "tinyint (1)" },
         { typeof(long?), " tinyint( 1 ) not null " },
+        // a decimal property on a binary floating-point column type
+        { typeof(decimal), "real" },
+        { typeof(decimal?), "real" },
+        { typeof(decimal), "float" },
+        { typeof(decimal?), "float" },
+        { typeof(decimal), "float4" },
+        { typeof(decimal), "float8" },
+        { typeof(decimal?), "float8" },
+        { typeof(decimal), "double" },
+        { typeof(decimal?), "double" },
+        { typeof(decimal), "double precision" },
+        { typeof(decimal?), "double precision" },
+        { typeof(decimal), "float(24)" },
+        { typeof(decimal), "float(53)" },
+        { typeof(decimal), "float(10)" },
+        { typeof(decimal), "float(25)" },
+        { typeof(decimal), "double(18,4)" },
+        { typeof(decimal), "REAL" },
+        { typeof(decimal), "Float8" },
+        { typeof(decimal), "DOUBLE PRECISION" },
+        { typeof(decimal), "Double  Precision" },
+        { typeof(decimal), "  real  " },
+        { typeof(decimal), "FLOAT (53)" },
+        { typeof(decimal), "[float]" },
+        { typeof(decimal), "[float](53)" },
+        { typeof(decimal), "\"real\"" },
+        { typeof(decimal), "`double`" },
+        { typeof(decimal), "float not null" },
+        { typeof(decimal?), "real default 0" },
+        { typeof(decimal), "double precision not null" },
+        { typeof(decimal), "float(53) null" },
+        { typeof(decimal), "float unsigned" },
+        { typeof(decimal?), "float unsigned" },
+        { typeof(decimal), "double unsigned" },
+        { typeof(decimal), "real unsigned" },
+        { typeof(decimal), "float zerofill" },
+        { typeof(decimal), "float unsigned zerofill" },
+        { typeof(decimal), "double precision unsigned" },
+        { typeof(decimal), "DOUBLE UNSIGNED" },
+        // no precision and scale
+        { typeof(decimal), "decimal" },
+        { typeof(decimal?), "decimal" },
+        { typeof(decimal), "numeric" },
+        { typeof(decimal?), "numeric" },
+        { typeof(decimal), "dec" },
+        { typeof(decimal?), "dec" },
+        { typeof(decimal), "fixed" },
+        { typeof(decimal?), "fixed" },
+        { typeof(decimal), "DECIMAL" },
+        { typeof(decimal), "Numeric" },
+        { typeof(decimal), "  decimal  " },
+        { typeof(decimal), "decimal not null" },
+        { typeof(decimal?), "numeric default 0" },
+        { typeof(decimal), "[decimal]" },
+        { typeof(decimal), "[numeric] not null" },
+        { typeof(decimal), "\"numeric\"" },
+        { typeof(decimal), "`dec`" },
+        { typeof(decimal), "decimal unsigned" },
+        { typeof(decimal), "numeric unsigned" },
+        { typeof(decimal), "dec unsigned" },
+        { typeof(decimal), "fixed unsigned" },
+        { typeof(decimal), "decimal zerofill" },
+        { typeof(decimal), "numeric zerofill" },
+        // a bool property on a string column type
+        { typeof(bool), "varchar(5)" },
+        { typeof(bool?), "varchar(5)" },
+        { typeof(bool), "nvarchar(5)" },
+        { typeof(bool), "char(5)" },
+        { typeof(bool?), "char(5)" },
+        { typeof(bool), "text" },
+        { typeof(bool?), "text" },
+        { typeof(bool), "character varying(5)" },
+        { typeof(bool?), "character varying(5)" },
+        { typeof(bool), "varchar" },
+        { typeof(bool), "nvarchar" },
+        { typeof(bool), "nvarchar(max)" },
+        { typeof(bool), "varchar(max)" },
+        { typeof(bool), "nchar(5)" },
+        { typeof(bool), "ntext" },
+        { typeof(bool), "tinytext" },
+        { typeof(bool), "mediumtext" },
+        { typeof(bool), "longtext" },
+        { typeof(bool), "character(5)" },
+        { typeof(bool), "character" },
+        { typeof(bool), "bpchar" },
+        { typeof(bool), "character varying" },
+        { typeof(bool), "VARCHAR(5)" },
+        { typeof(bool), "Text" },
+        { typeof(bool), "NVarChar(Max)" },
+        { typeof(bool), "  text  " },
+        { typeof(bool), "varchar (5)" },
+        { typeof(bool), "CHARACTER   VARYING (5)" },
+        { typeof(bool), "character varying(5)not null" },
+        { typeof(bool), "[nvarchar](max)" },
+        { typeof(bool), "[text]" },
+        { typeof(bool), "\"varchar\"(5)" },
+        { typeof(bool), "`text`" },
+        { typeof(bool), "text not null" },
+        { typeof(bool?), "text null" },
+        { typeof(bool), "varchar(5) not null" },
+        { typeof(bool), "varchar(5) default 'x'" },
+        { typeof(bool), "character varying(5) not null" },
+        { typeof(bool), "char" },
+        { typeof(bool), "nchar" },
+        { typeof(bool), "bpchar(5)" },
+        { typeof(bool), "longtext collate utf8mb4_bin" },
     };
 
     [Theory]
@@ -91,10 +197,29 @@ public sealed class ColumnDataTypeFitTests
         misfit.Value.Why.Should().NotBeNullOrWhiteSpace();
     }
 
+    [Theory]
+    [MemberData(nameof(Rejected))]
+    public void The_nullable_twin_of_a_rejected_pair_is_found_too(Type propertyType, string columnType)
+    {
+        if (!propertyType.IsValueType || Nullable.GetUnderlyingType(propertyType) is not null) return;
+        var twin = typeof(Nullable<>).MakeGenericType(propertyType);
+
+        var misfit = ColumnTypeFit.Find(twin, columnType);
+
+        misfit.Should().NotBeNull();
+        misfit!.Value.Fix.Should().Contain(ExpectedFix(propertyType, columnType));
+    }
+
     // The fix text identifies the rule that fired.
     private static string ExpectedFix(Type propertyType, string columnType)
     {
+        var single = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
+        if (single == typeof(bool)) return "declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
         var name = columnType.ToLowerInvariant();
+        if (single == typeof(decimal) && (name.Contains("float") || name.Contains("real") || name.Contains("double")))
+            return "Declare decimal(18,4) or another decimal type with an explicit scale";
+        if (single == typeof(decimal) && !name.Contains("float") && !name.Contains("real") && !name.Contains("double"))
+            return "Write the precision and scale, such as decimal(18,4)";
         if (name.Contains("tinyint", StringComparison.Ordinal)) return "Write tinyint without its length";
         if (propertyType == typeof(DateTime) || propertyType == typeof(DateTime?)) return "TimestampWithTimeZone";
         var isInt = propertyType == typeof(int) || propertyType == typeof(int?);
@@ -176,8 +301,86 @@ public sealed class ColumnDataTypeFitTests
         { typeof(long), "[int value]" },
         // a group with no word before it adds nothing, so tinyint has no length here
         { typeof(int), "(1)tinyint" },
+        // decimal types with a precision
+        { typeof(decimal), "decimal(18,4)" },
+        { typeof(decimal), "decimal(18)" },
+        { typeof(decimal), "numeric(10,0)" },
+        { typeof(decimal), "decimal (18,4)" },
+        { typeof(decimal), "numeric(18, 4) unsigned" },
+        { typeof(decimal), "decimal(18,4) zerofill" },
+        { typeof(decimal), "dec(18,4)" },
+        { typeof(decimal), "fixed(18,4)" },
+        { typeof(decimal), "decimal(18,4)[]" },
+        { typeof(decimal), "decimal[]" },
+        { typeof(decimal), "numeric array" },
+        { typeof(decimal), "decimal_custom" },
+        { typeof(decimal), "fixedpoint" },
+        { typeof(decimal), "decimals" },
+        { typeof(double), "decimal" },
+        { typeof(long), "numeric" },
+        { typeof(string), "decimal" },
+        { typeof(decimal?), "numeric(18,4)" },
+        { typeof(decimal), "decimal(18, 4) not null" },
+        { typeof(decimal), "[decimal](18,4)" },
+        // floating-point types on a property that is itself floating-point
+        { typeof(double), "double" },
+        { typeof(double), "double precision" },
+        { typeof(double?), "float" },
+        { typeof(float), "real" },
+        { typeof(float), "float4" },
+        // another type: unsigned, arrays, whole words only
+        { typeof(decimal), "float4 unsigned" },
+        { typeof(decimal), "float8 zerofill" },
+        { typeof(decimal), "float unsigned[]" },
+        { typeof(decimal), "float4[]" },
+        { typeof(decimal), "real[]" },
+        { typeof(decimal), "double precision[]" },
+        { typeof(decimal), "double precision array" },
+        { typeof(decimal), "float8 []" },
+        { typeof(decimal), "floaty" },
+        { typeof(decimal), "realm" },
+        { typeof(decimal), "doubled" },
+        { typeof(decimal), "float4range" },
+        { typeof(decimal), "my_float" },
+        { typeof(decimal), "\"double custom\"" },
+        { typeof(decimal), "\"double precision\"" },
+        // another property type is not the concern of the floating-point rule
+        { typeof(long), "real" },
+        { typeof(int), "double" },
+        { typeof(string), "float" },
+        // boolean and integer types on a bool property
+        { typeof(bool), "bit" },
+        { typeof(bool), "boolean" },
+        { typeof(bool?), "boolean" },
+        { typeof(bool), "tinyint(1)" },
+        { typeof(bool), "tinyint" },
+        { typeof(bool), "int" },
+        { typeof(bool), "bigint" },
+        { typeof(bool), "smallint" },
+        { typeof(bool), "[bit] not null" },
+        // names outside the table
+        { typeof(bool), "string" },
+        { typeof(bool), "varchar2(5)" },
+        { typeof(bool), "clob" },
+        { typeof(bool), "texty" },
+        { typeof(bool), "varchar_custom" },
+        // another type: arrays, whole words only
+        { typeof(bool), "text[]" },
+        { typeof(bool), "varchar(5)[]" },
+        { typeof(bool), "varchar[]" },
+        { typeof(bool), "character varying[]" },
+        { typeof(bool), "character varying array" },
+        { typeof(bool), "text array" },
+        { typeof(bool), "char []" },
+        { typeof(bool), "\"text custom\"" },
+        // a string-typed name on a property that is not bool
+        { typeof(int), "varchar(5)" },
+        { typeof(Guid), "text" },
+        { typeof(decimal), "varchar(5)" },
         // no declaration, or an empty one
         { typeof(int), null },
+        { typeof(decimal), null },
+        { typeof(bool), "" },
         { typeof(DateTime), "" },
     };
 
@@ -206,6 +409,16 @@ public sealed class ColumnDataTypeFitTests
         [CmsField(Label = "Vendor", Interface = FieldInterface.Number)] public int Vendor { get; set; }
         [SugarColumn(ColumnDataType = "varchar(7)")]
         [CmsField(Label = "Text", Interface = FieldInterface.Text)] public string? Text { get; set; }
+        [SugarColumn(ColumnDataType = "decimal(18,4)")]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal Price { get; set; }
+        [SugarColumn(ColumnDataType = "numeric(18,4)", IsNullable = true)]
+        [CmsField(Label = "Cost", Interface = FieldInterface.Number)] public decimal? Cost { get; set; }
+        [SugarColumn(ColumnDataType = "double precision")]
+        [CmsField(Label = "Ratio", Interface = FieldInterface.Number)] public double Ratio { get; set; }
+        [SugarColumn(ColumnDataType = "tinyint(1)")]
+        [CmsField(Label = "Flag", Interface = FieldInterface.Boolean)] public bool Flag { get; set; }
+        [SugarColumn(ColumnDataType = "boolean", IsNullable = true)]
+        [CmsField(Label = "Maybe", Interface = FieldInterface.Boolean)] public bool? Maybe { get; set; }
     }
 
     [Fact]
@@ -214,7 +427,7 @@ public sealed class ColumnDataTypeFitTests
         var collection = MetadataScanner.ScanTypes([typeof(Fit)]).Single();
 
         collection.Fields.Select(f => f.Name)
-            .Should().Contain(["zoneLess", "shaped", "natural", "wide", "small", "vendor", "text"]);
+            .Should().Contain(["zoneLess", "shaped", "natural", "wide", "small", "vendor", "text", "price", "cost", "ratio", "flag", "maybe"]);
     }
 
     [CmsCollection("Zone-aware", Name = "cdtZoneAware")]
@@ -305,6 +518,54 @@ public sealed class ColumnDataTypeFitTests
         [CmsField(Label = "Total", Interface = FieldInterface.Number)] public long Total { get; set; }
     }
 
+    [CmsCollection("Decimal on real", Name = "cdtDecimalReal")]
+    public sealed class DecimalReal
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "real")]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal Price { get; set; }
+    }
+
+    [CmsCollection("Nullable decimal on double", Name = "cdtDecimalDouble")]
+    public sealed class DecimalNullableDouble
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "Double Precision", IsNullable = true)]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal? Price { get; set; }
+    }
+
+    [CmsCollection("Decimal without precision", Name = "cdtDecimalBare")]
+    public sealed class DecimalBare
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "decimal")]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal Price { get; set; }
+    }
+
+    [CmsCollection("Nullable decimal without precision", Name = "cdtNumericBare")]
+    public sealed class NumericBareNullable
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "NUMERIC null", IsNullable = true)]
+        [CmsField(Label = "Price", Interface = FieldInterface.Number)] public decimal? Price { get; set; }
+    }
+
+    [CmsCollection("Bool on varchar", Name = "cdtBoolVarchar")]
+    public sealed class BoolVarchar
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "varchar(5)")]
+        [CmsField(Label = "Flag", Interface = FieldInterface.Boolean)] public bool Flag { get; set; }
+    }
+
+    [CmsCollection("Nullable bool on text", Name = "cdtBoolText")]
+    public sealed class BoolNullableText
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(ColumnDataType = "text", IsNullable = true)]
+        [CmsField(Label = "Flag", Interface = FieldInterface.Checkbox)] public bool? Flag { get; set; }
+    }
+
     [CmsCollection("Shape wins", Name = "cdtShapeAndType")]
     public sealed class ShapeAndZoneAware
     {
@@ -333,6 +594,12 @@ public sealed class ColumnDataTypeFitTests
         { typeof(LongInt), "LongInt.Total", "ColumnDataType = \"int\")] and is a long property" },
         { typeof(LongInteger), "LongInteger.Total", "ColumnDataType = \"integer\")] and is a long property" },
         { typeof(LongSmallint), "LongSmallint.Total", "ColumnDataType = \"smallint\")] and is a long property" },
+        { typeof(DecimalReal), "DecimalReal.Price", "ColumnDataType = \"real\")] and is a decimal property" },
+        { typeof(DecimalNullableDouble), "DecimalNullableDouble.Price", "ColumnDataType = \"Double Precision\")] and is a decimal? property" },
+        { typeof(DecimalBare), "DecimalBare.Price", "ColumnDataType = \"decimal\")] and is a decimal property" },
+        { typeof(NumericBareNullable), "NumericBareNullable.Price", "ColumnDataType = \"NUMERIC null\")] and is a decimal? property" },
+        { typeof(BoolVarchar), "BoolVarchar.Flag", "ColumnDataType = \"varchar(5)\")] and is a bool property" },
+        { typeof(BoolNullableText), "BoolNullableText.Flag", "ColumnDataType = \"text\")] and is a bool? property" },
     };
 
     [Theory]
@@ -394,6 +661,73 @@ public sealed class ColumnDataTypeFitTests
             "Write tinyint without its length, or remove ColumnDataType: " +
             "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
             "and the check is the same on every backend.");
+    }
+
+    [Fact]
+    public void The_message_for_a_decimal_on_a_floating_point_type_offers_an_exact_type()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(DecimalReal)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'DecimalReal.Price' has [SugarColumn(ColumnDataType = \"real\")] and is a decimal property. " +
+            "Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType: " +
+            "a single-precision type returns 12345.6789 as 12345.68 or 12345.7, " +
+            "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
+            "and filters, facets and sums on the column then go wrong, " +
+            "and the check is the same on every backend.");
+    }
+
+    [Fact]
+    public void The_message_for_a_nullable_decimal_offers_the_same_fix()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(DecimalNullableDouble)]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("and is a decimal? property. Declare decimal(18,4) or another decimal type with an explicit scale, or remove ColumnDataType:");
+    }
+
+    [Fact]
+    public void The_message_for_a_decimal_without_precision_asks_for_the_precision_and_scale()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(DecimalBare)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'DecimalBare.Price' has [SugarColumn(ColumnDataType = \"decimal\")] and is a decimal property. " +
+            "Write the precision and scale, such as decimal(18,4), or remove ColumnDataType: " +
+            "a decimal type written with no precision gets scale 0 on MySQL and MariaDB (decimal(10,0)) and, " +
+            "for numeric and dec, on SQL Server, so 12345.6789 reads back as 12346, " +
+            "and the check is the same on every backend.");
+    }
+
+    [Fact]
+    public void The_message_for_a_nullable_decimal_without_precision_offers_the_same_fix()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(NumericBareNullable)]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("and is a decimal? property. Write the precision and scale, such as decimal(18,4), or remove ColumnDataType:");
+    }
+
+    [Fact]
+    public void The_message_for_a_bool_on_a_string_type_offers_a_boolean_type()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(BoolVarchar)]);
+
+        act.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'BoolVarchar.Flag' has [SugarColumn(ColumnDataType = \"varchar(5)\")] and is a bool property. " +
+            "Remove ColumnDataType, or declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server): " +
+            "a string column is not read back as a bool, so where the database accepts the write, " +
+            "reading the row and a facet of the column then fail, " +
+            "and the check is the same on every backend.");
+    }
+
+    [Fact]
+    public void The_message_for_a_nullable_bool_offers_the_same_fix()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(BoolNullableText)]);
+
+        act.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("and is a bool? property. Remove ColumnDataType, or declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server):");
     }
 
     [Fact]
