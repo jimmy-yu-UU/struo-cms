@@ -466,9 +466,10 @@ allowed field cost was exceeded.`，`extensions` 帶 `fieldCost` 與 `maxFieldCo
 `MaxDeepRelations`。
 
 執行深度、cost 與欄位重複這三個上限設在 `GraphQl:` 底下（見[第 4 章](04-configuration.md)），而且
-只能在設定裡設：在程式碼裡設定 `GraphQlOptions` 沒有作用。成本上限的預設值是只針對核心 schema 量出來的：
-最重的一般查詢成本是 33，50 個 alias 的放大是 550，150 落在兩者之間。fork 加了比較重的查詢，就像
-`GraphQlCostAnalysisTests` 對核心做的那樣，量出自己最重的正當查詢，把成本上限設在它的上面一點。
+只能在設定裡設：在程式碼裡設定 `GraphQlOptions` 沒有作用。成本上限的預設值是只針對核心 schema
+量出來的：最重的一般查詢成本是 33，50 個 alias 的放大是 550，150 落在兩者之間。fork 加了比較重的
+查詢，就像 `GraphQlCostAnalysisTests` 對核心做的那樣，量出自己最重的正當查詢，把成本上限設在它的
+上面一點。
 
 ## 加上自己的型別與欄位
 

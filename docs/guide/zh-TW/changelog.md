@@ -42,8 +42,9 @@
 
 ### 修正
 
-- 0.31.0 中，以 POST 送出、GraphQL 伺服器無法讀成請求的 JSON 本文（例如 `query` 為空字串、完全沒有 `query`、本文不是
-  JSON、`query`、`operationName` 或 `extensions` 的型別不對，或 `variables` 是數字或字串）會回 `400`
+- 0.31.0 中，以 POST 送出、GraphQL 伺服器無法讀成請求的 JSON 本文（例如 `query` 為空字串、完全沒有
+  `query`、本文不是 JSON、`query`、`operationName` 或 `extensions` 的型別不對，或 `variables` 是數字
+  或字串）會回 `400`
   與錯誤 `An internal error occurred.`、代碼 `INTERNAL_SERVER_ERROR`，API 還為它寫一筆 error 等級的
   記錄。狀態碼仍是 `400`；錯誤現在帶代碼 `BAD_USER_INPUT` 與 GraphQL 伺服器自己的訊息，例如
   `Request must contain either a query or a document id.`，沒有 `data` 鍵；也不再寫 error 等級的記錄
