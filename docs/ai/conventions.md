@@ -437,8 +437,12 @@ checked. `MetadataScanner.ValidateRelationKeyTypes` then compares the type of ea
 no integer widening: the many-to-one key against the target's primary key, the one-to-many child
 key against the declaring entity's, the junction's parent key against the declaring entity's and
 its target key against the target's. The primary key is the one `PrimaryKeyName` resolves, as for
-`EntityDescriptor.IdProperty`; a key property or a primary key it cannot find, and a target that
-is not a collection, are skipped and left to the checks that already cover them. A mismatch throws
+`EntityDescriptor.IdProperty`. The comparison is skipped when either property does not exist or
+when the entity holding the primary key is not a collection: `NavigateShape` has refused a
+many-to-one or one-to-many key that names no property before this check runs, `RelationshipGraph`
+refuses a target that is not a collection when the host starts, and a junction key that names no
+property, or an entity with no primary key property, passes the scan and fails at run time. A
+mismatch throws
 a `MetadataException` naming `Class.Property` of the relation, the key and the primary key with
 their types. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
 `NavigateForeignKeyTests` and `RelationKeyTypeCheckTests` pin these.

@@ -48,9 +48,9 @@ and `int` against `long` does not. Four keys are compared:
 | Many-to-many | The junction's target key | The target's primary key |
 
 Any other pairing stops startup. The message names the relation, the key and its type, the primary
-key and its type, and the type to declare. A column that already exists in another type needs a
-migration. A key property or a target the scan cannot find is left to the checks above. With
-another type, the relation reads back empty or fails at the first request.
+key and its type, and the type to declare. A column that already exists with another type needs a
+migration. The comparison needs both properties: a junction key that names no property is not
+compared.
 
 The checks above apply to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
 relation and is ignored; a many-to-many one is read only for its junction type, to check that a
