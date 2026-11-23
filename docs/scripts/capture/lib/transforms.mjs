@@ -8,9 +8,13 @@
 
 export class TransformError extends Error {}
 
+const WHITESPACE = ' \t\r\n'
+const LITERAL_END = `,}]${WHITESPACE}`
+const NOT_OBJECT = 'not a JSON object'
+
 function skipWhitespace(text, index) {
   let i = index
-  while (i < text.length && ' \t\r\n'.includes(text[i])) i += 1
+  while (i < text.length && WHITESPACE.includes(text[i])) i += 1
   return i
 }
 
@@ -21,50 +25,62 @@ function skipString(text, start) {
   return i + 1
 }
 
+// Index just past the object or array that starts at `start`, strings and nesting included.
+function skipComposite(text, start) {
+  let depth = 0
+  let i = start
+  while (i < text.length) {
+    if (text[i] === '"') {
+      i = skipString(text, i)
+    } else {
+      depth += bracketDepthChange(text[i])
+      i += 1
+      if (depth === 0) return i
+    }
+  }
+  throw new TransformError('unterminated JSON value')
+}
+
+function bracketDepthChange(char) {
+  if (char === '{' || char === '[') return 1
+  if (char === '}' || char === ']') return -1
+  return 0
+}
+
+// Index just past the number, true, false or null that starts at `start`.
+function skipLiteral(text, start) {
+  let i = start
+  while (i < text.length && !LITERAL_END.includes(text[i])) i += 1
+  return i
+}
+
 // Index just past the JSON value that starts at `start`.
 function skipValue(text, start) {
   const first = text[start]
   if (first === '"') return skipString(text, start)
-  if (first === '{' || first === '[') {
-    let depth = 0
-    let i = start
-    while (i < text.length) {
-      const char = text[i]
-      if (char === '"') {
-        i = skipString(text, i)
-        continue
-      }
-      if (char === '{' || char === '[') depth += 1
-      if (char === '}' || char === ']') depth -= 1
-      i += 1
-      if (depth === 0) return i
-    }
-    throw new TransformError('unterminated JSON value')
-  }
-  let i = start
-  while (i < text.length && !',}] \t\r\n'.includes(text[i])) i += 1
-  return i
+  if (first === '{' || first === '[') return skipComposite(text, start)
+  return skipLiteral(text, start)
 }
 
 // The members of the object that starts at `start`: key, where the key token starts, and the
 // span of the value.
 function members(text, start) {
   let i = skipWhitespace(text, start)
-  if (text[i] !== '{') throw new TransformError('not a JSON object')
+  if (text[i] !== '{') throw new TransformError(NOT_OBJECT)
   i = skipWhitespace(text, i + 1)
   const found = []
   while (text[i] !== '}') {
-    if (text[i] !== '"') throw new TransformError('not a JSON object')
+    if (text[i] !== '"') throw new TransformError(NOT_OBJECT)
     const keyStart = i
     const keyEnd = skipString(text, i)
     i = skipWhitespace(text, keyEnd)
-    if (text[i] !== ':') throw new TransformError('not a JSON object')
+    if (text[i] !== ':') throw new TransformError(NOT_OBJECT)
     const valueStart = skipWhitespace(text, i + 1)
     const valueEnd = skipValue(text, valueStart)
     found.push({ key: JSON.parse(text.slice(keyStart, keyEnd)), keyStart, valueStart, valueEnd })
     i = skipWhitespace(text, valueEnd)
     if (text[i] === ',') i = skipWhitespace(text, i + 1)
-    else if (text[i] !== '}') throw new TransformError('not a JSON object')
+    else if (text[i] !== '}') throw new TransformError(NOT_OBJECT)
   }
   return found
 }

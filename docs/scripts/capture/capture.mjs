@@ -84,11 +84,10 @@ async function main() {
   process.stdout.write(`${summarize({ write: values.write, files, only })}\n`)
 }
 
-main().catch((error) => {
-  if (error instanceof CaptureError) {
-    process.stderr.write(`capture: ${error.message}\n`)
-  } else {
-    process.stderr.write(`${error.stack ?? error}\n`)
-  }
+try {
+  await main()
+} catch (error) {
+  const report = error instanceof CaptureError ? `capture: ${error.message}` : (error.stack ?? String(error))
+  process.stderr.write(`${report}\n`)
   process.exitCode = 1
-})
+}

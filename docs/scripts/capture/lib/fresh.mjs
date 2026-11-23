@@ -20,6 +20,12 @@ async function total(client, collection) {
   return JSON.parse(response.body).meta.total
 }
 
+function findings(counts) {
+  const [users, ...rest] = counts
+  const found = users === 1 ? [] : [`${users} users (expected exactly 1)`]
+  return [...found, ...rest.filter(([, rows]) => rows > 0).map(([name, rows]) => `${rows} ${name} row(s) (trashed rows included)`)]
+}
+
 export async function checkFresh({ client, vars, collections }) {
   const login = await client.request({
     identity: 'admin',
@@ -29,13 +35,10 @@ export async function checkFresh({ client, vars, collections }) {
   })
   if (login.status !== 200) throw new CaptureError(`login as the bootstrap admin: HTTP ${login.status}`)
 
-  const found = []
-  const users = await total(client, 'user')
-  if (users !== 1) found.push(`${users} users (expected exactly 1)`)
-  for (const collection of ['file', ...collections]) {
-    const rows = await total(client, collection)
-    if (rows > 0) found.push(`${rows} ${collection} row(s) (trashed rows included)`)
-  }
+  // The lists are independent reads, and Promise.all keeps their results in the order declared.
+  const names = ['file', ...collections]
+  const [users, ...rows] = await Promise.all(['user', ...names].map((collection) => total(client, collection)))
+  const found = findings([users, ...names.map((name, index) => [name, rows[index]])])
   if (found.length > 0) {
     throw new CaptureError(
       `the database is not freshly migrated: found ${found.join(', ')}; the capture needs a database that holds only the bootstrap admin`,

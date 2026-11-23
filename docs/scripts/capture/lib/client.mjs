@@ -10,6 +10,7 @@ import http from 'node:http'
 import https from 'node:https'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
+const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 const CSRF_HEADER = 'X-Struo-CSRF'
 const DEFAULT_TIMEOUT_MS = 30000
 const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH'])
@@ -42,20 +43,35 @@ function updateJar(jar, headers) {
 function describe(error, baseUrl) {
   if (error instanceof RequestTimeoutError) return error
   if (UNREACHABLE.has(error.code)) return new HostUnreachableError(`host unreachable at ${baseUrl} (${error.code})`)
-  return new ConnectionError(`connection to ${baseUrl} failed (${error.code ?? error.message})`)
+  return new ConnectionError(`connection to ${baseUrl} failed (${error.detail ?? error.code ?? error.message})`)
 }
 
 function attempt(url, options, body, timeoutMs) {
   const transport = url.protocol === 'https:' ? https : http
   return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (settle, value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      settle(value)
+    }
     const req = transport.request(url, options, (res) => {
+      // Headers have arrived, so the server has the request: a failure from here on is never a
+      // stale-socket reset, and a body that stops short must not settle as a response.
+      const cutOff = (cause) =>
+        finish(reject, Object.assign(new Error(cause), { code: 'ECONNRESET', detail: cause, reusedSocket: false }))
       const chunks = []
       res.on('data', (chunk) => chunks.push(chunk))
+      res.on('error', (error) => cutOff(error.message))
+      res.on('aborted', () => cutOff('response cut off before its body was complete'))
+      res.on('close', () => {
+        if (!res.complete) cutOff('response cut off before its body was complete')
+      })
       res.on('end', () => {
-        clearTimeout(timer)
         const headers = []
         for (let i = 0; i < res.rawHeaders.length; i += 2) headers.push([res.rawHeaders[i], res.rawHeaders[i + 1]])
-        resolve({
+        finish(resolve, {
           status: res.statusCode,
           statusMessage: res.statusMessage,
           httpVersion: res.httpVersion,
@@ -68,22 +84,19 @@ function attempt(url, options, body, timeoutMs) {
       () => req.destroy(new RequestTimeoutError(`no answer within ${timeoutMs} ms`)),
       timeoutMs,
     )
-    req.on('error', (error) => {
-      clearTimeout(timer)
-      reject(Object.assign(error, { reusedSocket: req.reusedSocket }))
-    })
+    req.on('error', (error) => finish(reject, Object.assign(error, { reusedSocket: req.reusedSocket })))
     req.end(body)
   })
 }
 
 export function createClient({ baseUrl, csrfValue = 'capture', timeoutMs = DEFAULT_TIMEOUT_MS }) {
   const jars = new Map()
-  // One keep-alive agent per client, so the run travels over a few long-lived connections.
-  // Measured on Windows loopback, 100 sequential requests to a Node server: with a new connection
-  // per request 17 failed (15 ECONNRESET, 2 timeouts); over one kept-alive connection 0 failed.
-  // A server can still close an idle kept-alive socket just as the next request goes out; Node's
-  // documented handling is one retry when the error is ECONNRESET on a reused socket
-  // (`req.reusedSocket`), which is safe because that request never reached the server.
+  // One keep-alive agent per client: the run travels over one long-lived connection instead of a
+  // new one per request (docs/ai/decisions/capture-client-reuses-one-connection.md has why). A
+  // server can close an idle kept-alive socket just as the next request goes out, so an idempotent
+  // request (GET, HEAD, OPTIONS) is retried once when a reused socket is reset. Any other method
+  // fails the step: a reset does not show that the server never processed it, and a repeated
+  // create or delete would shift the ids and totals the manual prints.
   const agents = { 'http:': new http.Agent({ keepAlive: true }), 'https:': new https.Agent({ keepAlive: true }) }
 
   // identity: the name of a cookie jar, or undefined for a request with no cookie at all.
@@ -105,7 +118,7 @@ export function createClient({ baseUrl, csrfValue = 'capture', timeoutMs = DEFAU
       try {
         response = await attempt(url, options, body, limit)
       } catch (error) {
-        if (error.code !== 'ECONNRESET' || !error.reusedSocket) throw error
+        if (error.code !== 'ECONNRESET' || !error.reusedSocket || !RETRYABLE_METHODS.has(method)) throw error
         response = await attempt(url, options, body, limit)
       }
     } catch (error) {

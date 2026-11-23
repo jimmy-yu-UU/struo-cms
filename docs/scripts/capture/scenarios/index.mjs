@@ -5,6 +5,9 @@ import { ch10 } from './ch10.mjs'
 import { ch11 } from './ch11.mjs'
 import { seed } from './seed.mjs'
 
+// Coupling: the runner's fresh-database guard (lib/fresh.mjs) logs in as the bootstrap admin under
+// the identity named `admin`, and the steps with `as: 'admin'` use that session. A scenario that
+// needs another login of its own adds a step for it under a different identity.
 export const GROUPS = [seed, ch10, ch11]
 
 // Content collections of the sample that the fresh-database guard requires to be empty, trashed

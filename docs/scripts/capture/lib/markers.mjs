@@ -12,11 +12,15 @@
 // A marker-looking line inside a fenced block is content (the manual shows markdown samples), so
 // the scan tracks fences with the shared rule in ../../lib/fences.mjs. Outside a fence, a line that
 // holds a capture comment in any other form (indented, spaced differently, mid-line) is an error:
-// a marker the tool would silently ignore is a block nobody updates.
+// a marker the tool would silently ignore is a block nobody updates. Two shapes are exempt because
+// they are text about the marker, not a marker: an inline code span, and indented code (four spaces
+// or a tab after a blank line, the CommonMark shape; an indented line inside a list item is not).
 import { closesFence, fenceOpener } from '../../lib/fences.mjs'
 
-const MARKER = /^<!-- capture: ([A-Za-z0-9._-]+) -->$/
+const MARKER = /^<!-- capture: ([\w.-]+) -->$/
 const NEAR_MISS = /<!--\s*capture/i
+const INLINE_CODE = /``[^`]+``|`[^`]+`/g
+const INDENTED = /^( {4}|\t)/
 
 export class MarkerError extends Error {}
 
@@ -36,15 +40,44 @@ function where(file, line) {
   return file ? `${file}:${line + 1}: ` : `line ${line + 1}: `
 }
 
+function fail(file, line, message) {
+  return new MarkerError(`${where(file, line)}${message}`)
+}
+
 function findCloser(lines, from, opener) {
   let close = from
   while (close < lines.length && !closesFence(opener, lines[close])) close += 1
   return close
 }
 
+function continuesIndentedCode(lines, index, inCode) {
+  if (!INDENTED.test(lines[index])) return false
+  return inCode || index === 0 || lines[index - 1].trim() === ''
+}
+
+function rejectNearMiss(line, file, index) {
+  if (NEAR_MISS.test(line.replace(INLINE_CODE, ''))) {
+    throw fail(
+      file,
+      index,
+      "near-miss capture marker; the form is '<!-- capture: <id> -->' at column 0, directly above a fence",
+    )
+  }
+}
+
+// The block whose marker sits on line `index`, or an error when no closed fence follows it.
+function readBlock(lines, index, id, file) {
+  const fence = index + 1 < lines.length ? fenceOpener(lines[index + 1]) : null
+  if (!fence) throw fail(file, index, `marker '${id}' is not directly above a fence`)
+  const close = findCloser(lines, index + 2, fence)
+  if (close >= lines.length) throw fail(file, index, `marker '${id}': the fence is never closed`)
+  return { id, markerLine: index, openLine: index + 1, closeLine: close }
+}
+
 function scan(lines, file) {
   const blocks = []
   let index = 0
+  let inIndentedCode = false
   while (index < lines.length) {
     const line = lines[index]
     const opener = fenceOpener(line)
@@ -53,30 +86,19 @@ function scan(lines, file) {
       index = findCloser(lines, index + 1, opener) + 1
       continue
     }
-    const marker = MARKER.exec(line)
+    inIndentedCode = continuesIndentedCode(lines, index, inIndentedCode)
+    const marker = inIndentedCode ? null : MARKER.exec(line)
     if (!marker) {
-      if (NEAR_MISS.test(line)) {
-        throw new MarkerError(
-          `${where(file, index)}near-miss capture marker; the form is '<!-- capture: <id> -->' at column 0, directly above a fence`,
-        )
-      }
+      if (!inIndentedCode) rejectNearMiss(line, file, index)
       index += 1
       continue
     }
-    const id = marker[1]
-    const fence = index + 1 < lines.length ? fenceOpener(lines[index + 1]) : null
-    if (!fence) {
-      throw new MarkerError(`${where(file, index)}marker '${id}' is not directly above a fence`)
+    const block = readBlock(lines, index, marker[1], file)
+    if (blocks.some((candidate) => candidate.id === block.id)) {
+      throw fail(file, index, `marker '${block.id}' appears twice`)
     }
-    const close = findCloser(lines, index + 2, fence)
-    if (close >= lines.length) {
-      throw new MarkerError(`${where(file, index)}marker '${id}': the fence is never closed`)
-    }
-    if (blocks.some((block) => block.id === id)) {
-      throw new MarkerError(`${where(file, index)}marker '${id}' appears twice`)
-    }
-    blocks.push({ id, markerLine: index, openLine: index + 1, closeLine: close })
-    index = close + 1
+    blocks.push(block)
+    index = block.closeLine + 1
   }
   return blocks
 }
@@ -100,16 +122,15 @@ export function replaceBlock(text, id, content, { file } = {}) {
   if (content.includes('\r')) throw new MarkerError(`${id}: the captured text contains a carriage return`)
   const { lines, eols } = split(text)
   const block = scan(lines, file).find((candidate) => candidate.id === id)
-  if (!block) throw new MarkerError(`${file ? `${file}: ` : ''}no marker '${id}'`)
+  const prefix = file ? `${file}: ` : ''
+  if (!block) throw new MarkerError(`${prefix}no marker '${id}'`)
   const opener = fenceOpener(lines[block.openLine])
   const replacement = content.split('\n')
   if (replacement.some((line) => closesFence(opener, line))) {
     throw new MarkerError(`${id}: a line of the captured text would close the fence`)
   }
   const eol = eols.find((candidate) => candidate !== '') ?? '\n'
-  const out = []
-  for (let i = 0; i <= block.openLine; i += 1) out.push(lines[i] + eols[i])
-  for (const line of replacement) out.push(line + eol)
-  for (let i = block.closeLine; i < lines.length; i += 1) out.push(lines[i] + eols[i])
-  return out.join('')
+  const keep = (from, to) => lines.slice(from, to).map((line, offset) => line + eols[from + offset])
+  const created = replacement.map((line) => line + eol)
+  return [...keep(0, block.openLine + 1), ...created, ...keep(block.closeLine, lines.length)].join('')
 }

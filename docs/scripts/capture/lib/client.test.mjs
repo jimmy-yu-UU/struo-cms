@@ -3,9 +3,10 @@ import { test } from 'node:test'
 import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
 import { startStub } from '../test-support/stub-server.mjs'
 
+const SET_COOKIE = 'Set-Cookie'
 const login = (request) =>
   request.path === '/login'
-    ? { status: 200, headers: { 'Set-Cookie': 'sess=abc; path=/; httponly', 'Content-Type': 'application/json' }, body: '{"ok":true}' }
+    ? { status: 200, headers: { [SET_COOKIE]: 'sess=abc; path=/; httponly', 'Content-Type': 'application/json' }, body: '{"ok":true}' }
     : { status: 200, body: 'plain' }
 
 async function withStub(handler, fn) {
@@ -30,7 +31,7 @@ test('a response comes back raw, with the status text and the headers in server 
     assert.equal(res.httpVersion, '1.1')
     assert.equal(res.body, '{"ok":true}')
     assert.deepEqual(res.headers.slice(0, 2), [
-      ['Set-Cookie', 'sess=abc; path=/; httponly'],
+      [SET_COOKIE, 'sess=abc; path=/; httponly'],
       ['Content-Type', 'application/json'],
     ])
   })
@@ -100,7 +101,7 @@ test('an unreachable host raises HostUnreachableError naming the base URL', asyn
 
 const cookies = (values) => (request) =>
   request.path === '/set'
-    ? { status: 200, headers: { 'Set-Cookie': values } }
+    ? { status: 200, headers: { [SET_COOKIE]: values } }
     : { status: 200, body: request.headers.cookie ?? '' }
 
 test('several Set-Cookie headers in one response all enter the jar', async () => {
@@ -119,7 +120,7 @@ test('Max-Age=0 and an expiry in the past delete a cookie; a later value replace
       ['a=1; path=/', 'b=2; path=/', 'c=3; path=/'],
       ['a=; path=/; Max-Age=0', 'b=gone; path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT', 'c=4; path=/'],
     ]
-    return { status: 200, headers: { 'Set-Cookie': sets[phase++] } }
+    return { status: 200, headers: { [SET_COOKIE]: sets[phase++] } }
   }
   await withStub(handler, async (_stub, client) => {
     await client.request({ identity: 'u', method: 'GET', path: '/set' })
@@ -185,5 +186,50 @@ test('a refused connection reads as an unreachable host and any other socket err
   } finally {
     client.close()
     await stub.close()
+  }
+})
+
+test('a response cut off in its body rejects instead of hanging, and names the cause', async () => {
+  const stub = await startStub(() => ({ cut: '{"partial":' }))
+  const client = createClient({ baseUrl: stub.baseUrl, timeoutMs: 5000 })
+  try {
+    const started = Date.now()
+    await assert.rejects(client.request({ method: 'GET', path: '/x' }), (error) => {
+      assert.ok(error instanceof ConnectionError)
+      assert.match(error.message, /cut off before its body was complete/)
+      return true
+    })
+    assert.ok(Date.now() - started < 3000)
+  } finally {
+    client.close()
+    await stub.close()
+  }
+})
+
+test('a reset reused socket is retried for GET, HEAD and OPTIONS only', async () => {
+  for (const method of ['HEAD', 'OPTIONS']) {
+    let hits = 0
+    const handler = (request) => {
+      if (request.path !== '/flaky') return { status: 200 }
+      hits += 1
+      return hits === 1 ? { destroy: true } : { status: 200 }
+    }
+    await withStub(handler, async (stub, client) => {
+      await client.request({ method: 'GET', path: '/warm' })
+      assert.equal((await client.request({ method, path: '/flaky' })).status, 200, method)
+      assert.equal(stub.requests.filter((r) => r.path === '/flaky').length, 2, method)
+    })
+  }
+})
+
+test('a POST the server processed and then reset is never sent twice, and the step fails', async () => {
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const handler = (request) => (request.path === '/create' ? { destroy: true } : { status: 200, body: 'ok' })
+    await withStub(handler, async (stub, client) => {
+      await client.request({ method: 'GET', path: '/warm' })
+      const body = method === 'DELETE' ? undefined : '{}'
+      await assert.rejects(client.request({ method, path: '/create', body }), ConnectionError, method)
+      assert.equal(stub.requests.filter((r) => r.path === '/create').length, 1, method)
+    })
   }
 })

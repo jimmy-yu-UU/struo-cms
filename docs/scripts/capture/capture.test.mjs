@@ -4,8 +4,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { FIXTURE_PASSWORD } from './test-support/fixtures.mjs'
 import { fileURLToPath } from 'node:url'
 
+const BASE_URL_FLAG = '--base-url'
+const DEAD_HOST = 'http://127.0.0.1:9'
 const CLI = join(dirname(fileURLToPath(import.meta.url)), 'capture.mjs')
 
 function run(args, cwd, env = {}) {
@@ -67,7 +70,7 @@ test('a capture run without a base URL exits 1 with a message', () => {
 test('a capture run without the admin password exits 1 and names the variable', () => {
   const root = makeGuide('# a\n', '# a\n')
   try {
-    const result = run(['--base-url', 'http://127.0.0.1:9'], root)
+    const result = run([BASE_URL_FLAG, DEAD_HOST], root)
     assert.equal(result.status, 1)
     assert.match(result.stderr, /STRUO_CAPTURE_ADMIN_PASSWORD/)
   } finally {
@@ -76,16 +79,16 @@ test('a capture run without the admin password exits 1 and names the variable', 
 })
 
 test('an unreachable host exits 1', () => {
-  const result = run(['--base-url', 'http://127.0.0.1:9', '--chapters', '10'], join(dirname(CLI), '..', '..'), {
-    STRUO_CAPTURE_ADMIN_PASSWORD: 'x',
+  const result = run([BASE_URL_FLAG, DEAD_HOST, '--chapters', '10'], join(dirname(CLI), '..', '..'), {
+    STRUO_CAPTURE_ADMIN_PASSWORD: FIXTURE_PASSWORD,
   })
   assert.equal(result.status, 1)
   assert.match(result.stderr, /unreachable/)
 })
 
 test('an unknown chapter number exits 1', () => {
-  const result = run(['--base-url', 'http://127.0.0.1:9', '--chapters', '99'], join(dirname(CLI), '..', '..'), {
-    STRUO_CAPTURE_ADMIN_PASSWORD: 'x',
+  const result = run([BASE_URL_FLAG, DEAD_HOST, '--chapters', '99'], join(dirname(CLI), '..', '..'), {
+    STRUO_CAPTURE_ADMIN_PASSWORD: FIXTURE_PASSWORD,
   })
   assert.equal(result.status, 1)
   assert.match(result.stderr, /no scenario for chapter 99/)

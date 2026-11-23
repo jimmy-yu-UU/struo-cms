@@ -340,8 +340,9 @@ the generic list/form pattern at all (a dashboard widget, a bespoke wizard).
 ## Playbook 6: Re-capture the manual's transcripts
 
 Background: `docs/ai/conventions.md`, "Transcripts". The tool is `docs/scripts/capture/` (Node,
-standard library only). It replays one ordered run against a host and writes the responses into
-the marked blocks of both languages from that run. Chapters 10 and 11 are covered.
+standard library only; `docs/ai/decisions/capture-client-reuses-one-connection.md` records why
+its client reuses one connection). It replays one ordered run against a host and writes the
+responses into the marked blocks of both languages from that run. Chapters 10 and 11 are covered.
 
 **What the tool needs**
 
@@ -357,8 +358,11 @@ the marked blocks of both languages from that run. Chapters 10 and 11 are covere
   database it connected to before the run.
 - **The guard is the last line of defence, not the isolation.** Before the first step the tool logs
   in as the admin and requires exactly one user, no files, and no article, category or tag rows,
-  trashed rows included. It stops and says what it found. A run removes only what it created: a
-  DELETE step is refused unless its path holds a value the run saved from an earlier response.
+  trashed rows included. It stops and says what it found. The real safety is the throwaway database
+  plus this guard. On top of that a DELETE step is refused unless one whole path segment equals a
+  value a 201 response of the same run returned (a row the run created), or the step declares a
+  `deletes` reason, for example revoking a token under the admin's id. Values the run read, and
+  empty values, never qualify.
 - A new database for every run.
 - Settings: `STRUO_CAPTURE_ADMIN_PASSWORD` (required), `STRUO_CAPTURE_BASE_URL` and
   `STRUO_CAPTURE_ADMIN_EMAIL` (default `admin@admin.com`). The password has no command-line flag, so
@@ -377,8 +381,11 @@ written; the other files are not read and their blocks are discarded. Without `-
 captured blocks are printed and no file changes. `--base-url` and `--email` override the settings
 above, and `--guide-dir` points at another manual root inside the working directory.
 
-Every file is produced and checked before any is replaced, each through a temporary file renamed
-into place at the end, so a failed run leaves the chapters as they were.
+The run produces and checks every block of every selected file before it replaces any file. Each
+file is written to a temporary `*.capture-tmp` file next to it and the temporaries are renamed one
+after the other, a file's two languages adjacent. A failure before the renames changes no chapter
+file. A failure during the renames removes the remaining temporaries and the error lists the files
+already replaced; `git checkout` restores them.
 
 `--check` needs no network. It verifies that every marker sits above a closed fence, that near-miss
 spellings of a marker are rejected, that both languages hold the same markers and byte-identical
@@ -393,7 +400,10 @@ The docs build runs it.
   that uses it (`stripTraceId`, `elideData`). An undeclared difference does not exist.
 - A printed request body differs from the sent one only through `print.requestBody` on the step
   (for example a placeholder where the sent body holds the admin password). The tool refuses to
-  write a block that holds the admin password or any value a step registered with `secret`.
+  write a block that holds the admin password, the session cookie of an identity, or any value a
+  step registered with `secret`. A step that prints one declares `print.mask: { name: '<text>' }`,
+  naming the secret (`adminPassword`, `session_<identity>`, or the `secret` variable); every
+  occurrence in that exchange is replaced by the text before the check runs.
 - Ids and timestamps change on every capture, so a re-capture rewrites every block of the files
   it selects. Ids quoted outside a marked block (a JSON sample, a sentence) are updated by hand from
   the same run.

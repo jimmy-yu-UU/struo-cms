@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { startStub } from '../test-support/stub-server.mjs'
+import { FIXTURE_PASSWORD } from '../test-support/fixtures.mjs'
 import { createClient } from './client.mjs'
 import { checkFresh } from './fresh.mjs'
 
-const vars = { adminEmail: 'a@b.c', adminPassword: 'pw' }
+const vars = { adminEmail: 'a@b.c', adminPassword: FIXTURE_PASSWORD }
 
 // totals: { user, file, article, ... }; a total is reported only when the list asks for trashed rows too.
 function host(totals, { login = 200 } = {}) {

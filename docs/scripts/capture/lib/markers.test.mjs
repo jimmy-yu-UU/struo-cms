@@ -135,3 +135,18 @@ test('capture comments inside a fenced block are content and never near-misses',
   const text = '```md\n<!--capture: a-->\n  <!-- capture: b -->\n```\n'
   assert.deepEqual(findBlocks(text), [])
 })
+
+test('an inline-code mention of the marker form in prose is not a near-miss', () => {
+  assert.deepEqual(findBlocks('Put `<!-- capture: <id> -->` above the fence.\n'), [])
+  assert.deepEqual(findBlocks('Two: `<!--capture: a-->` and ``<!-- capture: b -->`` here.\n'), [])
+})
+
+test('a near-miss beside an inline-code span is still an error', () => {
+  assert.throws(() => findBlocks('`ok` and <!--capture: a-->\n', { file: 'f.md' }), /f\.md:1: .*near-miss/)
+})
+
+test('indented code after a blank line is exempt, but a marker indented inside a list is not', () => {
+  assert.deepEqual(findBlocks('para\n\n    <!-- capture: a -->\n'), [])
+  assert.deepEqual(findBlocks('para\n\n\t<!--capture: a-->\n'), [])
+  assert.throws(() => findBlocks('- item\n\n  <!-- capture: a -->\n  ```text\n  x\n  ```\n'), /near-miss/)
+})

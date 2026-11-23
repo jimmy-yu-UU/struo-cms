@@ -2,6 +2,7 @@
 // and C created in that order (the default list order is newest first, so the manual shows C, B, A).
 // Every step here is setup; nothing is printed. The runner's fresh-database guard has already logged
 // in as the admin, so the steps use that session.
+const GUIDES = '{{guidesId}}'
 const create = (name, collection, body, save) => ({
   name,
   as: 'admin',
@@ -21,20 +22,20 @@ export const seed = {
     create('create article A', 'article', {
       status: 'published',
       publishedAt: '2026-03-01T00:00:00Z',
-      categoryId: '{{guidesId}}',
+      categoryId: GUIDES,
       tags: [{ id: '{{howtoId}}', note: 'hero' }],
       translations: { en: { title: 'Getting started' }, 'zh-TW': { title: '開始使用' } },
     }, { articleAId: 'data.id' }),
     create('create article B', 'article', {
       status: 'published',
       publishedAt: '2026-06-01T00:00:00Z',
-      categoryId: '{{guidesId}}',
+      categoryId: GUIDES,
       tags: ['{{howtoId}}', { id: '{{releaseId}}', note: 'hero' }],
       translations: { en: { title: 'Release notes' } },
     }, { articleBId: 'data.id' }),
     create('create article C', 'article', {
       status: 'draft',
-      categoryId: '{{guidesId}}',
+      categoryId: GUIDES,
       translations: { en: { title: 'Draft piece' } },
     }, { articleCId: 'data.id' }),
   ],

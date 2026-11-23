@@ -21,7 +21,8 @@ function headerLines(response, selection) {
 export function formatExchange({ method, path, printPath, note, requestBody, headers, responseOnly, response }) {
   const lines = []
   if (!responseOnly) {
-    lines.push(`$ ${method} ${printPath ?? path}${note ? ` ${note}` : ''}`)
+    const suffix = note ? ` ${note}` : ''
+    lines.push(`$ ${method} ${printPath ?? path}${suffix}`)
     if (requestBody !== undefined) lines.push('body:', requestBody)
   }
   if (headers) lines.push(...headerLines(response, headers))

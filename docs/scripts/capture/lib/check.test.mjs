@@ -144,11 +144,17 @@ test('one capture id in two files is an error', () => {
   )
 })
 
-test('files outside the NN-name.md pattern are ignored', () => {
-  const root = guide('# a\n', '# a\n', { 'zh-TW/index.md': '<!-- capture: z -->\n' })
+test('a file outside the chapter pattern may not hold a marker, and needs no markers otherwise', () => {
+  const sample = '# home\n```md\n<!-- capture: sample -->\n```\n'
+  const plain = guide('# a\n', '# a\n', { 'zh-TW/index.md': sample })
+  const marked = guide('# a\n', '# a\n', { 'zh-TW/index.md': block('z'), 'en/changelog.md': '<!--capture: z-->\n' })
   try {
-    assert.deepEqual(checkGuide({ guideDir: root, groups: [] }).problems, [])
+    assert.deepEqual(checkGuide({ guideDir: plain, groups: [] }).problems, [])
+    const text = checkGuide({ guideDir: marked, groups: [] }).problems.join('\n')
+    assert.match(text, /zh-TW[\/]index\.md: .*markers are allowed only in chapter files/)
+    assert.match(text, /en[\/]changelog\.md:1: .*near-miss capture marker/)
   } finally {
-    cleanup(root)
+    cleanup(plain)
+    cleanup(marked)
   }
 })
