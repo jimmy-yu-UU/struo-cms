@@ -371,9 +371,9 @@ fork 若換掉 `IItemUseCases` 的實作，要自己執行這條規則。
 來的多對一外鍵——`categoryId` 因此可以篩，即使它自己沒有 `[CmsField]`；`id` 永遠合法，即使不在欄位
 清單裡。
 
-屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 沒有欄位，所以白名單把它排除在 `filter`、`sort`、
-`facets`、`aggregate`、關聯路徑的最後一段與 `_junction` 欄位之外；這些都和未知欄位一樣回覆，`search`
-也略過它。`fields=` 仍選得到，GraphQL 的篩選輸入型別沒有它。
+屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 沒有欄位，所以白名單把它排除在 `filter`、
+`sort`、`facets`、`aggregate`、關聯路徑的最後一段與 `_junction` 欄位之外；這些都和未知欄位一樣回覆，
+`search` 也略過它。`fields=` 仍選得到，GraphQL 的篩選輸入型別沒有它。
 
 `Sortable` 不影響這份白名單：`[CmsField]` 上的 `Sortable` 只決定後台清單畫面的欄位表頭能不能點來排
 序，跟 `sort=` 這裡的白名單是兩件事。隱藏欄位刻意被排除在白名單之外：一個看起來像密碼的隱藏欄位如

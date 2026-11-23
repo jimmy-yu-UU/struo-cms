@@ -36,8 +36,8 @@
   - Every other pair passes, including `decimal(18,4)` and `numeric(18,4)` on a `decimal`;
     `bit`, `boolean`, `tinyint` and the integer types on a `bool`; the array types such as
     `float4[]` and `text[]`; and a `double` or `float` property on a floating-point column.
-- The scanner stops the host at start, with a `MetadataException` that names "Class.Property", when a
-  `[CmsField]` with `Searchable = true` or `Sortable = true` sits on a property with
+- The scanner stops the host at start, with a `MetadataException` that names "Class.Property", when
+  a `[CmsField]` with `Searchable = true` or `Sortable = true` sits on a property with
   `[SugarColumn(IsIgnore = true)]`. Such a property has no column; the host used to start, and a
   request that filtered or sorted by it answered `500`. Remove `Searchable` or `Sortable` from the
   property, or remove `IsIgnore` so it is stored in a column; a table that exists needs a migration
@@ -54,8 +54,9 @@
   created the bootstrap admin. `migrate` prints one more line after the `Applied` lines: the admin's
   email, or that `Auth:BootstrapAdmin:Email` is not set and which directory the configuration files
   were read from. The start writes the same text to the log, at `Information` when the admin was
-  created and at `Warning` when it was not. Exit codes are unchanged, and `--contentRoot <directory>`
-  reads the configuration files from another directory ([Chapter 20](20-deployment.md)).
+  created and at `Warning` when it was not. Exit codes are unchanged, and
+  `--contentRoot <directory>` reads the configuration files from another directory
+  ([Chapter 20](20-deployment.md)).
 - `FieldMetadata.Ignored` is `true` for a `[CmsField]` on a property with
   `[SugarColumn(IsIgnore = true)]`, and `GET /api/schema` lists it as `ignored` on every field
   ([Chapter 5](05-collections.md)).
