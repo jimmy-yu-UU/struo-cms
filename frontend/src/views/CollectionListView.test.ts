@@ -912,4 +912,34 @@ describe('CollectionListView', () => {
     expect(textOf('publishedAt')).toBe(false)
     expect(textOf('status')).toBe(false)
   })
+
+  // The API answers 400 to a filter on a field that has no column, so the list shows the field as a
+  // column and leaves it out of the filter menu.
+  it('shows a field without a column and does not offer it to FilterBuilder', async () => {
+    const field = (name: string, over: Record<string, unknown> = {}) => ({
+      name, label: name, interface: 'text', required: false, searchable: false, sortable: false,
+      readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over,
+    })
+    const article = {
+      name: 'article',
+      label: 'Article',
+      defaultDisplayField: 'title',
+      fields: [field('title'), field('badge', { ignored: true })],
+      relations: [],
+    }
+    const schema = useSchemaStore()
+    schema.collections = [article]
+    schema.loaded = true
+    seedLanguage()
+    useAuthStore().user = { id: 'u1', isSuperAdmin: true, permissions: {} }
+    vi.mocked(itemsApi.list).mockResolvedValue({ data: [{ id: 1, title: 'A', badge: 'new' }], total: 1 })
+
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.text()).toContain('new')
+    const names = (w.findComponent(FilterBuilder).props('fields') as { name: string }[]).map((f) => f.name)
+    expect(names).toContain('title')
+    expect(names).not.toContain('badge')
+  })
 })
