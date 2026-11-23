@@ -282,10 +282,10 @@ JSON 欄位，同樣如此。
 `[bigint]` 就是 `bigint`，`"int custom"` 不是 `int`；單字中間出現中括號，例如 `int[]`，是另一種型
 別。型別後面的字，例如 `not null`、`identity(1,1)`，是欄位修飾：`bigint not null` 當作 `bigint`。
 `array` 接在名稱後面，名稱就變成另一種型別；`unsigned` 與 `zerofill` 接在整數或字串型別名稱後面也
-一樣，所以 `int unsigned` 不是 `int`。接在 `real`、`float`、`double`、`decimal`、`numeric`、`dec`
-、`fixed` 後面時，它們是欄位修飾：`float unsigned` 當作 `float`。`double precision` 算`double`，
-`character varying` 算 `character`，後面的 `precision`、`varying` 屬於名稱。不在表裡的名稱，包含
-`timestamp with local time zone`，是你自己的，照常通過。
+一樣，所以 `int unsigned` 不是 `int`。接在 `real`、`float`、`double`、`decimal`、`numeric`、
+`dec`、`fixed` 後面時，它們是欄位修飾：`float unsigned` 當作 `float`。`double precision` 算
+`double`，`character varying` 算 `character`，後面的 `precision`、`varying` 屬於名稱。不在表裡的
+名稱，包含 `timestamp with local time zone`，是你自己的，照常通過。
 
 | 屬性型別 | `ColumnDataType` | 改成 |
 |---|---|---|
