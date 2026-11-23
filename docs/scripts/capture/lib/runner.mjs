@@ -54,7 +54,7 @@ import { join } from 'node:path'
 import { BinaryError, summarizeBinary } from './binary.mjs'
 import { cliBlock, cliDescriptors, readCliResult } from './cli.mjs'
 import { LOCALES, chapterProblems, declaredByFile, readTexts } from './check.mjs'
-import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient } from './client.mjs'
+import { ConnectionError, HostUnreachableError, RequestTimeoutError, createClient, ownedHeaders } from './client.mjs'
 import { CaptureError } from './errors.mjs'
 import { checkFresh } from './fresh.mjs'
 import { formatBlock, formatExchange, shownHeaders } from './format.mjs'
@@ -142,7 +142,7 @@ function excerpt(text, state) {
 
 function registerSecret(state, name, value) {
   state.secrets.add(value)
-  state.secretByName.set(name, value)
+  state.secretByName.set(name, new Set([...(state.secretByName.get(name) ?? []), value]))
 }
 
 // A row the run created is known by its id: the value saved from a path whose last key is `id` or
@@ -183,9 +183,9 @@ function registerCookies(state, identity, headers) {
 function applyMask(text, mask, state) {
   const placeholders = new Map()
   for (const [name, placeholder] of Object.entries(mask ?? {})) {
-    const value = state.secretByName.get(name)
-    if (value === undefined) throw new Error(`print.mask names '${name}', which no step registered as secret`)
-    placeholders.set(value, placeholder)
+    const values = state.secretByName.get(name)
+    if (values === undefined) throw new Error(`print.mask names '${name}', which no step registered as secret`)
+    for (const value of values) placeholders.set(value, placeholder)
   }
   const unnamed = [...state.secrets].filter((secret) => !placeholders.has(secret))
   if (holdsSecret(text, unnamed)) throw new Error(UNMASKED_SECRET)
@@ -220,6 +220,7 @@ async function send(client, step, state, { path, body, contentType }) {
     contentType,
     bearer: step.bearer === undefined ? undefined : substitute(step.bearer, state.vars),
     csrf: step.csrf,
+    headers: step.headers,
     timeoutMs: step.timeoutMs,
   })
   registerCookies(state, step.as, response.headers)
@@ -252,13 +253,16 @@ function collect(state, step, response) {
   step.verify?.(json, state.vars)
 }
 
-// A step that changes the body it prints cannot also print the length the server sent for the
-// original body: the two would disagree on the page.
-function refuseStaleLength(step, response) {
-  if ((step.transforms ?? []).length === 0 || !step.print?.headers) return
+// A step whose printed body differs from the one the server sent (a transform or a mask changed it)
+// cannot also print the length the server sent: the two would disagree on the page. A binary
+// summary prints no body and states the byte count itself, so it is exempt (printedText undefined).
+function refuseStaleLength(step, response, printedText) {
+  if (printedText === undefined || printedText === response.body || !step.print?.headers) return
   const shown = shownHeaders(response, step.print.headers)
   if (shown.some(([name]) => name.toLowerCase() === 'content-length')) {
-    throw new Error('the step transforms the body and shows Content-Length, which would not match the printed body; name the headers to show without it')
+    throw new Error(
+      'the step shows Content-Length but the body it prints differs from the server body (a transform or a mask changes it); name the headers to show without it',
+    )
   }
 }
 
@@ -267,7 +271,6 @@ function uploadNote(step) {
 }
 
 function printedBody(step, response) {
-  refuseStaleLength(step, response)
   if (!step.print?.binary) return { body: applyTransforms(response.body, step.transforms), binary: undefined }
   if ((step.transforms ?? []).length > 0) throw new Error('print.binary prints no body, so a transform on the same step cannot apply')
   return { body: '', binary: summarizeBinary(response.bytes, step.print.binary) }
@@ -275,6 +278,7 @@ function printedBody(step, response) {
 
 function printExchange(state, step, { path, printed }, response) {
   const { body, binary } = printedBody(step, response)
+  refuseStaleLength(step, response, binary ? undefined : applyMask(body, step.print?.mask, state))
   const substituted = (value) => (value === undefined ? undefined : substitute(value, state.vars))
   const text = formatExchange({
     method: step.method,
@@ -415,9 +419,22 @@ function prepare({ groups, guideDir, only, fixturesDir, cliResults }) {
   for (const { step } of steps.filter(({ step: candidate }) => !candidate.cli)) {
     if (!Number.isInteger(step.expect)) throw new CaptureError(`${labelOf(step)}: the step declares no expected status`)
   }
+  checkRequestHeaders(steps)
   const fixtures = loadFixtures(steps, fixturesDir)
   const commands = loadCommands(groups, selected, cliResults)
   return { declared, loaded, steps, fixtures, commands }
+}
+
+// Extra request headers: never one the client owns, and a printed step says in its note that the
+// request was not a plain one. Checked before any request.
+function checkRequestHeaders(steps) {
+  for (const { step } of steps.filter(({ step: candidate }) => candidate.headers)) {
+    const owned = ownedHeaders(step.headers)
+    if (owned.length > 0) throw new CaptureError(`${labelOf(step)}: a step cannot set the request header ${owned.join(', ')}`)
+    if (step.capture && !step.print?.note) {
+      throw new CaptureError(`${labelOf(step)}: a captured step with request headers must declare print.note, so the reader sees the request was not a plain one`)
+    }
+  }
 }
 
 // The fixture files the upload steps name, read before any request is sent.
@@ -454,7 +471,7 @@ function newState(vars, secretVars) {
     exchanges: new Map(),
     created: new Set(),
     secrets: new Set(named.map(([, value]) => value)),
-    secretByName: new Map(named),
+    secretByName: new Map(named.map(([name, value]) => [name, new Set([value])])),
   }
 }
 

@@ -5,7 +5,7 @@ import { PASSWORD_FIELD, STRIP_TRACE_ID, check, exchange, must, setup } from './
 const ARTICLE_A = '/api/items/article/{{articleAId}}'
 const LIST_ONE = '/api/items/article?limit=1'
 const TOKEN_FLOW = 'ch12-token-flow'
-const BEARER_NOTE = 'Authorization: Bearer {{token}}'
+const BEARER_NOTE = '(Authorization: Bearer {{token}})'
 const FILLER = 'x'.repeat(201)
 
 const noteOf = (json, name) => json.data.tags.find((tag) => tag.name === name)?._junction.note

@@ -12,6 +12,12 @@ import https from 'node:https'
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE'])
 const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 const CSRF_HEADER = 'X-Struo-CSRF'
+// Request headers the client decides itself: a step cannot replace them through its own headers.
+const CLIENT_OWNED = new Set(['content-type', 'cookie', 'authorization', CSRF_HEADER.toLowerCase()])
+
+export function ownedHeaders(extra) {
+  return Object.keys(extra ?? {}).filter((name) => CLIENT_OWNED.has(name.toLowerCase()))
+}
 const DEFAULT_TIMEOUT_MS = 30000
 const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH'])
 
@@ -110,9 +116,11 @@ export function createClient({ baseUrl, csrfValue = 'capture', timeoutMs = DEFAU
   const agents = { 'http:': new http.Agent({ keepAlive: true }), 'https:': new https.Agent({ keepAlive: true }) }
 
   // identity: the name of a cookie jar, or undefined for a request with no cookie at all.
-  async function request({ identity, method, path, body, contentType, bearer, csrf = true, timeoutMs: stepTimeout }) {
+  async function request({ identity, method, path, body, contentType, headers: extra, bearer, csrf = true, timeoutMs: stepTimeout }) {
+    const owned = ownedHeaders(extra)
+    if (owned.length > 0) throw new Error(`a step cannot set the request header ${owned.join(', ')}; the client controls it`)
     const jar = identity === undefined ? null : (jars.get(identity) ?? jars.set(identity, new Map()).get(identity))
-    const headers = {}
+    const headers = { ...extra }
     if (body !== undefined) headers['Content-Type'] = contentType ?? 'application/json'
     if (bearer !== undefined) {
       headers.Authorization = `Bearer ${bearer}`

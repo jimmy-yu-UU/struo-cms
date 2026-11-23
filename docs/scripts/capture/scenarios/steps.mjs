@@ -34,5 +34,5 @@ export const check = (name, method, path, expect, assertion, extra = {}) =>
   setup(name, method, path, expect, { verify: assertion, ...extra })
 
 export function must(condition, message) {
-  if (!condition) throw new Error(`the prose is no longer true: ${message}`)
+  if (!condition) throw new Error(`the prose is false: ${message}`)
 }

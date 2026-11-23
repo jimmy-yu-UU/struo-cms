@@ -73,3 +73,15 @@ test('an output with a byte-order mark or a NUL byte is refused with a message t
   withDir({ [OUT]: '﻿line\n', [EXIT]: '0' }, (dir) => assert.throws(() => readCliResult(dir, descriptor), /byte-order mark/))
   withDir({ [OUT]: 'a\0b\n', [EXIT]: '0' }, (dir) => assert.throws(() => readCliResult(dir, descriptor), /NUL/))
 })
+
+test('an output that is not valid UTF-8 is refused naming the file', () => {
+  const [descriptor] = cliDescriptors(groups([step()]))
+  const dir = mkdtempSync(join(tmpdir(), 'struo-cli-bytes-'))
+  try {
+    writeFileSync(join(dir, OUT), Buffer.from([0x61, 0xc3, 0x28, 0x0a]))
+    writeFileSync(join(dir, EXIT), '0')
+    assert.throws(() => readCliResult(dir, descriptor), /demo-cli\.out.*UTF-8/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

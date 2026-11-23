@@ -301,9 +301,9 @@ HTTP_STATUS:200
 ```
 
 `tagsLinks` 整組取代這篇文章的標籤連結：回應只列出 `release`，備註是「editor pick」，送出的陣列
-沒有提到的 `howto` 連結不在了。再送一次 mutation，同時給
-`tags: ["<howto 的 id>"]` 跟 `tagsLinks: null`，結果是 `tagsLinks` 的 `null` 贏，連結維持不變、
-`tags` 陣列裡的內容根本沒被套用。
+沒有提到的 `howto` 連結不在了。再送一次 mutation，同時給 `tags: ["<howto 的 id>"]` 跟
+`tagsLinks: null`，結果是 `tagsLinks` 的 `null` 贏，連結維持不變、`tags` 陣列裡的內容根本沒被
+套用。
 
 ## 翻譯
 
@@ -373,8 +373,9 @@ GraphQL 的錯誤過濾器是 REST 例外處理器的對應版本，把 resolver
 尋提供者失敗的訊息也是同一種遮罩。
 
 還有一種失敗走另一條路。一個文件本身剖析不了、指名了不存在的欄位，或違反深度／cost 規則，在任何
-resolver 開始跑之前就出錯，不帶任何例外，也就沒有 `extensions.code`，HotChocolate 直接回 HTTP
-`400`：
+resolver 開始跑之前就出錯，不帶任何例外，也就沒有 `extensions.code`。剖析失敗與不存在的欄位，在
+請求沒帶 `Accept` 或帶 `*/*` 時，HotChocolate 回 HTTP `400`；帶 `Accept: application/json` 時，同
+一份錯誤以 `200` 回應。下面的請求沒帶 `Accept`：
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -392,9 +393,9 @@ X-Content-Type-Options: nosniff
 HTTP_STATUS:400
 ```
 
-錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——這是判斷一則 GraphQL 錯誤該看狀
-態碼還是該看 `extensions.code` 的分界：request 層級的結構性錯誤是 `400` 沒有代碼，resolver 執行時
-丟出的例外是 `200` 配代碼。
+錯誤訊息指名了不存在的欄位 `bogusThing`，但沒有 `extensions.code`——判斷一則 GraphQL 錯誤屬於哪一種，
+看的是有沒有 `extensions.code`，不是狀態碼：request 層級的結構性錯誤沒有代碼，resolver 執行時丟出
+的例外是 `200` 配代碼。
 
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，

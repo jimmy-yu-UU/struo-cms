@@ -42,7 +42,11 @@ function readFile(dir, name, id) {
   if (!existsSync(path)) throw new CaptureError(`${id}: the command has no result file ${name} in ${dir}`)
   const bytes = readFileSync(path)
   checkBytes(bytes, name, id)
-  return bytes.toString('utf8')
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    throw new CaptureError(`${id}: ${name} is not valid UTF-8; save the output as UTF-8 text`)
+  }
 }
 
 // The output of one command, checked against its declared exit code.

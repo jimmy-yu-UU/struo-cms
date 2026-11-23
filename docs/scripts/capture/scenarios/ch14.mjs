@@ -27,6 +27,29 @@ function sampleMatches(json, vars) {
   must(JSON.stringify(json) === JSON.stringify({ data: { article } }), 'the single-article sample')
 }
 
+const ACCEPT_ANY = '*/*'
+const ACCEPT_JSON = 'application/json'
+
+// The two request-level errors the prose names as measured: a document that does not parse and a field
+// the schema does not have. They fail before any resolver runs.
+const REQUEST_LEVEL_QUERIES = [
+  { label: 'a document that does not parse', query: 'query {' },
+  { label: 'an unknown field', query: 'query { bogusThing { id } }' },
+]
+
+// The same anonymous request under a chosen Accept header: only the status depends on it.
+const acceptCheck = (name, accept, query, expect, assertion) =>
+  anonymous(undefined, 'POST', GRAPHQL, expect, { name, headers: { Accept: accept }, body: spaced(query), verify: assertion })
+
+function noCodeErrors(json) {
+  must(Array.isArray(json.errors) && json.errors.length > 0, 'a request-level failure answers with an errors array')
+  must(json.errors.every((error) => error.extensions?.code === undefined), 'a request-level failure has no extensions.code')
+}
+
+function codedError(json) {
+  must(json.errors.every((error) => typeof error.extensions?.code === 'string'), 'a resolver error carries extensions.code')
+}
+
 // The mutation replaces the whole set of links: after it only release is linked, with its note.
 function onlyReleaseLinked(json) {
   const links = json.data.tags.map((tag) => `${tag.name}:${tag._junction.note}`)
@@ -85,9 +108,19 @@ export const ch14Rest = {
       (json) => must(JSON.stringify(json.data.articles.facets) === FACETS && json.data.articles.total === 2, 'total 2, published 2 and draft 1'),
       { body: { query: LIST_WITH_FACETS } },
     ),
-    check('tagsLinks null wins over tags', 'POST', GRAPHQL, 200, (json, vars) =>
-      must(json.data.updateArticle.id === vars.articleAId, 'the mutation that sends tags and tagsLinks null succeeds'),
-    { body: { query: NULL_WINS } }),
+    check(
+      'tagsLinks null wins over tags',
+      'POST',
+      GRAPHQL,
+      200,
+      (json, vars) => must(json.data.updateArticle.id === vars.articleAId, 'the mutation that sends tags and tagsLinks null succeeds'),
+      { body: { query: NULL_WINS } },
+    ),
     check('the links after tagsLinks null', 'GET', '/api/items/article/{{articleAId}}?deep=tags', 200, onlyReleaseLinked),
+    ...REQUEST_LEVEL_QUERIES.flatMap(({ label, query }) => [
+      acceptCheck(`${label} with Accept */*`, ACCEPT_ANY, query, 400, noCodeErrors),
+      acceptCheck(`${label} with Accept application/json`, ACCEPT_JSON, query, 200, noCodeErrors),
+    ]),
+    acceptCheck('a resolver error with Accept application/json', ACCEPT_JSON, '{ users { total } }', 200, codedError),
   ],
 }

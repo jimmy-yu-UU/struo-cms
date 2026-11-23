@@ -443,11 +443,12 @@ The docs build runs it.
   before the check runs.
 - How an exchange is shown is set by `print`: `headers: true` prints the status line and every
   response header, `headers: ['Name', ...]` only the named ones (a name the response lacks fails
-  the step); a step that transforms the body cannot show `Content-Length`, because the length is
-  the server's and the body is not, so it names the headers it shows; `note` and `path` take
-  `{{variables}}` and add to the `$` line after one space; `responseOnly` leaves the request out;
-  `pretty: true`
-  keeps the raw line and appends `pretty:` with an indented copy; `binary: 'png'` prints the
+  the step); a step that transforms or masks the body cannot show `Content-Length` (a binary
+  summary may), because the length is the server's and the printed body is not, so it names the
+  headers it shows; `note` takes `{{variables}}` and is appended to the `$` line after one space;
+  `path` takes `{{variables}}` and replaces the printed path; `responseOnly` leaves the request
+  out; `pretty: true` keeps the raw line and appends `pretty:` with an indented copy; `binary:
+  'png'` prints the
   decoded PNG size and the byte count in place of a binary body (`binary: true` the byte count
   only) and cannot be combined with a transform. Steps that share a capture id make one block.
 - A step can also upload a fixture as one multipart file part (`upload: { field, fixture,
@@ -457,7 +458,12 @@ The docs build runs it.
   `print.note`. A step with no `as` sends no cookie at all. A login runs under an identity of its
   own whose jar holds no cookie yet (chapters 13, 16 and 17): the session cookie it receives is kept
   in that jar and registered as the secret `session_<identity>`. A cookie set on a step with no
-  `as` is registered as `session_anonymous`. `verify(json, vars)` and `verifyResponse(response)`
+  `as` is registered as `session_anonymous`; one mask name covers every cookie held under it, so a
+  response that sets two cookies needs one `print.mask` entry. A step may add request headers with
+  `headers: { Name: value }`, sent as given; `Content-Type`, `Cookie`, `Authorization` and the CSRF
+  header stay the client's and are refused, and a captured step with `headers` must declare a
+  `print.note` so the block says the request was not a plain one (chapter 14 uses `Accept`).
+  `verify(json, vars)` and `verifyResponse(response)`
   check what the prose says about a request the manual does not show; a throw stops the run, after
   the step's secrets are registered, so a message that quotes the response is redacted.
 - Ids and timestamps change on every capture, so a re-capture rewrites every block of the files

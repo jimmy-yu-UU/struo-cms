@@ -23,13 +23,17 @@ test('a bodyless exchange prints the request line, the raw response and the stat
 })
 
 test('a request body prints after a body: line, exactly as sent', () => {
-  const sent = String.raw`{"a": 1,"b":"é"}`
+  // The JSON escape for e-acute: a backslash, u, 00e9 (six characters), which must come out unchanged.
+  const escape = `${String.fromCharCode(92)}u00e9`
+  const sent = `{"a": 1,"b":"${escape}"}`
   const text = formatExchange({
     method: 'POST',
     path: '/api/x',
     requestBody: sent,
     response: response({ status: 400, body: '{"e":1}' }),
   })
+  assert.equal(escape.length, 6)
+  assert.ok(text.includes(escape))
   assert.equal(text, `$ POST /api/x\nbody:\n${sent}\n{"e":1}\nHTTP_STATUS:400`)
 })
 

@@ -371,9 +371,9 @@ HTTP_STATUS:200
 
 `tagsLinks` replaces the article's whole set of tag links: the response lists only `release`, with
 the note "editor pick," and the `howto` link, which the sent array does not mention, is gone.
-Sending the mutation again, this time
-with both `tags: ["<howto's id>"]` and `tagsLinks: null`, results in `tagsLinks`' `null` winning —
-the link stays unchanged, and nothing from the `tags` array's content is ever applied.
+Sending the mutation again, this time with both `tags: ["<howto's id>"]` and `tagsLinks: null`,
+results in `tagsLinks`' `null` winning — the link stays unchanged, and nothing from the `tags`
+array's content is ever applied.
 
 ## Translations
 
@@ -461,8 +461,10 @@ logged server-side; a search-provider failure is masked the same way.
 
 There's a second kind of failure on a different path entirely. A document that doesn't parse at
 all, names a field that doesn't exist, or violates the depth or cost rules fails before any
-resolver ever runs, carries no exception, and so has no `extensions.code` — HotChocolate returns
-plain HTTP `400`:
+resolver ever runs, carries no exception, and so has no `extensions.code`. Without an `Accept`
+header or with `*/*`, a document that does not parse or a field that does not exist is answered
+with HTTP `400`; with `Accept: application/json` the same error comes back with `200`. This
+request sends no `Accept`:
 
 <!-- capture: ch14-bogus-field-400 -->
 ```text
@@ -481,9 +483,8 @@ HTTP_STATUS:400
 ```
 
 The error message names the nonexistent field `bogusThing`, but carries no `extensions.code` —
-that's the dividing line for whether a GraphQL error should be read by status code or by
-`extensions.code`: a request-level structural error is `400` with no code, while an exception a
-resolver throws at execution time is `200` with a code.
+the code, not the status, tells the two kinds of GraphQL error apart: a request-level structural
+error has no code, while an exception a resolver throws at execution time is `200` with a code.
 
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That

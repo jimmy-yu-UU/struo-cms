@@ -219,7 +219,7 @@ function indentWhole(text) {
   return value.out
 }
 
-const NOTHING_TO_INDENT = /^\s*([{[]\s*[}\]]|[^{[\s][\s\S]*)\s*$/
+const NOTHING_TO_INDENT = /^\s*(?:[{[]\s*[}\]]\s*$|[^{[\s])/
 
 // Re-indents a JSON body with two spaces per level, as the manual prints a pretty body.
 export function prettyJson(text) {

@@ -264,3 +264,20 @@ test('a Buffer body is sent byte for byte with the content type the step names',
     },
   )
 })
+
+test('extra request headers are sent as given and the headers the client owns cannot be replaced', async () => {
+  await withStub(
+    () => ({ status: 200, body: '{}' }),
+    async (stub, client) => {
+      await client.request({ identity: undefined, method: 'GET', path: '/x', headers: { Accept: 'application/json' } })
+      assert.equal(stub.requests[0].headers.accept, 'application/json')
+      for (const name of ['content-type', 'Cookie', 'AUTHORIZATION', 'X-Struo-CSRF']) {
+        await assert.rejects(
+          client.request({ identity: undefined, method: 'GET', path: '/x', headers: { [name]: 'v' } }),
+          new RegExp(name, 'i'),
+        )
+      }
+      assert.equal(stub.requests.length, 1)
+    },
+  )
+})
