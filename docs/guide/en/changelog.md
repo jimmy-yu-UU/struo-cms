@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.31.0
+## 0.31.0 — 2026-11-23
 
 ::: danger Breaking
 - GraphQL reads and writes go through `IItemUseCases`, the interface REST uses, so a replacement
