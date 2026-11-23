@@ -409,7 +409,7 @@ internal sealed class CollectionSchemaBuilder(
 
         foreach (var f in meta.Fields)
         {
-            if (f.Hidden || SchemaTypeMapper.IsExcluded(f.Interface)) continue;
+            if (f.Hidden || f.Ignored || SchemaTypeMapper.IsExcluded(f.Interface)) continue;
             if (!IsFilterable(f.Interface)) continue;
             var opInput = FilterInputTranslator.OperatorInputTypeName(f.Interface, ClrType(desc, f.Name));
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(opInput)));
