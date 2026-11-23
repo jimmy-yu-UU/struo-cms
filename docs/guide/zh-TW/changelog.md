@@ -1,5 +1,30 @@
 # 版本紀錄
 
+## 0.32.0
+
+::: danger 破壞性變更
+- 當明寫的 `ColumnDataType` 把 `decimal` 放在二進位浮點型別上，或把 `bool` 放在字串型別上，掃描器
+  就讓主機在啟動時失敗，丟出 `MetadataException`，訊息點名「類別.屬性」、屬性型別與寫的型別；這些
+  組合原本都能啟動主機，之後才回傳被捨入的值或讀取失敗
+  （表格在 [第 6 章](06-field-types.md#與屬性型別衝突的欄位型別)）：
+  - `decimal` 或 `decimal?` 配 `real`、`float`、`float4`、`float8`、`double` 或 `double precision`，
+    不論有沒有 `float(53)` 這種長度或精度。欄位會把值捨入。在 PostgreSQL 17、SQL Server 2022、
+    MySQL 8.4 與 MariaDB 11.8 上量到：單精度型別（PostgreSQL 與 SQL Server 的 `real`，MySQL 與
+    MariaDB 的 `float`）把 12345.6789 讀成 12345.68 或 12345.7，雙精度型別把
+    12345678901234.5678 讀成 12345678901234.6，欄位上的篩選筆數、facet 分組與加總也都是錯的。
+    改用 `decimal(18,4)` 這類精確型別，或拿掉 `ColumnDataType`；欄位型別有變時，已存在的表需要
+    migration。
+  - `bool` 或 `bool?` 配 `varchar`、`nvarchar`、`char`、`nchar`、`character`、`character varying`、
+    `bpchar`、`text`、`ntext`、`tinytext`、`mediumtext` 或 `longtext`。值存成 `0` 或 `1`（PostgreSQL
+    存成 `false` 或 `true`）；資料庫肯收這個寫入時，讀取該列與對欄位做 facet 隨後失敗，在
+    SQLite、PostgreSQL、SQL Server、MySQL 與 MariaDB 都一樣，在 PostgreSQL 上篩選也失敗。改用
+    `boolean`（PostgreSQL、MySQL、MariaDB）或 `bit`（SQL Server），或拿掉 `ColumnDataType`；欄位
+    型別有變時，已存在的表需要 migration。
+  - 其他組合照常通過，包含 `decimal` 配 `decimal(18,4)` 與 `numeric(18,4)`；`bool` 配 `bit`、
+    `boolean`、`tinyint` 與整數型別；`float4[]`、`text[]` 這類陣列型別；以及 `double` 或 `float`
+    屬性配浮點欄位。
+:::
+
 ## 0.31.0 — 2026-11-23
 
 ::: danger 破壞性變更

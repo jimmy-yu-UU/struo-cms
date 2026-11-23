@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.32.0
+
+::: danger Breaking
+- The scanner stops the host at start, with a `MetadataException` that names "Class.Property", the
+  property type and the declared type, when an explicit `ColumnDataType` puts a `decimal` on a
+  binary floating-point type or a `bool` on a string type; each combination used to start the host
+  and then return rounded values or fail on read
+  ([Chapter 6](06-field-types.md#column-types-that-contradict-the-property) has the table):
+  - A `decimal` or `decimal?` with `real`, `float`, `float4`, `float8`, `double` or
+    `double precision`, with or without a length or precision such as `float(53)`. The column
+    rounds the value. Measured on PostgreSQL 17, SQL Server 2022, MySQL 8.4 and MariaDB 11.8: a
+    single-precision type (`real` on PostgreSQL and SQL Server, `float` on MySQL and MariaDB)
+    returned 12345.6789 as 12345.68 or 12345.7, a double-precision type returned
+    12345678901234.5678 as 12345678901234.6, and filter counts, facet buckets and sums on the
+    column were wrong. Use an exact type such as `decimal(18,4)`, or remove `ColumnDataType`; a
+    table that exists needs a migration when the column type changes.
+  - A `bool` or `bool?` with `varchar`, `nvarchar`, `char`, `nchar`, `character`,
+    `character varying`, `bpchar`, `text`, `ntext`, `tinytext`, `mediumtext` or `longtext`. The
+    value was stored as `0` or `1` (`false` or `true` on PostgreSQL); where the database accepted
+    the write, reading the row and a facet over the column then failed on SQLite, PostgreSQL, SQL
+    Server, MySQL and MariaDB, and on PostgreSQL a filter failed too. Use `boolean` (PostgreSQL,
+    MySQL, MariaDB) or `bit` (SQL Server), or remove `ColumnDataType`; a table that exists needs a
+    migration when the column type changes.
+  - Every other pair passes, including `decimal(18,4)` and `numeric(18,4)` on a `decimal`;
+    `bit`, `boolean`, `tinyint` and the integer types on a `bool`; the array types such as
+    `float4[]` and `text[]`; and a `double` or `float` property on a floating-point column.
+:::
+
 ## 0.31.0 — 2026-11-23
 
 ::: danger Breaking

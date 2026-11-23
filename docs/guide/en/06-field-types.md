@@ -320,8 +320,10 @@ is ignored, except for `tinyint(1)`. A word wrapped whole in brackets, double qu
 counts as one word, so `[bigint]` is `bigint` and `"int custom"` is not `int`; brackets inside a
 word, as in `int[]`, make another type. Words after the type, such as `not null` or
 `identity(1,1)`, are column modifiers: `bigint not null` counts as `bigint`. `unsigned`,
-`zerofill` and `array` after the type make another type, so `int unsigned` is not `int`. A name
-that is not in the table, `timestamp with local time zone` included, is yours, and passes.
+`zerofill` and `array` after the type make another type, so `int unsigned` is not `int`.
+`double precision` counts as `double` and `character varying` as `character`; the `precision`
+and `varying` belong to the name. A name that is not in the table, `timestamp with local time zone`
+included, is yours, and passes.
 
 | Property type | `ColumnDataType` | Declare instead |
 |---|---|---|
@@ -331,6 +333,11 @@ that is not in the table, `timestamp with local time zone` included, is yours, a
 | `long` | `int`, `integer` | `int`, or remove `ColumnDataType` |
 | `long` | `smallint` | Remove `ColumnDataType`, or use `bigint` |
 | `int`, `long` | `tinyint(1)` | `tinyint` with no length, or remove `ColumnDataType` |
+| `decimal` | `real`, `float`, `float4`, `float8` | Use `decimal(18,4)`, or remove `ColumnDataType` |
+| `decimal` | `double`, `double precision` | Use `decimal(18,4)`, or remove `ColumnDataType` |
+| `bool` | `varchar`, `nvarchar`, `char`, `nchar` | Remove `ColumnDataType`, or use `boolean` or `bit` |
+| `bool` | `character`, `character varying`, `bpchar` | Remove `ColumnDataType`, or use `boolean` or `bit` |
+| `bool` | `text`, `ntext`, `tinytext`, `mediumtext`, `longtext` | Remove `ColumnDataType`, or use `boolean` or `bit` |
 
 For a `DateTime` the shape is `[ColumnShape(ColumnShape.TimestampWithTimeZone)]` (see
 [Date and time](#date-and-time)). On PostgreSQL and SQL Server the shape reads and writes the
@@ -366,6 +373,20 @@ they pass.
 The MySQL driver reads a `tinyint(1)` column as a boolean, on MySQL and on MariaDB: an `int` or
 `long` property stored as 7 reads back as 1, in a read and in a facet, although a filter for 7
 still matches the row. Write `tinyint` with no length.
+
+A `decimal` on a binary floating-point column has its value rounded by the column. Measured on
+PostgreSQL 17, SQL Server 2022, MySQL 8.4 and MariaDB 11.8: a single-precision type (`real` on
+PostgreSQL and SQL Server, `float` on MySQL and MariaDB) reads 12345.6789 as 12345.68 or 12345.7,
+and a double-precision type reads 12345678901234.5678 as 12345678901234.6. Filter counts, facet
+buckets and sums are wrong with them. With no `ColumnDataType`, the column of a `decimal` property
+is `decimal(18,4)` on SQL Server, MySQL and MariaDB, and `numeric` with no limit on precision on
+PostgreSQL.
+
+A `bool` on a string column is stored as `0` and `1` (`false` and `true` on PostgreSQL). Where the
+database accepts the write, reading the row and a facet over the column fail, on SQLite,
+PostgreSQL, SQL Server, MySQL and MariaDB alike; on PostgreSQL a filter fails too. To write the
+type, use `boolean` on PostgreSQL, MySQL and MariaDB and `bit` on SQL Server; with no
+`ColumnDataType` the framework picks the boolean type of the backend.
 
 ### Types no interface accepts
 

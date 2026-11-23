@@ -400,12 +400,20 @@ collections. It throws a `MetadataException` naming `Class.Property` and both de
   `DateTime` column); `int` with `bigint` or `smallint`; `long` with `int`, `integer` or `smallint`
   (the integer names SQL Server has whose reader types share one entry of the ORM's row-binder
   cache; only SQL Server fails, in one facet order, but the rule is the same on every backend);
-  `int` or `long` with `tinyint(1)` (the MySQL driver reads it as a boolean). The name is matched by
-  its words: case and a parenthesised length are ignored (the length only for `tinyint(1)`), a word
-  wrapped whole in brackets, double quotes or backticks is one word, brackets inside a word make
-  another type (`int[]`), trailing column modifiers such as `not null` are skipped, and `unsigned`,
-  `zerofill` or `array` after the name makes another type. Any other name passes,
-  `timestamp with local time zone` included. `ColumnDataTypeFitTests` pins the table;
+  `int` or `long` with `tinyint(1)` (the MySQL driver reads it as a boolean); `decimal` with `real`,
+  `float`, `float4`, `float8`, `double` or `double precision` (a binary floating-point column rounds
+  the value: a single-precision type returns 12345.6789 as 12345.68 or 12345.7, a double-precision
+  type returns 12345678901234.5678 as 12345678901234.6, and filters, facets and sums on it are
+  wrong); `bool` with `varchar`, `nvarchar`, `char`, `nchar`, `character`, `character varying`,
+  `bpchar`, `text`, `ntext`, `tinytext`, `mediumtext` or `longtext` (a string column is not read
+  back as a bool: where the write succeeds, the read of the row and the facet fail). The name is
+  matched by its words: case and a parenthesised length are ignored (the length only for
+  `tinyint(1)`), a word wrapped whole in brackets, double quotes or backticks is one word,
+  brackets inside a word make another type (`int[]`), trailing column modifiers such as `not null`
+  are skipped, `double precision` counts as `double` and `character varying` as `character`, and
+  `unsigned`, `zerofill` or `array` after the name makes another type. Any other name passes,
+  `timestamp with local time zone`, `decimal(18,4)`, `bit`, `boolean` and `string` included.
+  `ColumnDataTypeFitTests` pins the table;
 - `[SugarColumn(IsNullable = false)]` on a property that `ClrNullability.GivesNullableColumn`
   makes nullable (`Nullable<T>` or `string?`).
 

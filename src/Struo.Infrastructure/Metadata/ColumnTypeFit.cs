@@ -21,14 +21,28 @@ internal static class ColumnTypeFit
     private const string BooleanWhy =
         "the MySQL driver reads a tinyint(1) column as a boolean, so a stored 7 comes back as 1, " +
         "and the check is the same on every backend";
+    private const string DecimalFix = "Declare an exact decimal type such as decimal(18,4), or remove ColumnDataType";
+    private const string DecimalWhy =
+        "a single-precision type returns 12345.6789 as 12345.68 or 12345.7, " +
+        "a double-precision type returns 12345678901234.5678 as 12345678901234.6, " +
+        "and filters, facets and sums on the column then go wrong, " +
+        "and the check is the same on every backend";
+    private const string BoolStringFix =
+        "Remove ColumnDataType, or declare boolean (PostgreSQL, MySQL, MariaDB) or bit (SQL Server)";
+    private const string BoolStringWhy =
+        "a string column is not read back as a bool, so where the database accepts the write, " +
+        "reading the row and a facet of the column then fail, " +
+        "and the check is the same on every backend";
 
-    // One type name as written in a column type: the words it is made of, and for a one-word name the length
-    // or precision that must follow it (null when any, or none, matches).
-    private sealed record Entry(string[] Words, string? FirstArgument = null);
+    // One type name as written in a column type: the words it is made of, for a one-word name the length
+    // or precision that must follow it (null when any, or none, matches), and a word that may follow the name
+    // without changing it ("double precision" is "double", "character varying" is "character").
+    private sealed record Entry(string[] Words, string? FirstArgument = null, string? OptionalNext = null);
 
     private sealed record Rule(Type Clr, Entry[] Entries, Misfit Misfit);
 
-    private static Entry Name(string words, string? firstArgument = null) => new(words.Split(' '), firstArgument);
+    private static Entry Name(string words, string? firstArgument = null, string? optionalNext = null) =>
+        new(words.Split(' '), firstArgument, optionalNext);
 
     private static readonly Rule[] Rules =
     [
@@ -39,6 +53,17 @@ internal static class ColumnTypeFit
         new(typeof(long), [Name("smallint")], new("Remove ColumnDataType, or declare the column as bigint", WidthWhy)),
         new(typeof(int), [Name("tinyint", "1")], new(BooleanFix, BooleanWhy)),
         new(typeof(long), [Name("tinyint", "1")], new(BooleanFix, BooleanWhy)),
+        new(
+            typeof(decimal),
+            [Name("real"), Name("float"), Name("float4"), Name("float8"), Name("double", optionalNext: "precision")],
+            new(DecimalFix, DecimalWhy)),
+        new(
+            typeof(bool),
+            [
+                Name("varchar"), Name("nvarchar"), Name("char"), Name("nchar"), Name("character", optionalNext: "varying"),
+                Name("bpchar"), Name("text"), Name("ntext"), Name("tinytext"), Name("mediumtext"), Name("longtext"),
+            ],
+            new(BoolStringFix, BoolStringWhy)),
     ];
 
     /// <summary>
@@ -72,6 +97,7 @@ internal static class ColumnTypeFit
         for (var i = 0; i < count; i++)
             if (tokens[i].Word != entry.Words[i]) return false;
         if (entry.FirstArgument is not null && tokens[0].Argument != entry.FirstArgument) return false;
+        if (entry.OptionalNext is not null && tokens.Count > count && tokens[count].Word == entry.OptionalNext) count++;
 
         // "unsigned", "zerofill" and an array suffix turn the name into another type; any other trailing word is
         // a column modifier.
@@ -79,7 +105,7 @@ internal static class ColumnTypeFit
     }
 
     private static bool MakesAnotherType(string word) =>
-        word is "unsigned" or "zerofill" or "array" || word.StartsWith('[') || word.StartsWith("array[", StringComparison.Ordinal);
+        word is "unsigned" or "zerofill" or "array" || word.Contains('[');
 
     // Lower-case words split at whitespace and at a parenthesised group; the group's text, without spaces,
     // is the argument of the word before it. A word wrapped whole in brackets, double quotes or backticks keeps
