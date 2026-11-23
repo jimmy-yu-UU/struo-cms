@@ -142,13 +142,13 @@ nested to-many list with its own `sort`/`limit` arguments; later examples reuse 
 data — the id is data-specific, and your own environment will differ:
 
 ```graphql
-query { article(id: "01a08f92-3a18-7c5d-99a3-5b14cd1279ea") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
+query { article(id: "01a2073e-dd4b-728a-87b2-65f64f224d35") { id status version category { name } tags(sort: ["name"], limit: 1) { name } } }
 ```
 
 The actual response:
 
 ```json
-{"data":{"article":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","status":"published","version":7,"category":{"name":"Guides"},"tags":[{"name":"howto"}]}}}
+{"data":{"article":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","status":"published","version":3,"category":{"name":"Guides"},"tags":[{"name":"release"}]}}}
 ```
 
 `article` with only `id` returns that same item; `category` is many-to-one, straight to an object
@@ -237,7 +237,7 @@ both a same-row quantifier (`some` paired with `junction`) and `tagsLinks`' own 
 $ POST /graphql
 body:
 {"query": "query { articles(filter: { tags: { some: { name: { eq: \"howto\" }, junction: { note: { eq: \"hero\" } } } } }) { total items { id status tagsLinks { node { name } junction { note } } } } }"}
-{"data":{"articles":{"total":1,"items":[{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
+{"data":{"articles":{"total":1,"items":[{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","status":"published","tagsLinks":[{"node":{"name":"howto"},"junction":{"note":"hero"}}]}]}}}
 HTTP_STATUS:200
 ```
 
@@ -364,8 +364,8 @@ or unmappable. Below is the actual response after sending `tagsLinks`:
 ```text
 $ POST /graphql
 body:
-{"query": "mutation { updateArticle(id: \"01a08f92-3a18-7c5d-99a3-5b14cd1279ea\", input: { tagsLinks: [{ id: \"01a08f92-396e-7bf7-a77c-149c9aa732b1\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
-{"data":{"updateArticle":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
+{"query": "mutation { updateArticle(id: \"01a2073e-dd4b-728a-87b2-65f64f224d35\", input: { tagsLinks: [{ id: \"01a2073e-dd41-76af-9dc7-7d0b6a9fd22a\", note: \"editor pick\" }] }) { id tagsLinks { node { name } junction { note } } } }"}
+{"data":{"updateArticle":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","tagsLinks":[{"node":{"name":"release"},"junction":{"note":"editor pick"}}]}}}
 HTTP_STATUS:200
 ```
 
@@ -431,10 +431,11 @@ $ POST /graphql (no cookie)
 body:
 {"query":"{ users { total } }"}
 HTTP/1.1 200 OK
+Content-Length: 157
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:38 GMT
+Date: Mon, 23 Nov 2026 07:11:31 GMT
 Server: Kestrel
-Transfer-Encoding: chunked
+Vary: Accept
 X-Content-Type-Options: nosniff
 
 {"errors":[{"message":"Read not permitted.","path":["users"],"extensions":{"code":"UNAUTHORIZED"}}],"data":null}
@@ -468,10 +469,11 @@ $ POST /graphql
 body:
 {"query": "query { bogusThing { id } }"}
 HTTP/1.1 400 Bad Request
+Content-Length: 322
 Content-Type: application/graphql-response+json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:38 GMT
+Date: Mon, 23 Nov 2026 07:11:31 GMT
 Server: Kestrel
-Transfer-Encoding: chunked
+Vary: Accept
 X-Content-Type-Options: nosniff
 
 {"errors":[{"message":"The field `bogusThing` does not exist on the type `Query`.","locations":[{"line":1,"column":9}],"extensions":{"type":"Query","field":"bogusThing","responseName":"bogusThing","specifiedBy":"https://spec.graphql.org/September2025/#sec-Field-Selections"}}]}

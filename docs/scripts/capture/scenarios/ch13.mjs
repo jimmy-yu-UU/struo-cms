@@ -1,6 +1,6 @@
 // Chapter 13, REST endpoints. The login runs under its own identity, a jar that holds no cookie: a
 // request that presents a session cookie needs the CSRF header and revokes that session.
-import { PASSWORD_FIELD, exchange } from './steps.mjs'
+import { PASSWORD_FIELD, exchange, setup } from './steps.mjs'
 
 const LOGIN_IDENTITY = 'adminLogin'
 const PLACEHOLDER = '<your-admin-password>'
@@ -30,5 +30,7 @@ export const ch13 = {
       },
     },
     { capture: LOGIN_AND_ME, as: LOGIN_IDENTITY, method: 'GET', path: '/api/auth/me', expect: 200 },
+    setup('sign out', 'POST', '/api/auth/logout', 204, { as: LOGIN_IDENTITY }),
+    setup('read me after signing out', 'GET', '/api/auth/me', 401, { as: LOGIN_IDENTITY }),
   ],
 }

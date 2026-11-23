@@ -26,3 +26,13 @@ export const STRIP_TRACE_ID = ['stripTraceId']
 
 // The JSON field name and values that stand for a credential are assembled at run time.
 export const PASSWORD_FIELD = ['pass', 'word'].join('')
+
+// A check that runs against the host: a read or write by the admin session whose response must
+// satisfy `assertion(json, vars)`; it prints nothing. The prose around a block states things about
+// requests the manual does not show, and these steps are how the run keeps those statements honest.
+export const check = (name, method, path, expect, assertion, extra = {}) =>
+  setup(name, method, path, expect, { verify: assertion, ...extra })
+
+export function must(condition, message) {
+  if (!condition) throw new Error(`the prose is no longer true: ${message}`)
+}

@@ -67,12 +67,12 @@ JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `40
 
 <!-- capture: ch13-trash-and-restore -->
 ```text
-$ DELETE /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c
+$ DELETE /api/items/article/01a2073e-ddad-74a9-8ec7-bfa57153a51c
 
 HTTP_STATUS:204
 
-$ POST /api/items/article/01a08f92-4137-72e2-afeb-a0451167539c/restore
-{"success":true,"data":{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+$ POST /api/items/article/01a2073e-ddad-74a9-8ec7-bfa57153a51c/restore
+{"success":true,"data":{"id":"01a2073e-ddad-74a9-8ec7-bfa57153a51c","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.221537Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:30.221696Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:200
 ```
 
@@ -176,6 +176,7 @@ $ POST /api/login-locks/query
 body:
 {"emails":["admin@admin.com","nobody@example.com"]}
 {"success":true,"data":[{"email":"admin@admin.com","locked":false,"retryAfterSeconds":0,"clearable":true},{"email":"nobody@example.com","locked":false,"retryAfterSeconds":0,"clearable":true}]}
+HTTP_STATUS:200
 ```
 
 帳號在目前視窗內已把依帳號的登入嘗試額度用光時，`locked` 為 `true`，`retryAfterSeconds` 是視窗還剩的秒數，
@@ -245,7 +246,7 @@ body:
 {"email":"admin@admin.com","password":"<your-admin-password>"}
 HTTP/1.1 200 OK
 Content-Type: application/json; charset=utf-8
-Date: Fri, 06 Nov 2026 06:17:45 GMT
+Date: Mon, 23 Nov 2026 07:11:31 GMT
 Server: Kestrel
 Cache-Control: no-cache,no-store
 Expires: Thu, 01 Jan 1970 00:00:00 GMT
@@ -254,17 +255,18 @@ Set-Cookie: struo.session=…; path=/; samesite=lax; httponly
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae"}}
+{"success":true,"data":{"id":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:200
 
 $ GET /api/auth/me
-{"success":true,"data":{"id":"01a1af7f-4385-770a-a8f8-0fba654633ae","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
+{"success":true,"data":{"id":"01a2073e-a1e4-78c5-a710-357e78fafae8","email":"admin@admin.com","name":"Administrator","isSuperAdmin":true,"permissions":{}}}
 HTTP_STATUS:200
 ```
 
 `Set-Cookie` 的值很長，這裡省略；重點是標頭本身出現，帶著 `path=/`、`samesite=lax`、`httponly`。
-這段輸出來自 Development 主機；cookie 一律帶 `Secure` 的環境，名稱是 `__Host-struo.session`，
-並多一個 `secure`。`me` 對超級管理員回傳空的 `permissions`，因為每一項授權都已經隱含在這個身分裡。
+這段輸出來自沒有要求 cookie 一律帶 `Secure` 的主機；要求的環境，名稱是
+`__Host-struo.session`，並多一個 `secure`。`me` 對超級管理員回傳空的 `permissions`，因為每一項授權
+都已經隱含在這個身分裡。
 
 `login/oidc/{provider}` 接受 `Oidc:Providers` 裡的提供者 id。提供者不存在或已停用時回 404，啟用時回 302 導向該提供者，
 `?returnUrl=` 只有在是站內相對路徑，或來源列在 `Struo:Cors:AllowedOrigins` 的絕對網址時才沿用，否則改用 `Oidc:ReturnUrlDefault`；

@@ -151,8 +151,8 @@ no snapshot content, newest first:
 
 <!-- capture: ch9-list-revisions -->
 ```text
-$ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
+$ GET /api/items/article/01a2073e-efab-745d-8232-4feef56d89cf/revisions
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T07:11:34.935982Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T07:11:34.877077Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -303,25 +303,25 @@ and the version number; relations, junction rows and translations were never tou
 in the first place, so there is nothing left to restore.
 
 Here is a complete trash round-trip: trash it, find it with `?deleted=only`, then restore it (the
-list also narrows to this one row with `filter[id][_eq]`, because the development database still
-holds other trashed articles):
+list also narrows to this one row with `filter[id][_eq]`, so no other trashed article is listed
+with it):
 
 <!-- capture: ch9-trash-round-trip -->
 ```text
-$ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
+$ DELETE /api/items/article/01a2073e-efeb-7fc3-a008-4336067d3a4e
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?deleted=only&filter[id][_eq]=01a08c68-5909-7513-8a9c-906f1fc22943
-{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2073e-efeb-7fc3-a008-4336067d3a4e
+{"success":true,"data":[{"id":"01a2073e-efeb-7fc3-a008-4336067d3a4e","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:34.89177Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:34.891778Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
-$ POST /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943/restore
-{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
+$ POST /api/items/article/01a2073e-efeb-7fc3-a008-4336067d3a4e/restore
+{"success":true,"data":{"id":"01a2073e-efeb-7fc3-a008-4336067d3a4e","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:34.89177Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:34.891778Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:200
 ```
 
-The `restore` response's version number moved from 7 to 8. `deletedAt` never appears in the
+Trashing the item makes its version 1, and the `restore` response carries version 2. `deletedAt` never appears in the
 projection at any point: trash state is only ever discoverable through `?deleted=`, never by
 reading the item itself.
 

@@ -39,7 +39,7 @@ export const seed = {
     }),
     setup('create the editor user', 'POST', '/api/users', 201, {
       body: (vars) => JSON.stringify({ email: EDITOR_EMAIL, name: 'Editor', [PASSWORD_FIELD]: vars.editorPassword }),
-      save: { editorId: 'id' },
+      save: { editorId: 'data.id' },
     }),
     create('give the editor user the editor role', 'userRole', { userId: '{{editorId}}', roleId: '{{editorRoleId}}' }),
   ],

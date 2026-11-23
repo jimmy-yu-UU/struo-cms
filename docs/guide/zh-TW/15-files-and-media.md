@@ -75,16 +75,16 @@ not permitted.`。
 
 <!-- capture: ch15-upload-swatch-201 -->
 ```text
-$ POST /api/files  (multipart: file=@swatch.png; type=image/png)
+$ POST /api/files (multipart: file=@swatch.png; type=image/png)
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Tue, 15 Sep 2026 03:01:43 GMT
+Date: Mon, 23 Nov 2026 07:11:31 GMT
 Server: Kestrel
-Location: /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df
+Location: /api/files/0998d0cc-394b-415f-9111-345f6177223f
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"c4440800-43d3-4ff0-9fe7-b5d7671b30df","fileName":"swatch.png","contentType":"image/png","size":125,"width":64,"height":48,"status":"published","folderId":null}}
+{"success":true,"data":{"id":"0998d0cc-394b-415f-9111-345f6177223f","fileName":"swatch.png","contentType":"image/png","size":6325,"width":64,"height":48,"status":"published","folderId":null}}
 HTTP_STATUS:201
 ```
 
@@ -198,7 +198,7 @@ allowed.`。
 
 <!-- capture: ch15-get-draft-anon-404 -->
 ```text
-$ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
+$ GET /api/files/b4cf7053-67bc-4516-aa42-3a8f081aecb8
 {"success":false,"error":{"code":"NOT_FOUND","message":"Resource not found."}}
 HTTP_STATUS:404
 ```
@@ -208,8 +208,8 @@ HTTP_STATUS:404
 
 <!-- capture: ch15-get-draft-admin -->
 ```text
-$ GET /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9
-{"success":true,"data":{"id":"27327d5a-6cb0-40e3-b288-6d1186db6ab9","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
+$ GET /api/files/b4cf7053-67bc-4516-aa42-3a8f081aecb8
+{"success":true,"data":{"id":"b4cf7053-67bc-4516-aa42-3a8f081aecb8","fileName":"note.txt","contentType":"text/plain","size":19,"width":null,"height":null,"status":"draft","folderId":null}}
 HTTP_STATUS:200
 ```
 
@@ -317,12 +317,13 @@ cover 高度。
 
 <!-- capture: ch15-content-width5000-png -->
 ```text
-$ GET /api/files/c4440800-43d3-4ff0-9fe7-b5d7671b30df/content?width=5000&format=png
+$ GET /api/files/0998d0cc-394b-415f-9111-345f6177223f/content?width=5000&format=png
 HTTP/1.1 200 OK
-Content-Length: 394
+Content-Length: 6538
 Content-Type: image/png
+
 # decoded PNG IHDR: width=64, height=48
-# body: 394 bytes (binary, not shown)
+# body: 6538 bytes (binary, not shown)
 HTTP_STATUS:200
 ```
 
@@ -440,7 +441,7 @@ null，指向這個檔案的多對多連接資料列會被移除。blob 的清�
 
 <!-- capture: ch15-delete-purge-1-400 -->
 ```text
-$ DELETE /api/files/27327d5a-6cb0-40e3-b288-6d1186db6ab9?purge=1
+$ DELETE /api/files/b4cf7053-67bc-4516-aa42-3a8f081aecb8?purge=1
 {"success":false,"error":{"code":"VALIDATION","message":"One or more validation errors occurred.","details":[{"field":"purge","message":"The value '1' is not valid."}]}}
 HTTP_STATUS:400
 ```

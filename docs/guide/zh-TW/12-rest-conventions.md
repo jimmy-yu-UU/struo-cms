@@ -48,13 +48,13 @@ body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:38 GMT
+Date: Mon, 23 Nov 2026 07:11:30 GMT
 Server: Kestrel
-Location: /api/items/tag/01a08f92-8470-718c-888b-1714ffaef71e
+Location: /api/items/tag/01a2073e-e0fe-7278-a844-edbc364b3687
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a08f92-8470-718c-888b-1714ffaef71e","version":0,"name":"launch","createdAt":"2026-09-11T08:25:39.185162Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:39.1853366Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+{"success":true,"data":{"id":"01a2073e-e0fe-7278-a844-edbc364b3687","version":0,"name":"launch","createdAt":"2026-11-23T07:11:31.0709675Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:31.071087Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:201
 ```
 
@@ -242,15 +242,15 @@ GraphQL 上同一份清單在 `extensions.details`。`locale` 鍵只出現在這
 
 <!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
-{"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
+$ POST /api/users/01a2073e-a1e4-78c5-a710-357e78fafae8/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
 $ GET /api/items/article?limit=1  Authorization: Bearer <token>
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a2073e-ddad-74a9-8ec7-bfa57153a51c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.221537Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:30.221696Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
+$ DELETE /api/users/01a2073e-a1e4-78c5-a710-357e78fafae8/access-token
 
 HTTP_STATUS:204
 
@@ -300,7 +300,7 @@ body 也可以把讀到的值原樣送回；伺服器拿這個值去比對目前
 
 <!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2073e-dd4b-728a-87b2-65f64f224d35
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -374,21 +374,21 @@ HTTP_STATUS:400
 
 <!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2073e-dd4b-728a-87b2-65f64f224d35
 body:
-{"tags":["01a08f92-38f5-7f1b-a478-f8a1140f0b0b",{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":2,"status":"draft", …}}
+{"tags":["01a2073e-dd38-7fe7-94be-c35549fe1f6c",{"id":"01a2073e-dd41-76af-9dc7-7d0b6a9fd22a","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.124392Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:31.22264Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:200
 ```
 
-`data` 的其餘欄位省略，跟本章其他更新回應一樣的形狀。第一個目標只被連結，第二個目標的 `note`
-被換成 `editor pick`。
+`data` 是更新後的項目本身，`version` 從 1 推到 2。第一個目標只被連結，它原有的備註 `hero` 維持
+不變；第二個目標是新連上的，`note` 是 `editor pick`。
 
 payload 欄位驗證失敗時，訊息會標明是哪個關聯、哪個目標，方便一次改好幾筆連結的表單定位問題：
 
 <!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a08f92-396e-7bf7-a77c-149c9aa732b1': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2073e-dd41-76af-9dc7-7d0b6a9fd22a': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 

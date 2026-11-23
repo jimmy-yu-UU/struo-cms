@@ -57,13 +57,13 @@ body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Fri, 11 Sep 2026 08:25:38 GMT
+Date: Mon, 23 Nov 2026 07:11:30 GMT
 Server: Kestrel
-Location: /api/items/tag/01a08f92-8470-718c-888b-1714ffaef71e
+Location: /api/items/tag/01a2073e-e0fe-7278-a844-edbc364b3687
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a08f92-8470-718c-888b-1714ffaef71e","version":0,"name":"launch","createdAt":"2026-09-11T08:25:39.185162Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:39.1853366Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248"}}
+{"success":true,"data":{"id":"01a2073e-e0fe-7278-a844-edbc364b3687","version":0,"name":"launch","createdAt":"2026-11-23T07:11:31.0709675Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:31.071087Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:201
 ```
 
@@ -285,15 +285,15 @@ Issue a token for the current account, read once with it, then revoke it:
 
 <!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
-{"success":true,"data":{"token":"LbUeNnhuvBYeEYt9uFU1izO6eyQDmUAL57hIxchHMvw"}}
+$ POST /api/users/01a2073e-a1e4-78c5-a710-357e78fafae8/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
 $ GET /api/items/article?limit=1  Authorization: Bearer <token>
-{"success":true,"data":[{"id":"01a08f92-402f-7661-a0ba-08694e8391b6","version":0,"status":"published","translations":{"en":{"title":"Release notes","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":2,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a2073e-ddad-74a9-8ec7-bfa57153a51c","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.221537Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:30.221696Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a08f90-893a-7cdb-bb01-a1b46c5ed248/access-token
+$ DELETE /api/users/01a2073e-a1e4-78c5-a710-357e78fafae8/access-token
 
 HTTP_STATUS:204
 
@@ -350,7 +350,7 @@ the two match, and is rejected whole when they don't:
 
 <!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2073e-dd4b-728a-87b2-65f64f224d35
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -443,15 +443,15 @@ Here is an actual write and response, with one bare id and one payload-carrying 
 
 <!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a08f92-3a18-7c5d-99a3-5b14cd1279ea
+$ PUT /api/items/article/01a2073e-dd4b-728a-87b2-65f64f224d35
 body:
-{"tags":["01a08f92-38f5-7f1b-a478-f8a1140f0b0b",{"id":"01a08f92-396e-7bf7-a77c-149c9aa732b1","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a08f92-3a18-7c5d-99a3-5b14cd1279ea","version":2,"status":"draft", …}}
+{"tags":["01a2073e-dd38-7fe7-94be-c35549fe1f6c",{"id":"01a2073e-dd41-76af-9dc7-7d0b6a9fd22a","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a2073e-dd4b-728a-87b2-65f64f224d35","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.124392Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:31.22264Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:200
 ```
 
-The rest of `data`'s fields are elided, in the same shape as any other update response in this
-chapter. The first target is only linked; the second target's `note` is replaced with
+`data` is the updated item itself, and its `version` moves from 1 to 2. The first target is only
+linked, so its existing note `hero` stays; the second target is newly linked, with `note` set to
 `editor pick`.
 
 When a payload field fails validation, the message names the relation and the target, so a form
@@ -459,7 +459,7 @@ editing several links at once can pin down exactly where the problem is:
 
 <!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a08f92-396e-7bf7-a77c-149c9aa732b1': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a2073e-dd41-76af-9dc7-7d0b6a9fd22a': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 

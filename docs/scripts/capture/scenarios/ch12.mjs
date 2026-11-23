@@ -1,12 +1,14 @@
 // Chapter 12, REST conventions. Inside the chapter the order is the order article A changes in: the
 // bump moves A to version 1 (so the stale write is a conflict) and the mixed tags write moves it to 2.
-import { PASSWORD_FIELD, STRIP_TRACE_ID, exchange, setup } from './steps.mjs'
+import { PASSWORD_FIELD, STRIP_TRACE_ID, check, exchange, must, setup } from './steps.mjs'
 
 const ARTICLE_A = '/api/items/article/{{articleAId}}'
 const LIST_ONE = '/api/items/article?limit=1'
 const TOKEN_FLOW = 'ch12-token-flow'
 const BEARER_NOTE = ' Authorization: Bearer {{token}}'
 const FILLER = 'x'.repeat(201)
+
+const noteOf = (json, name) => json.data.tags.find((tag) => tag.name === name)?._junction.note
 
 // A block that shows the response only; the request is described by the prose.
 const responseOnly = (capture, method, path, expect, body) =>
@@ -60,6 +62,9 @@ export const ch12 = {
     exchange('ch12-put-tags-mixed-200', 'PUT', ARTICLE_A, 200, {
       body: { tags: ['{{howtoId}}', { id: '{{releaseId}}', note: 'editor pick' }] },
     }),
+    check('both links after the mixed write', 'GET', `${ARTICLE_A}?deep=tags`, 200, (json) =>
+      must(noteOf(json, 'howto') === 'hero' && noteOf(json, 'release') === 'editor pick', 'the bare id keeps its note, the object sets its own'),
+    ),
     responseOnly('ch12-put-tag-note-too-long-400', 'PUT', ARTICLE_A, 400, {
       tags: [{ id: '{{releaseId}}', note: FILLER }],
     }),

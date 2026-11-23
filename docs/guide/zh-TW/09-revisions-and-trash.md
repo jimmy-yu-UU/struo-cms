@@ -126,8 +126,8 @@ GraphQL 從同一個開關加出對應的三個介面，不需要逐集合寫任
 
 <!-- capture: ch9-list-revisions -->
 ```text
-$ GET /api/items/article/01a08c68-57d6-7f25-80e7-c42a2a1702a4/revisions
-{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-09-10T17:40:44.397818Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-09-10T17:40:43.741968Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","sourceRevisionNumber":null}]}
+$ GET /api/items/article/01a2073e-efab-745d-8232-4feef56d89cf/revisions
+{"success":true,"data":[{"revisionNumber":2,"operation":"update","createdAt":"2026-11-23T07:11:34.935982Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","sourceRevisionNumber":null},{"revisionNumber":1,"operation":"create","createdAt":"2026-11-23T07:11:34.877077Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","sourceRevisionNumber":null}]}
 HTTP_STATUS:200
 ```
 
@@ -255,24 +255,24 @@ payload 完全一樣，因此除了項目本身，也要有 junction collection 
 被動過，自然也沒有東西需要復原。
 
 以下是完整的一次垃圾桶往返：丟進垃圾桶、用 `?deleted=only` 找到它、再復原（列表額外用
-`filter[id][_eq]` 收斂到這一筆，因為開發用的資料庫裡還留著其他已經丟進垃圾桶的文章）：
+`filter[id][_eq]` 收斂到這一筆，垃圾桶裡其他的文章就不會一起列出）：
 
 <!-- capture: ch9-trash-round-trip -->
 ```text
-$ DELETE /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943
+$ DELETE /api/items/article/01a2073e-efeb-7fc3-a008-4336067d3a4e
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?deleted=only&filter[id][_eq]=01a08c68-5909-7513-8a9c-906f1fc22943
-{"success":true,"data":[{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":7,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
+$ GET /api/items/article?deleted=only&filter[id][_eq]=01a2073e-efeb-7fc3-a008-4336067d3a4e
+{"success":true,"data":[{"id":"01a2073e-efeb-7fc3-a008-4336067d3a4e","version":1,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:34.89177Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:34.891778Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Scratch article","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":1,"limit":25,"offset":0}}
 HTTP_STATUS:200
 
-$ POST /api/items/article/01a08c68-5909-7513-8a9c-906f1fc22943/restore
-{"success":true,"data":{"id":"01a08c68-5909-7513-8a9c-906f1fc22943","version":8,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-10T17:40:43.913263Z","createdBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858","updatedAt":"2026-09-10T17:40:43.913276Z","updatedBy":"019f1794-82d6-70b2-8e07-e7ecdf37b858"}}
+$ POST /api/items/article/01a2073e-efeb-7fc3-a008-4336067d3a4e/restore
+{"success":true,"data":{"id":"01a2073e-efeb-7fc3-a008-4336067d3a4e","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:34.89177Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:34.891778Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8"}}
 HTTP_STATUS:200
 ```
 
-`restore` 回傳的項目版本編號從 7 推到 8。`deletedAt` 從頭到尾都不在投影裡：垃圾桶狀態只能靠
+丟進垃圾桶讓項目的版本編號變成 1，`restore` 回傳的版本編號是 2。`deletedAt` 從頭到尾都不在投影裡：垃圾桶狀態只能靠
 `?deleted=` 查到，沒辦法從項目本身讀出來。
 
 ## `deleted=` 過濾器與權限

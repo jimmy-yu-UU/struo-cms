@@ -28,6 +28,7 @@
 //     secret: { token: 'data.token' }, // like save; the value may never appear in a written block
 //     deletes: 'revokes the token this run issued', // a DELETE of something the run did not create
 //     verify: (json, vars) => {},   // throws to stop the run
+//     verifyResponse: (response) => {}, // the raw response (status, headers, bytes); throws to stop the run
 //     transforms: ['stripTraceId'], // print transforms (lib/transforms.mjs)
 //     cli: { program, args, env, exit }, // a command the operator runs; the step sends nothing (lib/cli.mjs)
 //     print: { requestBody, note, headers, responseOnly, path, pretty, binary, mask },
@@ -228,6 +229,7 @@ async function send(client, step, state, { path, body, contentType }) {
 
 // Takes the values a step saves from its JSON response and runs its verify hook.
 function collect(state, step, response) {
+  step.verifyResponse?.(response)
   if (!step.save && !step.secret && !step.verify) return
   let json
   try {

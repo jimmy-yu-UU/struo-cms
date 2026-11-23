@@ -238,3 +238,17 @@ test('a command step in a file that is not selected needs no results', () =>
     assert.ok(result.blocks.has('demo-up'))
     assert.ok(!result.blocks.has('other-cli'))
   }))
+
+test('verifyResponse receives the raw response, and a throw stops the run naming the step', () =>
+  inRoot(['demo-v'], async (root) => {
+    const seen = []
+    const handler = () => ({ status: 200, headers: { 'X-Mark': 'one' }, body: Buffer.from([1, 2, 3]) })
+    const check = (response) => {
+      seen.push(response.headers.find(([name]) => name === 'X-Mark')[1])
+      assert.deepEqual(response.bytes, Buffer.from([1, 2, 3]))
+    }
+    await run(root, [{ name: 'headers', method: 'GET', path: '/b', expect: 200, verifyResponse: check }], {}, handler)
+    assert.deepEqual(seen, ['one'])
+    const failing = { name: 'headers', method: 'GET', path: '/b', expect: 200, verifyResponse: () => { throw new Error('no such header') } }
+    await assert.rejects(run(root, [failing], {}, handler), /headers.*no such header/)
+  }))

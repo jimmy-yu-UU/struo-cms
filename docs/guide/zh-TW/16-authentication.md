@@ -180,19 +180,19 @@ CSRF 的完整說明見[第 12 章：REST API 慣例](12-rest-conventions.md)。
 
 <!-- capture: ch16-token-flow -->
 ```text
-$ POST /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
-{"success":true,"data":{"token":"Lg9y_o7xrCFg2nGIQzeOPPluSndpdNQ-Hr9YtfNW7Pc"}}
+$ POST /api/users/01a2073e-df29-76c6-95d3-d37cde6a8004/access-token
+{"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
-$ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
-{"success":true,"data":[{"id":"01a08f92-4137-72e2-afeb-a0451167539c","version":4,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-09-11T08:25:21.975394Z","createdBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","updatedAt":"2026-09-11T08:25:21.975508Z","updatedBy":"01a08f90-893a-7cdb-bb01-a1b46c5ed248","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
+{"success":true,"data":[{"id":"01a2073e-ddad-74a9-8ec7-bfa57153a51c","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T07:11:30.221537Z","createdBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","updatedAt":"2026-11-23T07:11:30.221696Z","updatedBy":"01a2073e-a1e4-78c5-a710-357e78fafae8","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a0a2e2-2751-74e9-9f41-0913880cba31/access-token
+$ DELETE /api/users/01a2073e-df29-76c6-95d3-d37cde6a8004/access-token
 
 HTTP_STATUS:204
 
-$ GET /api/items/article?limit=1  (Authorization: Bearer <token>, no cookie)
+$ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
 {"success":false,"error":{"code":"UNAUTHORIZED","message":"Read not permitted."}}
 HTTP_STATUS:401
 ```
@@ -256,9 +256,9 @@ body:
 {"email":"$TW","password":"nope"}
 HTTP/1.1 429 Too Many Requests
 Content-Type: application/json; charset=utf-8
-Date: Tue, 15 Sep 2026 02:25:50 GMT
+Date: Mon, 23 Nov 2026 07:11:34 GMT
 Server: Kestrel
-Retry-After: 897
+Retry-After: 898
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
