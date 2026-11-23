@@ -54,8 +54,8 @@ const FOUR_TIMES = [...THREE_TIMES, 'category', 'articles']
 // category alternating.
 const DEEP_NO_REPEAT = [
   ...SAME_FIELD_PREFIX,
-  ...Array(3).fill('parent'),
-  ...Array(3).fill('children'),
+  ...new Array(3).fill('parent'),
+  ...new Array(3).fill('children'),
   'articles',
   'category',
   'articles',
@@ -65,7 +65,7 @@ const DEEP_NO_REPEAT = [
 ]
 const DEEP_NO_REPEAT_DEPTH = DEEP_NO_REPEAT.length + 1
 // Eight relation hops inside the depth limit: the relation-depth cap (6) is what refuses it.
-const RELATION_HOPS = [...SAME_FIELD_PREFIX, ...Array(3).fill('parent'), ...Array(3).fill('children'), 'articles', 'category']
+const RELATION_HOPS = [...SAME_FIELD_PREFIX, ...new Array(3).fill('parent'), ...new Array(3).fill('children'), 'articles', 'category']
 const RELATION_DEPTH_LIMIT = 6
 const RELATION_PATH = 'category' + '.parent'.repeat(RELATION_DEPTH_LIMIT + 1) + '.name'
 const RELATION_PATH_MESSAGE = `Relation path '${RELATION_PATH}' exceeds the maximum depth of ${RELATION_DEPTH_LIMIT}.`
