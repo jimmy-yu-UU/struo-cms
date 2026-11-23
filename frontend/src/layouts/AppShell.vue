@@ -12,7 +12,7 @@ import ConfirmHost from '@/components/shell/ConfirmHost.vue'
 const schema = useSchemaStore()
 const route = useRoute()
 
-onMounted(() => { schema.load() })
+onMounted(() => { void schema.load() })
 </script>
 
 <template>

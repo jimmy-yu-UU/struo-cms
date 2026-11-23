@@ -14,6 +14,7 @@ import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { resolveDisplayLabel } from '../../lib/resolveDisplayLabel'
 import { buildRelationTree, type TreeNode } from '../../lib/buildRelationTree'
+import { primitiveText } from '../../lib/primitiveText'
 import { debounce } from '../../lib/debounce'
 import { createLatestWins } from '../../lib/latestWins'
 import { ApiError } from '../../api/apiClient'
@@ -91,9 +92,16 @@ async function loadOptions(): Promise<void> {
   }
 }
 
+// The single-select id as text: a string or number model reads as its text (0 and '' included), and
+// null, undefined or any non-primitive value reads as nothing selected.
+const singleId = computed(() => {
+  const text = primitiveText(props.modelValue)
+  return text === '' && props.modelValue !== '' ? null : text
+})
+
 function selectedIds(): string[] {
   if (props.multiple) return ((props.modelValue as string[] | null) ?? []).map(String)
-  return props.modelValue != null ? [String(props.modelValue)] : []
+  return singleId.value != null ? [singleId.value] : []
 }
 
 async function ensureSelectedLabels(): Promise<void> {
@@ -168,7 +176,7 @@ function onTreeChange(key: string | null): void {
 }
 
 // The single-select id, or null when nothing is chosen.
-const singleSelected = computed(() => (props.modelValue != null ? String(props.modelValue) : null))
+const singleSelected = singleId
 // The multi-select ids, coerced to string[] regardless of what shape the model actually carries.
 const multipleSelected = computed(() => ((props.modelValue as string[] | null) ?? []).map(String))
 
@@ -238,7 +246,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
     <div v-if="tree" class="w-full max-w-[480px]">
       <TreeSelect
         v-bind="controlAttrs()"
-        :model-value="modelValue == null ? null : String(modelValue)"
+        :model-value="singleId"
         :nodes="treeNodes"
         :label="relation.label"
         :disabled="disabled"

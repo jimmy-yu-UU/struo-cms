@@ -758,3 +758,34 @@ describe('RelationPicker load failures', () => {
     expect(w.get('[role="alert"]').text()).toBe(zhTW.fields.loadOptionsFailed)
   })
 })
+
+describe('RelationPicker single mode model values', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.restoreAllMocks()
+  })
+
+  it('treats an object model value as nothing selected', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const get = vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'x', name: 'X' })
+    const w = mount(RelationPicker, { props: { relation, modelValue: { id: 1 } }, global: { plugins: [i18n], stubs } })
+    await flushPromises()
+    expect(get).not.toHaveBeenCalled()
+    expect((w.vm as any).displayOptions).toEqual([])
+  })
+
+  it('selects a numeric model value by its text, including 0', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const get = vi.spyOn(itemsApi, 'get').mockImplementation(async (_c, id) => ({ id, name: `Row ${id}` }))
+    const five = mount(RelationPicker, { props: { relation, modelValue: 5 }, global: { plugins: [i18n], stubs } })
+    await flushPromises()
+    expect(get).toHaveBeenCalledWith('category', '5', expect.anything())
+    expect((five.vm as any).displayOptions.map((o: { id: string }) => o.id)).toEqual(['5'])
+    get.mockClear()
+    mount(RelationPicker, { props: { relation, modelValue: 0 }, global: { plugins: [i18n], stubs } })
+    await flushPromises()
+    expect(get).toHaveBeenCalledWith('category', '0', expect.anything())
+  })
+})

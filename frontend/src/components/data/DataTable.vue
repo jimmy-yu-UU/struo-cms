@@ -126,7 +126,7 @@ function isLastVisible(column: ReturnType<typeof table.getAllLeafColumns>[number
 // 'actions'/'deletedAt' repeat across both. Reset to all-visible whenever the resolved id set
 // (not `props.columns` by reference, which churns on every unrelated recompute) actually changes,
 // so a hide from one set can't zero out or leak into an unrelated one.
-const columnIdsSignature = computed(() => table.getAllLeafColumns().map((c) => c.id).sort().join(' '))
+const columnIdsSignature = computed(() => table.getAllLeafColumns().map((c) => c.id).sort((a, b) => a.localeCompare(b)).join(' '))
 watch(columnIdsSignature, () => {
   table.setColumnVisibility({})
 })

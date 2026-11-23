@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { primitiveText } from '../../lib/primitiveText'
 import type { FieldMeta } from '../../types/schema'
 
 const props = defineProps<{ field: FieldMeta; modelValue: unknown; disabled?: boolean }>()
@@ -18,7 +19,7 @@ const options = computed(() => props.field.options ?? [])
 // reka's SelectRoot never sees `undefined` and never flips into its non-reactive `passive`
 // (uncontrolled) mode, which production never exercises. (The null-means-nothing-selected
 // convention belongs to the relation picker's own field, not to this one.)
-const current = computed(() => String(props.modelValue ?? ''))
+const current = computed(() => primitiveText(props.modelValue))
 </script>
 
 <template>
