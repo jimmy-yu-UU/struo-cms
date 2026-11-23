@@ -76,7 +76,6 @@
   answered with `500` `INTERNAL_SERVER_ERROR`. It is `408` with `BAD_USER_INPUT` and the message
   `The request body could not be read.`, and the server logs a warning
   ([Chapter 15](15-files-and-media.md)).
-
 - In 0.31.0, filtering, sorting, faceting or aggregating by a `[CmsField]` on a property with
   `[SugarColumn(IsIgnore = true)]`, or ending a relation path in one, answered `500`
   `INTERNAL_SERVER_ERROR`, and the same filter in GraphQL answered `INTERNAL_SERVER_ERROR`. REST now

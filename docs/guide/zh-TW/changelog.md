@@ -64,7 +64,6 @@
 - 0.31.0 中，上傳請求的本文在伺服器讀取 multipart 表單時逾時，會回 `500` `INTERNAL_SERVER_ERROR`。
   現在回 `408`，代碼 `BAD_USER_INPUT`，訊息 `The request body could not be read.`，伺服器記一則警告
   （見 [第 15 章](15-files-and-media.md)）。
-
 - 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、分組或彙總，或讓
   關聯路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回
   `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息
