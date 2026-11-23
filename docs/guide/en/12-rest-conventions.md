@@ -57,13 +57,13 @@ body:
 {"name":"launch"}
 HTTP/1.1 201 Created
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:06:19 GMT
+Date: Mon, 23 Nov 2026 08:08:20 GMT
 Server: Kestrel
-Location: /api/items/tag/01a20771-13b6-7420-8aa6-73942fe98618
+Location: /api/items/tag/01a20772-e765-7210-ba8b-3c2cefb71261
 Transfer-Encoding: chunked
 X-Content-Type-Options: nosniff
 
-{"success":true,"data":{"id":"01a20771-13b6-7420-8aa6-73942fe98618","version":0,"name":"launch","createdAt":"2026-11-23T08:06:20.8545324Z","createdBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe","updatedAt":"2026-11-23T08:06:20.8546433Z","updatedBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe"}}
+{"success":true,"data":{"id":"01a20772-e765-7210-ba8b-3c2cefb71261","version":0,"name":"launch","createdAt":"2026-11-23T08:08:20.5818266Z","createdBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","updatedAt":"2026-11-23T08:08:20.581969Z","updatedBy":"01a20772-b9fd-71cd-99a6-01890a1057f0"}}
 HTTP_STATUS:201
 ```
 
@@ -285,15 +285,15 @@ Issue a token for the current account, read once with it, then revoke it:
 
 <!-- capture: ch12-token-flow -->
 ```text
-$ POST /api/users/01a20770-f72b-7c7a-a020-354a6cbaacfe/access-token
+$ POST /api/users/01a20772-b9fd-71cd-99a6-01890a1057f0/access-token
 {"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
 $ GET /api/items/article?limit=1 (Authorization: Bearer <token>)
-{"success":true,"data":[{"id":"01a20771-106c-7bb3-a784-4d8114468813","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:06:20.013079Z","createdBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe","updatedAt":"2026-11-23T08:06:20.013224Z","updatedBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a20772-e3ce-7146-a80e-85cebae6b4fa","version":0,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:08:19.662724Z","createdBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","updatedAt":"2026-11-23T08:08:19.66281Z","updatedBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a20770-f72b-7c7a-a020-354a6cbaacfe/access-token
+$ DELETE /api/users/01a20772-b9fd-71cd-99a6-01890a1057f0/access-token
 
 HTTP_STATUS:204
 
@@ -350,7 +350,7 @@ the two match, and is rejected whole when they don't:
 
 <!-- capture: ch12-put-version-conflict-409 -->
 ```text
-$ PUT /api/items/article/01a20771-1000-7db9-aaff-b61b64098eca
+$ PUT /api/items/article/01a20772-e35c-72ed-bf37-5df75695a409
 body:
 {"status":"published","version":0}
 {"success":false,"error":{"code":"VERSION_CONFLICT","message":"The record was modified by someone else since you loaded it. Reload and try again."}}
@@ -443,10 +443,10 @@ Here is an actual write and response, with one bare id and one payload-carrying 
 
 <!-- capture: ch12-put-tags-mixed-200 -->
 ```text
-$ PUT /api/items/article/01a20771-1000-7db9-aaff-b61b64098eca
+$ PUT /api/items/article/01a20772-e35c-72ed-bf37-5df75695a409
 body:
-{"tags":["01a20771-0fe9-7e43-8209-4ed53555241e",{"id":"01a20771-0ff3-76d9-8728-5dbedad4341f","note":"editor pick"}]}
-{"success":true,"data":{"id":"01a20771-1000-7db9-aaff-b61b64098eca","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:06:19.905082Z","createdBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe","updatedAt":"2026-11-23T08:06:20.983251Z","updatedBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe"}}
+{"tags":["01a20772-e333-7fc9-b21b-7c905382e18a",{"id":"01a20772-e34d-787a-94d5-3fae7ec55e9b","note":"editor pick"}]}
+{"success":true,"data":{"id":"01a20772-e35c-72ed-bf37-5df75695a409","version":2,"status":"published","publishedAt":"2026-03-01T00:00:00Z","heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:08:19.54926Z","createdBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","updatedAt":"2026-11-23T08:08:20.720039Z","updatedBy":"01a20772-b9fd-71cd-99a6-01890a1057f0"}}
 HTTP_STATUS:200
 ```
 
@@ -459,7 +459,7 @@ editing several links at once can pin down exactly where the problem is:
 
 <!-- capture: ch12-put-tag-note-too-long-400 -->
 ```text
-{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a20771-0ff3-76d9-8728-5dbedad4341f': Field 'note' exceeds maximum length 200."}}
+{"success":false,"error":{"code":"BAD_USER_INPUT","message":"Relation 'tags', target '01a20772-e34d-787a-94d5-3fae7ec55e9b': Field 'note' exceeds maximum length 200."}}
 HTTP_STATUS:400
 ```
 

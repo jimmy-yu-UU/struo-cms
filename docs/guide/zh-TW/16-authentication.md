@@ -180,15 +180,15 @@ CSRF 的完整說明見[第 12 章：REST API 慣例](12-rest-conventions.md)。
 
 <!-- capture: ch16-token-flow -->
 ```text
-$ POST /api/users/01a20771-11fd-713c-bdde-2b0bcbf24c22/access-token
+$ POST /api/users/01a20772-e55a-77ef-a374-f9128c1e9cbe/access-token
 {"success":true,"data":{"token":"<token>"}}
 HTTP_STATUS:200
 
 $ GET /api/items/article?limit=1 (Authorization: Bearer <token>, no cookie)
-{"success":true,"data":[{"id":"01a20771-106c-7bb3-a784-4d8114468813","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:06:20.013079Z","createdBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe","updatedAt":"2026-11-23T08:06:20.013224Z","updatedBy":"01a20770-f72b-7c7a-a020-354a6cbaacfe","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
+{"success":true,"data":[{"id":"01a20772-e3ce-7146-a80e-85cebae6b4fa","version":2,"status":"draft","publishedAt":null,"heroImageId":null,"regions":[],"audiences":[],"keywords":[],"attributes":null,"meta":{},"gallery":[],"faqs":[],"createdAt":"2026-11-23T08:08:19.662724Z","createdBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","updatedAt":"2026-11-23T08:08:19.66281Z","updatedBy":"01a20772-b9fd-71cd-99a6-01890a1057f0","translations":{"en":{"title":"Draft piece","body":null,"seoTitle":null,"seoMetaDescription":null,"seoOgImageId":null,"seoOgImage":null}}}],"meta":{"total":3,"limit":1,"offset":0}}
 HTTP_STATUS:200
 
-$ DELETE /api/users/01a20771-11fd-713c-bdde-2b0bcbf24c22/access-token
+$ DELETE /api/users/01a20772-e55a-77ef-a374-f9128c1e9cbe/access-token
 
 HTTP_STATUS:204
 
@@ -256,7 +256,7 @@ body:
 {"email":"$TW","password":"nope"}
 HTTP/1.1 429 Too Many Requests
 Content-Type: application/json; charset=utf-8
-Date: Mon, 23 Nov 2026 08:06:23 GMT
+Date: Mon, 23 Nov 2026 08:08:23 GMT
 Server: Kestrel
 Retry-After: 898
 Transfer-Encoding: chunked
