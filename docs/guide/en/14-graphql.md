@@ -564,10 +564,10 @@ relations can hit `MaxDeepRelations` without sending any `deep` argument.
 
 The execution depth, cost and field repetition limits are set under `GraphQl:` (see
 [Chapter 4](04-configuration.md)), in configuration only: configuring `GraphQlOptions` in code has
-no effect. The defaults are measured against the core schema alone: the heaviest ordinary query costs 33 and a 50-alias
-amplification costs 550, so 150 sits between them. A fork that adds heavier queries measures its own
-heaviest legitimate query, the way `GraphQlCostAnalysisTests` does for the core, and sets the cost
-limits just above it.
+no effect. The defaults are measured against the core schema alone: the heaviest ordinary query
+costs 33 and a 50-alias amplification costs 550, so 150 sits between them. A fork that adds heavier
+queries measures its own heaviest legitimate query, the way `GraphQlCostAnalysisTests` does for the
+core, and sets the cost limits just above it.
 
 ## Adding your own types and fields
 

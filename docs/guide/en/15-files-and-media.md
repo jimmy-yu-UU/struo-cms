@@ -135,8 +135,8 @@ passes the cap, so up to the cap is buffered before it is refused. Either way th
 truncated body, more form values than the form limit) is `400`/`BAD_USER_INPUT` with the message
 `The request form could not be read.`. A request body that times out while the form is read is
 `408`/`BAD_USER_INPUT` with the message `The request body could not be read.`. A caller who may
-not write files is refused with `403` before the form is read. The admin image's nginx has a limit of its own that answers first with an HTML
-page; see [Chapter 20](20-deployment.md).
+not write files is refused with `403` before the form is read. The admin image's nginx has a limit
+of its own that answers first with an HTML page; see [Chapter 20](20-deployment.md).
 
 Content type first passes through the `Struo:Files:AllowedContentTypes` allowlist: left blank means
 unrestricted, which is also the compiled-in default; the accompanying `appsettings.json` lists a
