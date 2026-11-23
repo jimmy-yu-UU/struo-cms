@@ -19,6 +19,17 @@ function walk(dir: string): string[] {
 }
 
 const rel = (file: string): string => relative(SRC, file).replaceAll(String.fromCharCode(92), '/')
+
+// Every class token in a file that ends in the utility, reduced to the variants in front of it
+// ('' for the bare utility, 'md:disabled:' for a stacked one).
+const CLASS_SEPARATOR = /[\s"'`]+/
+function variantsOf(source: string): string[] {
+  return source
+    .split(CLASS_SEPARATOR)
+    .map((token) => (token.endsWith('!') ? token.slice(0, -1) : token))
+    .filter((token) => token.endsWith(UTILITY))
+    .map((token) => token.slice(0, -UTILITY.length))
+}
 const isVendored = (file: string): boolean => rel(file).startsWith('components/ui/')
 const isTest = (file: string): boolean => /\.(test|spec)\.ts$/.test(file)
 
@@ -40,11 +51,18 @@ describe('disabled controls use the default cursor', () => {
 
     const used = walk(SRC)
       .filter(isVendored)
-      .flatMap((file) => [...readFileSync(file, 'utf8').matchAll(/([\w-]+:)?cursor-not-allowed/g)])
-      .map((match) => match[1] ?? '')
+      .flatMap((file) => variantsOf(readFileSync(file, 'utf8')))
 
     expect(used.length).toBeGreaterThan(0)
     expect(used.filter((variant) => !covered.has(variant))).toEqual([])
+  })
+
+  it('reads a stacked or bracketed variant whole, so a new one is not mistaken for a listed one', () => {
+    // Assembled here: Tailwind scans this file too, and a literal class would be generated.
+    const variants = ['md:disabled:', 'data-[disabled]:']
+    const source = ['a', ...variants.map((variant) => variant + UTILITY), `${UTILITY}!`, 'b'].join(' ')
+
+    expect(variantsOf(source)).toEqual([...variants, ''])
   })
 
   it('tokens.css overrides the not-allowed cursor of a disabled toast button', () => {

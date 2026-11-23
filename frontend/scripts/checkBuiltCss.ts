@@ -15,7 +15,7 @@ const ASSETS_DIR = fileURLToPath(new URL('../dist/assets', import.meta.url))
 // rule with a more specific selector, so the declaration is present in the build but never wins.
 const OVERRIDDEN_BY_TOKENS = new Set(['[data-sonner-toast][data-styled=true] [data-disabled=true]'])
 
-const normalizeSelector = (selector: string): string => selector.replace(WHITESPACE, ' ').trim()
+const normalizeSelector = (selector: string): string => selector.replaceAll(WHITESPACE, ' ').trim()
 
 // Selectors of the rules that declare the not-allowed cursor. Each chunk ends at a closing brace;
 // the text after its last opening brace is the declaration block, and the selector sits between
@@ -42,7 +42,9 @@ export function checkBuiltCss(files: readonly CssFile[], assetsDir: string): str
       : [
           `${name} sets \`cursor: not-allowed\` in: ${offenders.join(', ')}. ` +
             'Disabled controls use the default cursor; remove the utility from first-party code, ' +
-            'or keep the `@utility cursor-not-allowed` override in src/assets/tokens.css.',
+            'or list the variant in the `@source not inline(...)` line of src/assets/tokens.css. ' +
+            'For a rule of a third-party stylesheet, override it in tokens.css and list its selector ' +
+            'in OVERRIDDEN_BY_TOKENS.',
         ]
   })
 }

@@ -751,7 +751,13 @@ not to generate those classes with `@source not inline(...)` and gives every `:d
 component that adds another variant of the class needs that variant in the `@source not inline(...)`
 list. `frontend/tests/disabledCursor.test.ts` checks the source and `tokens.css`, and
 `frontend/scripts/checkBuiltCss.ts`, the last step of the `build` script, fails when a built
-stylesheet sets the cursor.
+stylesheet sets the cursor. The one exception is the rule in the stylesheet of the toast library:
+`tokens.css` overrides it with a more specific selector, and the script lists that selector.
+
+The base-layer rule loses to any cursor utility and to scoped component CSS. A first-party element
+that carries `cursor-pointer` and can be disabled supplies its own disabled cursor: the vendored
+`Button` does it with `disabled:pointer-events-none`, and a plain element takes
+`disabled:cursor-default`.
 
 ## Tests per layer
 
