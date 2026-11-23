@@ -21,7 +21,8 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
     /// <summary>The message of every over-limit request body, JSON or Kestrel's own.</summary>
     internal const string TooLargeMessage = "Request body is too large.";
 
-    private const string UnreadableMessage = "The request body could not be read.";
+    /// <summary>The message of a request body that could not be read, such as one the server timed out on.</summary>
+    internal const string UnreadableBodyMessage = "The request body could not be read.";
 
     private const int BufferChunkBytes = 81920;
 
@@ -100,7 +101,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         var tooLarge = status == StatusCodes.Status413PayloadTooLarge;
         var error = new Dictionary<string, object?>
         {
-            ["message"] = tooLarge ? TooLargeMessage : UnreadableMessage,
+            ["message"] = tooLarge ? TooLargeMessage : UnreadableBodyMessage,
             ["extensions"] = new Dictionary<string, object?>
             {
                 ["code"] = tooLarge ? ErrorCodes.PayloadTooLarge : ErrorCodes.BadUserInput,

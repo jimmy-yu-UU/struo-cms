@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Serilog.Core;
+using Serilog.Events;
 using Struo.Api.Auth;
 using Struo.Application.Files;
 using Struo.Tests.Api;
@@ -52,6 +54,21 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
                     context.Request.Body = probe.Body;
                 }
 
+                await nextMiddleware();
+            });
+            next(app);
+        };
+    }
+
+    /// <summary>Gives every POST to /api/files a body whose read fails with the given exception.</summary>
+    private sealed class FailingBodyFilter(Exception failure) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (context, nextMiddleware) =>
+            {
+                if (HttpMethods.IsPost(context.Request.Method) && context.Request.Path.StartsWithSegments("/api/files"))
+                    context.Request.Body = new FailingBodyStream(failure);
                 await nextMiddleware();
             });
             next(app);
@@ -194,5 +211,27 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
         for (var i = 0; i < 1100; i++) content.Add(new StringContent("v"), $"f{i}");
 
         await AssertBadFormAsync(await client.PostAsync("/api/files", content));
+    }
+
+    [Fact]
+    public async Task A_form_read_that_times_out_is_a_408_with_BAD_USER_INPUT_and_no_error_log()
+    {
+        var sink = new CapturingLogSink();
+        var timeout = new BadHttpRequestException("Request body timeout.", StatusCodes.Status408RequestTimeout);
+        using var host = Host().WithWebHostBuilder(b => b.ConfigureServices(services =>
+        {
+            services.AddSingleton<IStartupFilter>(new FailingBodyFilter(timeout));
+            services.AddSingleton<ILogEventSink>(sink);
+        }));
+        var client = await AdminAsync(host);
+
+        var resp = await client.PostAsync("/api/files", Multipart(8));
+        var body = await resp.Content.ReadAsStringAsync();
+
+        resp.StatusCode.Should().Be(HttpStatusCode.RequestTimeout, body);
+        var error = JsonDocument.Parse(body).RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        error.GetProperty("message").GetString().Should().Be("The request body could not be read.");
+        sink.Events.Should().NotContain(e => e.Level >= LogEventLevel.Error);
     }
 }
