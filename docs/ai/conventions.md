@@ -430,22 +430,24 @@ none of them runs when the `Repeater` property carries `[SugarColumn(IsIgnore = 
 `MultiSelect` or `CheckboxGroup` property with no `[CmsOptions]`, or one that lists no value, is
 rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsRelation]` property's `[Navigate]` is
 checked by `NavigateShape`: a many-to-one or one-to-one foreign-key name must be a property of the
-declaring entity and a one-to-many one a property of the list's element type, compared without
-regard to case; a many-to-many names its two keys on the junction type, and their names are not
-checked. `MetadataScanner.ValidateRelationKeyTypes` then compares the type of each key of a
+declaring entity, matched exactly, and a one-to-many one a property of the list's element type,
+matched without regard to case. `MetadataScanner.ValidateJunctionKeyProperties` requires both key
+names of a many-to-many to match a property of the junction type exactly, and runs before the other
+junction checks. `MetadataScanner.ValidateCollectionPrimaryKeys` requires every collection to have
+exactly one property that carries `[SugarColumn(IsPrimaryKey = true)]` on its own declaration, read
+without attribute inheritance as SqlSugar reads it: an inherited property that carries the
+attribute counts, an override that leaves it out does not. `KeyLookup`
+(`src/Struo.Infrastructure/Metadata/KeyLookup.cs`) holds the lookups these checks share.
+`MetadataScanner.ValidateRelationKeyTypes` then compares the type of each key of a
 `[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and with
 no integer widening: the many-to-one key against the target's primary key, the one-to-many child
 key against the declaring entity's, the junction's parent key against the declaring entity's and
-its target key against the target's. The primary key is the one `PrimaryKeyName` resolves, as for
-`EntityDescriptor.IdProperty`. The comparison is skipped when either property does not exist or
-when the entity holding the primary key is not a collection: `NavigateShape` has refused a
-many-to-one or one-to-many key that names no property before this check runs, `RelationshipGraph`
-refuses a target that is not a collection when the host starts, and a junction key that names no
-property, or an entity with no primary key property, passes the scan and fails at run time. A
-mismatch throws
-a `MetadataException` naming `Class.Property` of the relation, the key and the primary key with
-their types. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
-`NavigateForeignKeyTests` and `RelationKeyTypeCheckTests` pin these.
+its target key against the target's. The comparison is skipped when the entity holding the primary
+key is not a scanned collection type; `RelationshipGraph` refuses a target that is not a collection
+when the host starts. Each refusal throws a `MetadataException` that names the relation as
+`Class.Property`, or the collection class, and what to declare. `InterfacePropertyTypeMatrixTests`,
+`InterfacePropertyTypeMessageTests`, `NavigateForeignKeyTests`, `KeyDeclarationCheckTests` and
+`RelationKeyTypeCheckTests` pin these.
 
 `WritableInput.RequireAny` (`src/Struo.Api/GraphQl/WritableInput.cs`) stops the host at startup,
 with a message that names the collection, when its GraphQL create input type would have no field,
