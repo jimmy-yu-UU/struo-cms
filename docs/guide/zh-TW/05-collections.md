@@ -194,7 +194,8 @@ mutation 回 `200` 配 `BAD_USER_INPUT` 錯誤，`/api/schema` 回報 `creatable
 屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 沒有欄位。`fields=` 選得到它，但不能拿來
 篩選、排序、做 facet、彙總、搜尋，也不能當關聯路徑的最後一段；GraphQL 的篩選輸入型別也沒有它。這種
 屬性上設 `Searchable = true` 或 `Sortable = true`，主機啟動時就停下並丟出 `MetadataException`，
-訊息點名屬性；拿掉旗標，或拿掉 `IsIgnore` 讓屬性有自己的欄位。
+訊息點名屬性；拿掉旗標，或拿掉 `IsIgnore` 讓屬性有自己的欄位。寫入時帶著這種欄位，請求會成功，
+回應裡是送進來的值；這個值不會存下來，之後讀到的是屬性自己的值。
 
 欄位對外的鍵名是 CLR 屬性名稱的 camelCase 形式；退回 PascalCase 屬性名時，不會自動加空格或
 改大小寫。

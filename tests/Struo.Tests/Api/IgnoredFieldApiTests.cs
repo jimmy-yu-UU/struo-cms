@@ -64,6 +64,25 @@ public class IgnoredFieldApiTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task A_write_to_a_field_without_a_column_is_accepted_and_the_value_is_not_stored()
+    {
+        var client = await _factory.CreateAuthenticatedClientAsync();
+
+        var created = await client.PostAsJsonAsync(
+            "/api/items/fxCategory", new { name = "Ignored-" + Guid.NewGuid().ToString("N")[..8], badge = "written" });
+
+        var createdBody = await created.Content.ReadAsStringAsync();
+        created.StatusCode.Should().Be(HttpStatusCode.Created, createdBody);
+        using var createdDoc = JsonDocument.Parse(createdBody);
+        var id = createdDoc.RootElement.GetProperty("data").GetProperty("id").GetString();
+        createdDoc.RootElement.GetProperty("data").GetProperty("badge").GetString().Should().Be("written");
+
+        var read = await client.GetAsync($"/api/items/fxCategory?filter[id][_eq]={id}&fields=badge");
+        using var doc = JsonDocument.Parse(await read.Content.ReadAsStringAsync());
+        doc.RootElement.GetProperty("data")[0].GetProperty("badge").GetString().Should().Be("fx-badge");
+    }
+
+    [Fact]
     public async Task The_schema_lists_a_field_without_a_column_as_ignored()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
