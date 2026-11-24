@@ -94,7 +94,7 @@ public class StruoErrorFilterRequestErrorTests
             new HttpContextAccessor { HttpContext = null });
 
     [Fact]
-    public void A_JsonException_without_a_path_stays_an_internal_error_and_is_logged_as_an_error()
+    public void A_JsonException_without_a_path_is_an_internal_error_and_is_logged_as_an_error()
     {
         var logger = new RecordingLogger<StruoErrorFilter>();
         var error = ErrorBuilder.New().SetMessage("x").SetException(new JsonException("server fault")).Build();
@@ -123,7 +123,7 @@ public class StruoErrorFilterRequestErrorTests
     }
 
     [Fact]
-    public void A_BadHttpRequestException_that_is_not_a_client_error_stays_an_internal_error()
+    public void A_BadHttpRequestException_that_is_not_a_client_error_is_an_internal_error()
     {
         var error = ErrorBuilder.New().SetMessage("x")
             .SetException(new BadHttpRequestException("server detail", 500)).Build();

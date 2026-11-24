@@ -24,6 +24,8 @@ namespace Struo.Tests.GraphQl;
 public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper output)
 {
     private const string Unreadable = "The request body could not be read.";
+    private const string ReadWarningTemplate = "The request body could not be read (status {StatusCode}).";
+    private const string GraphQlPath = "/graphql";
     private const string Query = "{ __typename }";
     private const string MixedBody = "--xyz\r\nContent-Type: application/json\r\n\r\n{}\r\n--xyz--\r\n";
     private const string MultipartRefused =
@@ -36,13 +38,14 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     private readonly CapturingLogSink _sink = new();
     private readonly List<LogEvent> _requestEvents = [];
 
-    private WebApplicationFactory<Program> Host(Exception? bodyFailure = null) => factory.WithWebHostBuilder(b =>
-        b.ConfigureServices(s =>
-        {
-            s.AddSingleton<ILogEventSink>(_sink);
-            if (bodyFailure is not null)
-                s.AddSingleton<IStartupFilter>(new FailingBodyPathFilter("/graphql", bodyFailure));
-        }));
+    private WebApplicationFactory<Program> Host(Exception? bodyFailure = null, bool clientGone = false) =>
+        factory.WithWebHostBuilder(b =>
+            b.ConfigureServices(s =>
+            {
+                s.AddSingleton<ILogEventSink>(_sink);
+                if (bodyFailure is not null)
+                    s.AddSingleton<IStartupFilter>(new FailingBodyPathFilter(GraphQlPath, bodyFailure, clientGone));
+            }));
 
     private static void Accept(HttpRequestMessage request, string? accept)
     {
@@ -99,11 +102,15 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         AssertLogged(warnings, expected);
     }
 
-    // No Error entry, and exactly `warnings` Warning entries, each the read-failure message with the status.
+    private List<LogEvent> ReadWarnings() => _requestEvents
+        .Where(e => e.Level == LogEventLevel.Warning && e.MessageTemplate.Text == ReadWarningTemplate)
+        .ToList();
+
+    // No Error entry, and exactly `warnings` body-read Warning entries, each with the status.
     private void AssertLogged(int warnings, HttpStatusCode status)
     {
         _requestEvents.Should().NotContain(e => e.Level >= LogEventLevel.Error);
-        var logged = _requestEvents.Where(e => e.Level == LogEventLevel.Warning).ToList();
+        var logged = ReadWarnings();
         logged.Should().HaveCount(warnings);
         foreach (var entry in logged)
         {
@@ -155,9 +162,9 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         string name, string value)
     {
         var results = new List<(HttpStatusCode, string)>();
+        using var host = Host();
         foreach (var accept in AcceptValues)
         {
-            using var host = Host();
             var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{name}={Uri.EscapeDataString(value)}";
             var request = new HttpRequestMessage(HttpMethod.Get, uri);
             Accept(request, accept);
@@ -180,9 +187,9 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     [InlineData("extensions", " {} ")]
     public async Task A_query_string_value_of_a_kind_GraphQL_accepts_is_executed(string name, string value)
     {
+        using var host = Host();
         foreach (var accept in AcceptValues)
         {
-            using var host = Host();
             var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{name}={Uri.EscapeDataString(value)}";
             var request = new HttpRequestMessage(HttpMethod.Get, uri);
             Accept(request, accept);
@@ -191,6 +198,27 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
 
             status.Should().Be(HttpStatusCode.OK, body);
             body.Should().Contain("\"__typename\"");
+        }
+    }
+
+    // Pin: a value that passes the query-string check and that the GraphQL server itself refuses.
+    [Theory]
+    [InlineData("variables", "[]", HttpStatusCode.BadRequest, "HC0009")]
+    public async Task A_query_string_value_the_server_refuses_itself_keeps_the_server_answer_and_logs_no_error(
+        string name, string value, HttpStatusCode expected, string serverCode)
+    {
+        using var host = Host();
+        foreach (var accept in AcceptValues)
+        {
+            var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{name}={Uri.EscapeDataString(value)}";
+            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            Accept(request, accept);
+
+            var (status, body) = await SendAsync(host, request, $"S1 server {name}={value} accept={accept ?? "none"}");
+
+            status.Should().Be(expected, body);
+            TryCode(body).Should().Be(serverCode, body);
+            AssertLogged(0, status);
         }
     }
 
@@ -216,9 +244,9 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         string rawQuery, bool executes)
     {
         var results = new List<(HttpStatusCode, string)>();
+        using var host = Host();
         foreach (var accept in AcceptValues)
         {
-            using var host = Host();
             var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{rawQuery}";
             var request = new HttpRequestMessage(HttpMethod.Get, uri);
             Accept(request, accept);
@@ -313,10 +341,10 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     public async Task Multipart_is_refused_with_415_under_every_Accept_with_or_without_the_preflight_header(
         string variant, bool withPreflight)
     {
+        using var host = Host();
         foreach (var accept in AcceptValues)
         {
-            using var host = Host();
-            var request = new HttpRequestMessage(HttpMethod.Post, "/graphql") { Content = MultipartBody(variant) };
+            var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath) { Content = MultipartBody(variant) };
             if (withPreflight) request.Headers.Add("GraphQL-Preflight", "1");
             Accept(request, accept);
 
@@ -337,7 +365,7 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     public async Task Multipart_is_refused_whatever_the_casing_parameters_or_method(string method, string contentType)
     {
         using var host = Host();
-        var request = new HttpRequestMessage(new HttpMethod(method), "/graphql")
+        var request = new HttpRequestMessage(new HttpMethod(method), GraphQlPath)
         {
             Content = Raw("--x\r\n", contentType),
         };
@@ -351,7 +379,7 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     public async Task Multipart_is_refused_without_reading_its_body()
     {
         using var host = Host(new InvalidOperationException("the body must not be read"));
-        var request = new HttpRequestMessage(HttpMethod.Post, "/graphql") { Content = MultipartBody("well-formed") };
+        var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath) { Content = MultipartBody("well-formed") };
 
         var (status, body) = await SendAsync(host, request, "S2 multipart body is not read");
 
@@ -362,7 +390,7 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     public async Task Multipart_over_the_JSON_cap_is_refused_as_multipart_not_as_too_large()
     {
         using var host = Host();
-        var request = new HttpRequestMessage(HttpMethod.Post, "/graphql")
+        var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath)
         {
             Content = new ByteArrayContent(new byte[5 * 1024 * 1024]),
         };
@@ -380,10 +408,13 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     [InlineData("multipart/related; boundary=xyz")]
     public async Task Other_multipart_types_are_left_to_the_server_which_answers_404(string contentType)
     {
+        using var host = Host();
         foreach (var accept in AcceptValues)
         {
-            using var host = Host();
-            var request = new HttpRequestMessage(HttpMethod.Post, "/graphql") { Content = Raw(MixedBody, contentType) };
+            var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath)
+            {
+                Content = Raw(MixedBody, contentType),
+            };
             Accept(request, accept);
 
             var (status, body) = await SendAsync(host, request, $"M1 {contentType} accept={accept ?? "none"}");
@@ -405,7 +436,7 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         int serverStatus, HttpStatusCode expected)
     {
         using var host = Host(new BadHttpRequestException("server detail", serverStatus));
-        var request = new HttpRequestMessage(HttpMethod.Post, "/graphql")
+        var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath)
         {
             Content = new StringContent(OperationsJson, Encoding.UTF8, "application/json"),
         };
@@ -419,7 +450,7 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     public async Task A_body_read_failure_that_is_not_a_client_error_is_an_internal_error_with_an_error_log()
     {
         using var host = Host(new BadHttpRequestException("server detail", StatusCodes.Status500InternalServerError));
-        var request = new HttpRequestMessage(HttpMethod.Post, "/graphql")
+        var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath)
         {
             Content = new StringContent(OperationsJson, Encoding.UTF8, "application/json"),
         };
@@ -430,14 +461,34 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         JsonDocument.Parse(body).RootElement.GetProperty("error").GetProperty("code").GetString()
             .Should().Be("INTERNAL_SERVER_ERROR", body);
         _sink.Events.Should().Contain(e => e.Level >= LogEventLevel.Error);
-        _requestEvents.Should().NotContain(e => e.Level == LogEventLevel.Warning);
+        ReadWarnings().Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(StatusCodes.Status400BadRequest)]
+    [InlineData(StatusCodes.Status408RequestTimeout)]
+    public async Task A_body_read_that_fails_after_the_client_left_ends_without_an_answer_and_logs_nothing(
+        int serverStatus)
+    {
+        using var host = Host(new BadHttpRequestException("server detail", serverStatus), clientGone: true);
+        var client = host.CreateClient();
+        var before = _sink.Events.Count;
+        var content = new StringContent(OperationsJson, Encoding.UTF8, "application/json");
+
+        using var response = await client.PostAsync(GraphQlPath, content);
+
+        ((int)response.StatusCode).Should().Be(499);
+        (await response.Content.ReadAsStringAsync()).Should().BeEmpty();
+        _sink.Events.Skip(before).Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        _sink.Events.Skip(before).Should().NotContain(
+            e => e.Level == LogEventLevel.Warning && e.MessageTemplate.Text == ReadWarningTemplate);
     }
 
     [Fact]
     public async Task A_body_over_the_cap_from_the_server_is_413_and_writes_no_Warning()
     {
         using var host = Host(new BadHttpRequestException("too large", StatusCodes.Status413PayloadTooLarge));
-        var request = new HttpRequestMessage(HttpMethod.Post, "/graphql")
+        var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath)
         {
             Content = new StringContent(OperationsJson, Encoding.UTF8, "application/json"),
         };

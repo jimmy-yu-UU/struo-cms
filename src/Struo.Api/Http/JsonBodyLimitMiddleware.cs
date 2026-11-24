@@ -17,7 +17,8 @@ namespace Struo.Api.Http;
 /// once it passes the cap and surfaces as the same exception. A GraphQL body is read up to the cap before
 /// GraphQL sees it: one that passes the cap is answered 413 <c>PAYLOAD_TOO_LARGE</c>, and one whose read
 /// fails with a 4xx from the server (such as a timeout) is answered with that status and
-/// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>. Any request to
+/// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>; a read that fails
+/// after the client left ends as a cancellation, with no answer and no log entry. Any request to
 /// <c>/graphql</c> whose media type is <c>multipart/form-data</c> is answered 415 <c>BAD_USER_INPUT</c>
 /// (<see cref="MultipartMessage"/>) before its size is checked and before its body is read. A GET to
 /// <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string value fails
@@ -124,12 +125,14 @@ public sealed class JsonBodyLimitMiddleware(
         }
         catch (BadHttpRequestException e) when (HttpStatusClass.IsClientError(e.StatusCode))
         {
+            // A client that left is a cancellation, which the server ends without an answer or a log entry.
+            context.RequestAborted.ThrowIfCancellationRequested();
             RequestBodyReadLog.Rejected(logger, e);
             return (null, e.StatusCode);
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(chunk);
+            ArrayPool<byte>.Shared.Return(chunk, clearArray: true);
         }
         buffer.Position = 0;
         return (buffer, 0);

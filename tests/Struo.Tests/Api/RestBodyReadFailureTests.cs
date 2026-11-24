@@ -4,6 +4,8 @@ using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog.Core;
 using Serilog.Events;
@@ -19,6 +21,8 @@ namespace Struo.Tests.Api;
 public class RestBodyReadFailureTests(ApiFactory factory, ITestOutputHelper output)
 {
     private const string Unreadable = "The request body could not be read.";
+    private const string ReadWarningTemplate = "The request body could not be read (status {StatusCode}).";
+    private const string ItemsPath = "/api/items/fxArticle";
 
     private readonly CapturingLogSink _sink = new();
 
@@ -27,7 +31,7 @@ public class RestBodyReadFailureTests(ApiFactory factory, ITestOutputHelper outp
         var data = new TheoryData<string, string, bool, int>();
         foreach (var serverStatus in new[] { StatusCodes.Status408RequestTimeout, StatusCodes.Status400BadRequest })
         {
-            data.Add("POST", "/api/items/fxArticle", true, serverStatus);
+            data.Add("POST", ItemsPath, true, serverStatus);
             data.Add("PUT", $"/api/items/fxArticle/{Guid.Empty}", true, serverStatus);
             data.Add("POST", "/api/auth/login", false, serverStatus);
         }
@@ -71,8 +75,7 @@ public class RestBodyReadFailureTests(ApiFactory factory, ITestOutputHelper outp
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
         error.GetProperty("message").GetString().Should().Be(Unreadable);
         errorLog.Should().BeFalse();
-        var warnings = _sink.Events.Skip(before).Where(e => e.Level == LogEventLevel.Warning).ToList();
-        var warning = warnings.Should().ContainSingle().Subject;
+        var warning = ReadWarnings(before).Should().ContainSingle().Subject;
         warning.RenderMessage().Should().Be($"The request body could not be read (status {serverStatus}).");
         ((ScalarValue)warning.Properties["StatusCode"]).Value.Should().Be(serverStatus);
         warning.Exception.Should().BeSameAs(failure);
@@ -97,8 +100,50 @@ public class RestBodyReadFailureTests(ApiFactory factory, ITestOutputHelper outp
 
         ((int)response.StatusCode).Should().Be(StatusCodes.Status413PayloadTooLarge, body);
         TryCode(body).Should().Be("PAYLOAD_TOO_LARGE");
-        _sink.Events.Skip(before).Should().NotContain(e => e.Level >= LogEventLevel.Warning);
+        _sink.Events.Skip(before).Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        ReadWarnings(before).Should().BeEmpty();
     }
+
+    // Raises the server's 400 from inside the MVC pipeline, with the client already gone or still there.
+    private sealed class FailingReadFilter(bool clientGone) : IAsyncResourceFilter
+    {
+        public Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
+        {
+            if (!context.HttpContext.Request.Path.StartsWithSegments("/api/items")) return next();
+            if (clientGone) context.HttpContext.RequestAborted = new CancellationToken(canceled: true);
+            throw new BadHttpRequestException("server detail", StatusCodes.Status400BadRequest);
+        }
+    }
+
+    // Pin: the pipeline ends a request whose client left before the exception handler maps the failure, so
+    // it logs no body-read Warning; with the client present the same failure is logged once.
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public async Task A_body_read_failure_is_logged_once_unless_the_client_left(bool clientGone, int warnings)
+    {
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        {
+            s.AddSingleton<ILogEventSink>(_sink);
+            s.Configure<MvcOptions>(o => o.Filters.Add(new FailingReadFilter(clientGone)));
+        }));
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
+        await factory.EnsureAdminSeededAsync();
+        (await client.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
+        var before = _sink.Events.Count;
+
+        using var response = await client.PostAsync(ItemsPath,
+            new StringContent("{\"status\":\"draft\"}", Encoding.UTF8, "application/json"));
+
+        _sink.Events.Skip(before).Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        ReadWarnings(before).Should().HaveCount(warnings);
+    }
+
+    private List<LogEvent> ReadWarnings(int skip) => _sink.Events.Skip(skip)
+        .Where(e => e.Level == LogEventLevel.Warning && e.MessageTemplate.Text == ReadWarningTemplate)
+        .ToList();
 
     private static string? TryCode(string body)
     {

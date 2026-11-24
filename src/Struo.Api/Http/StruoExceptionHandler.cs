@@ -31,7 +31,7 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
     {
         var (code, message) = DomainErrorMap.Map(exception, authenticated);
         // A fork's own error is a client error by construction; its code may equal one the branches below
-        // key on in <see cref="Log"/>, so the type decides before the code does.
+        // key on in Log, so the type decides before the code does.
         if (exception is StruoDomainException)
             return (DomainErrorMap.StatusFor(exception, code), new ErrorBody(code, message));
         Log(exception, code, logger);

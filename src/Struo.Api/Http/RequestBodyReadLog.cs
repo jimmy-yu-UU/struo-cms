@@ -12,12 +12,10 @@ internal static class RequestBodyReadLog
 {
     private const string Template = "The request body could not be read (status {StatusCode}).";
 
-    /// <summary>Writes the Warning for <paramref name="rejected"/> when it is a 4xx other than 413.</summary>
+    /// <summary>Writes the Warning for a 4xx <paramref name="rejected"/> other than 413.</summary>
     internal static void Rejected(ILogger? logger, BadHttpRequestException rejected)
     {
-        if (!HttpStatusClass.IsClientError(rejected.StatusCode)
-            || rejected.StatusCode == StatusCodes.Status413PayloadTooLarge)
-            return;
+        if (rejected.StatusCode == StatusCodes.Status413PayloadTooLarge) return;
         if (logger?.IsEnabled(LogLevel.Warning) == true)
             logger.LogWarning(rejected, Template, rejected.StatusCode);
     }

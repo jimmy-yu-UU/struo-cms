@@ -242,7 +242,7 @@ public class DomainErrorMapTests
     [Theory]
     [InlineData(500)]
     [InlineData(302)]
-    public void A_BadHttpRequestException_with_a_status_that_is_not_4xx_stays_masked_internal(int status)
+    public void A_BadHttpRequestException_with_a_status_that_is_not_4xx_is_masked_internal(int status)
     {
         var exception = new Microsoft.AspNetCore.Http.BadHttpRequestException("bad chunk", status);
 
