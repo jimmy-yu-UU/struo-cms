@@ -1,6 +1,7 @@
 using System.Buffers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Struo.Application.Configuration;
 using Struo.Domain.Query;
@@ -16,18 +17,25 @@ namespace Struo.Api.Http;
 /// once it passes the cap and surfaces as the same exception. A GraphQL body is read up to the cap before
 /// GraphQL sees it: one that passes the cap is answered 413 <c>PAYLOAD_TOO_LARGE</c>, and one whose read
 /// fails with a 4xx from the server (such as a timeout) is answered with that status and
-/// <c>BAD_USER_INPUT</c>. A GET to <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string
+/// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>. Any request to <c>/graphql</c> whose media type is <c>multipart/form-data</c> is answered 415
+/// <c>BAD_USER_INPUT</c> (<see cref="MultipartMessage"/>) before its size is checked and before its body is read.
+/// A GET to <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string
 /// value fails <see cref="GraphQlQueryStringCheck"/> is answered 400 <c>BAD_USER_INPUT</c>. Every 413 carries
 /// <see cref="TooLargeMessage"/>, which names no limit. Multipart uploads are not JSON and keep
 /// <c>Struo:Files:MaxUploadBytes</c>.
 /// </summary>
-public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOptions> options)
+public sealed class JsonBodyLimitMiddleware(
+    RequestDelegate next, IOptions<ApiOptions> options, ILogger<JsonBodyLimitMiddleware> logger)
 {
     /// <summary>The message of every over-limit request body, JSON or Kestrel's own.</summary>
     internal const string TooLargeMessage = "Request body is too large.";
 
     /// <summary>The message of a request body that could not be read, such as one the server timed out on.</summary>
     internal const string UnreadableBodyMessage = "The request body could not be read.";
+
+    /// <summary>The message of the 415 for a multipart request to <c>/graphql</c>.</summary>
+    internal const string MultipartMessage =
+        "GraphQL does not accept multipart requests; upload a file through POST /api/files.";
 
     private const int BufferChunkBytes = 81920;
 
@@ -42,11 +50,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         }
 
         var isGraphQl = IsGraphQl(context.Request);
-        if (isGraphQl && GraphQlQueryStringCheck.Problem(context.Request) is { } problem)
-        {
-            await WriteGraphQlErrorAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
-            return;
-        }
+        if (isGraphQl && await RefuseGraphQlRequestShapeAsync(context)) return;
 
         if (context.Request.ContentLength > _limit)
         {
@@ -63,6 +67,21 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         else if (!await BufferGraphQlBodyAsync(context))
             return;
         await next(context);
+    }
+
+    // A multipart request is refused for its type before its size or its body matters; a GET whose query-string
+    // values GraphQL cannot accept is refused next. Neither is a failed read, so neither is logged.
+    private static async Task<bool> RefuseGraphQlRequestShapeAsync(HttpContext context)
+    {
+        if (IsMultipartFormData(context.Request.ContentType))
+        {
+            await WriteGraphQlErrorAsync(context, StatusCodes.Status415UnsupportedMediaType,
+                ErrorCodes.BadUserInput, MultipartMessage);
+            return true;
+        }
+        if (GraphQlQueryStringCheck.Problem(context.Request) is not { } problem) return false;
+        await WriteGraphQlErrorAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
+        return true;
     }
 
     // The body is read here, up to the cap, before GraphQL sees it, so a failed read is answered by this
@@ -104,6 +123,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         }
         catch (BadHttpRequestException e) when (HttpStatusClass.IsClientError(e.StatusCode))
         {
+            RequestBodyReadLog.Rejected(logger, e);
             return (null, e.StatusCode);
         }
         finally
@@ -144,10 +164,14 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
     private static bool IsGraphQl(HttpRequest request) =>
         request.Path.StartsWithSegments("/graphql", StringComparison.OrdinalIgnoreCase);
 
+    private static string MediaTypeOf(string? contentType) => (contentType ?? "").Split(';', 2)[0].Trim();
+
+    private static bool IsMultipartFormData(string? contentType) =>
+        MediaTypeOf(contentType).Equals("multipart/form-data", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsJson(string? contentType)
     {
-        if (string.IsNullOrEmpty(contentType)) return false;
-        var mediaType = contentType.Split(';', 2)[0].Trim();
+        var mediaType = MediaTypeOf(contentType);
         return mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase)
             || mediaType.Equals("text/json", StringComparison.OrdinalIgnoreCase)
             || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);

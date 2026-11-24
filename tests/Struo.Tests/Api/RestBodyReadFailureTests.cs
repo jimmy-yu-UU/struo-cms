@@ -54,6 +54,7 @@ public class RestBodyReadFailureTests(ApiFactory factory, ITestOutputHelper outp
                 new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
         }
 
+        var before = _sink.Events.Count;
         var request = new HttpRequestMessage(new HttpMethod(method), path)
         {
             Content = new StringContent("{\"status\":\"draft\"}", Encoding.UTF8, "application/json"),
@@ -70,6 +71,33 @@ public class RestBodyReadFailureTests(ApiFactory factory, ITestOutputHelper outp
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
         error.GetProperty("message").GetString().Should().Be(Unreadable);
         errorLog.Should().BeFalse();
+        var warnings = _sink.Events.Skip(before).Where(e => e.Level == LogEventLevel.Warning).ToList();
+        var warning = warnings.Should().ContainSingle().Subject;
+        warning.RenderMessage().Should().Be($"The request body could not be read (status {serverStatus}).");
+        ((ScalarValue)warning.Properties["StatusCode"]).Value.Should().Be(serverStatus);
+        warning.Exception.Should().BeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task A_body_over_the_cap_from_the_server_is_413_and_writes_no_Warning()
+    {
+        var failure = new BadHttpRequestException("server detail", StatusCodes.Status413PayloadTooLarge);
+        using var host = factory.WithWebHostBuilder(b => b.ConfigureServices(s =>
+        {
+            s.AddSingleton<ILogEventSink>(_sink);
+            s.AddSingleton<IStartupFilter>(new FailingBodyPathFilter("/api/auth/login", failure));
+        }));
+        var client = host.CreateClient();
+        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
+        var before = _sink.Events.Count;
+
+        using var response = await client.PostAsync("/api/auth/login",
+            new StringContent("{\"email\":\"a\"}", Encoding.UTF8, "application/json"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        ((int)response.StatusCode).Should().Be(StatusCodes.Status413PayloadTooLarge, body);
+        TryCode(body).Should().Be("PAYLOAD_TOO_LARGE");
+        _sink.Events.Skip(before).Should().NotContain(e => e.Level >= LogEventLevel.Warning);
     }
 
     private static string? TryCode(string body)

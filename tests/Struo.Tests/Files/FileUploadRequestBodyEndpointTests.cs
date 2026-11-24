@@ -235,6 +235,7 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
         error.GetProperty("message").GetString().Should().Be("The request body could not be read.");
         body.Should().NotContain("server detail");
         sink.Events.Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        AssertOneReadWarning(sink, "The request body could not be read (status 400).");
     }
 
     [Fact]
@@ -258,5 +259,11 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
         error.GetProperty("message").GetString().Should().Be("The request body could not be read.");
         sink.Events.Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        AssertOneReadWarning(sink, "The upload request body timed out.");
     }
+
+    // The sink also holds the host start-up and the login; only the entries about the body count.
+    private static void AssertOneReadWarning(CapturingLogSink sink, string message) =>
+        sink.Events.Where(e => e.Level == LogEventLevel.Warning && e.Exception is BadHttpRequestException)
+            .Should().ContainSingle().Which.RenderMessage().Should().Be(message);
 }
