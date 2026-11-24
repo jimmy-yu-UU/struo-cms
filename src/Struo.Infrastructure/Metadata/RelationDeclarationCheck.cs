@@ -38,12 +38,18 @@ internal static class RelationDeclarationCheck
     public static string? ResolutionNote(Type element, Type? resolved) =>
         resolved is null || resolved == element
             ? null
-            : "the collection the element type " + Describe(element) +
-              $" resolves to by name '{MetadataScanner.CollectionNameOf(element)}'";
+            : element.Name == resolved.Name
+                ? $"the collection class {Qualified(resolved)} that the element type {Qualified(element)} " +
+                  $"resolves to by name '{MetadataScanner.CollectionNameOf(element)}'"
+                : $"the collection the element type {Describe(element)} " +
+                  $"resolves to by name '{MetadataScanner.CollectionNameOf(element)}'";
 
     // A nested type with the class it is declared in, as it is written in the declaration.
     private static string Describe(Type type) =>
         type.DeclaringType is { } outer ? $"{outer.Name}.{type.Name}" : type.Name;
+
+    // The namespace-qualified name: tells apart two classes that share a simple name.
+    private static string Qualified(Type type) => type.ToString().Replace('+', '.');
 
     /// <summary>
     /// The property <paramref name="name"/> of <paramref name="holder"/>, or a <see cref="MetadataException"/>
@@ -59,7 +65,7 @@ internal static class RelationDeclarationCheck
 
     /// <summary>
     /// Every relation of every scanned collection: the keys it names are properties with a column, a
-    /// many-to-many names two different keys, <c>OnDelete</c> stays on a many-to-one or one-to-one relation,
+    /// many-to-many names two different keys, <c>OnDelete</c> is declared only on a many-to-one or one-to-one relation,
     /// <c>SortField</c> follows <see cref="SortFieldCheck"/>, and a one-to-many child key is read off the
     /// collection class the element type is named after.
     /// </summary>
@@ -100,7 +106,7 @@ internal static class RelationDeclarationCheck
     private static bool IsPublicInstance(PropertyInfo prop)
     {
         var accessors = prop.GetAccessors(nonPublic: true);
-        return accessors.Any(accessor => accessor.IsPublic) && !accessors[0].IsStatic;
+        return Array.Exists(accessors, accessor => accessor.IsPublic) && !accessors[0].IsStatic;
     }
 
     private static void RequireRelation(
@@ -115,7 +121,7 @@ internal static class RelationDeclarationCheck
                 prop, holder, declaration, key, "key", "the relation cannot read or store the key", resolution);
         }
         if (nav.IsJunction) RequireDistinctJunctionKeys(prop, nav);
-        RequireOnDeleteOnManyToOne(prop, nav, attribute);
+        RequireOnDeleteOnManyToOne(prop, nav, attribute, collections);
         if (attribute.SortField is { } sortField)
             SortFieldCheck.Require(prop, nav, sortField);
     }
@@ -131,15 +137,22 @@ internal static class RelationDeclarationCheck
     }
 
     private static void RequireOnDeleteOnManyToOne(
-        PropertyInfo prop, NavigateShape nav, CmsRelationAttribute attribute)
+        PropertyInfo prop, NavigateShape nav, CmsRelationAttribute attribute,
+        IReadOnlyDictionary<string, Type> collections)
     {
         if (attribute.OnDelete == OnDelete.Restrict || !NavigateShape.IsListProperty(prop)) return;
 
         var kind = nav.IsJunction ? "many-to-many" : "one-to-many";
+        var element = prop.PropertyType.GetGenericArguments()[0];
+        var remedy = nav.IsJunction
+            ? "The links of a deleted item are always removed."
+            : $"The many-to-one relation on {(CollectionClassOf(element, collections) ?? element).Name} that " +
+              "points at this collection decides what happens to the children when a parent is deleted: " +
+              "declare OnDelete there.";
         throw new MetadataException(
             $"Relation '{RelationName(prop)}' declares OnDelete = {attribute.OnDelete} in [CmsRelation], but " +
             "OnDelete decides what happens to the items that point at a deleted target through a many-to-one key, " +
-            $"so it has no effect on a {kind} relation. Remove OnDelete from it.");
+            $"so it has no effect on a {kind} relation. Remove OnDelete from it. {remedy}");
     }
 
     // The description, the class that holds the property, the property name and how the holder was resolved
@@ -179,6 +192,7 @@ internal static class RelationDeclarationCheck
             $"Relation '{RelationName(relation)}' declares {declaration}, but "
             + $"{property.DeclaringType!.Name}.{property.Name} " +
             $"is [SugarColumn(IsIgnore = true)]: it has no column, so {consequence}. " +
-            "Name a property that is stored in a column, or remove IsIgnore from it.");
+            "Name a property that is stored in a column, or remove IsIgnore from it." +
+            (resolution is null ? "" : $" The key is read off {KeyLookup.Label(holder, resolution)}."));
     }
 }

@@ -9,10 +9,11 @@ using Xunit;
 namespace Struo.Tests.Metadata;
 
 /// <summary>
-/// A <c>[CmsRelation]</c> declaration the item service cannot serve is refused at the scan: a
-/// <c>[CmsRelation]</c> without <c>[Navigate]</c>, a <c>SortField</c> that is not a column of the junction
-/// or sits on a relation that is not a many-to-many, a key property that has no column, and a one-to-many
-/// child key the collection class does not declare.
+/// A <c>[CmsRelation]</c> declaration the item service cannot serve is refused at the scan: a missing
+/// <c>[Navigate]</c>, a relation that is not a public instance property, a key property that is missing or has
+/// no column, a one-to-many child key looked up by collection name, a many-to-many whose two junction keys are
+/// one property, a <c>SortField</c> that is not a column of the junction or sits on a relation that is not a
+/// many-to-many, and an <c>OnDelete</c> on a relation held by no many-to-one key.
 /// </summary>
 public class RelationDeclarationCheckTests
 {
@@ -458,6 +459,17 @@ public class RelationDeclarationCheckTests
             .Should().Contain("but Kid has no property with that name").And.NotContain("resolves to");
     }
 
+    [Fact]
+    public void A_child_key_without_a_column_on_the_element_class_that_is_the_collection_class_adds_no_clause()
+    {
+        var scan = () => MetadataScanner.ScanTypes(
+            [typeof(OneToManyKeyHasNoColumn), typeof(Target), typeof(Kid)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("Kid.IgnoredParentId is [SugarColumn(IsIgnore = true)]")
+            .And.NotContain("The key is read off");
+    }
+
     // A virtual key that the base class ignores and the override does not repeat has a column (SqlSugar reads
     // [SugarColumn] off the overriding property), so the relation is served; an override that ignores it has none.
     private abstract class KidBaseIgnoringTheKey
@@ -628,17 +640,22 @@ public class RelationDeclarationCheckTests
     }
 
     [Theory]
-    [InlineData(typeof(OneToManyWithOnDelete), "OneToManyWithOnDelete.Kids", "SetNull", "one-to-many")]
-    [InlineData(typeof(ManyToManyWithOnDelete), "ManyToManyWithOnDelete.Tags", "Cascade", "many-to-many")]
+    [InlineData(
+        typeof(OneToManyWithOnDelete), "OneToManyWithOnDelete.Kids", "SetNull", "one-to-many",
+        "The many-to-one relation on Kid that points at this collection decides what happens to the children " +
+        "when a parent is deleted: declare OnDelete there.")]
+    [InlineData(
+        typeof(ManyToManyWithOnDelete), "ManyToManyWithOnDelete.Tags", "Cascade", "many-to-many",
+        "The links of a deleted item are always removed.")]
     public void OnDelete_on_a_relation_that_is_not_held_by_a_many_to_one_key_is_refused(
-        Type owner, string relation, string value, string kind)
+        Type owner, string relation, string value, string kind, string remedy)
     {
         var scan = () => MetadataScanner.ScanTypes([owner, typeof(Target), typeof(Kid)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().StartWith($"Relation '{relation}' declares OnDelete = {value} in [CmsRelation]")
             .And.Contain("what happens to the items that point at a deleted target through a many-to-one key")
-            .And.Contain($"no effect on a {kind} relation").And.Contain("Remove OnDelete from it");
+            .And.Contain($"no effect on a {kind} relation").And.Contain("Remove OnDelete from it. " + remedy);
     }
 
     // Pins: OnDelete decides the delete of a many-to-one and a one-to-one relation.
@@ -735,7 +752,6 @@ public class RelationDeclarationCheckTests
         MetadataScanner.ScanTypes([typeof(SelfLinked)]).Should().ContainSingle();
 
     // ── a relation is a public instance property ─────────────────────────────
-
 
     [SugarTable("rdc_vis_private")]
     [CmsCollection("Vis private", Name = "rdcVisPrivate")]

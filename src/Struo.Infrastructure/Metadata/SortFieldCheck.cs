@@ -10,6 +10,9 @@ namespace Struo.Infrastructure.Metadata;
 /// </summary>
 internal static class SortFieldCheck
 {
+    private const BindingFlags DeclaredAny =
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+
     private static readonly Type[] OrderTypes =
     [
         typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long), typeof(ulong),
@@ -27,12 +30,18 @@ internal static class SortFieldCheck
                 "Remove SortField from it.");
 
         var junction = nav.JunctionType!;
+        if (string.IsNullOrWhiteSpace(sortField))
+            throw new MetadataException(
+                $"Relation '{RelationDeclarationCheck.RelationName(relation)}' declares a blank SortField in " +
+                "[CmsRelation], which names no junction property, so the links keep no order. " +
+                $"Name a property of {junction.Name} that holds the position, or remove SortField from it.");
+
         var property = RelationDeclarationCheck.RequireColumn(
             relation, junction, $"SortField '{sortField}' in [CmsRelation]", sortField, "sort field",
             "the links cannot be ordered by it");
         RequireNotAKey(relation, nav, property);
         RequireOrderType(relation, property);
-        RequireSetter(relation, property);
+        RequireSetter(relation, property, junction);
     }
 
     private static void RequireNotAKey(PropertyInfo relation, NavigateShape nav, PropertyInfo property)
@@ -66,9 +75,17 @@ internal static class SortFieldCheck
             $"property as {OrderTypeNames} (a nullable value type is accepted too).");
     }
 
-    private static void RequireSetter(PropertyInfo relation, PropertyInfo property)
+    private static void RequireSetter(PropertyInfo relation, PropertyInfo property, Type junction)
     {
         if (property.SetMethod is not null) return;
+
+        var owner = property.DeclaringType!;
+        if (owner.GetProperty(property.Name, DeclaredAny)?.GetSetMethod(nonPublic: true) is not null)
+            throw Refuse(
+                relation, property,
+                $"has a private setter on the base class {owner.Name}, which {junction.Name} cannot reach: the " +
+                $"link writer assigns the position to it. Make the setter protected, init or public on {owner.Name}, " +
+                $"or declare the sort property on {junction.Name}.");
 
         throw Refuse(
             relation, property,

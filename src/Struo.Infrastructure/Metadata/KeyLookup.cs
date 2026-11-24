@@ -16,7 +16,7 @@ internal static class KeyLookup
 
     /// <summary>The public instance property called <paramref name="name"/>, spelled exactly, or null.</summary>
     public static PropertyInfo? Find(Type type, string name) =>
-        type.GetProperties(PublicInstance).FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.Ordinal));
+        Array.Find(type.GetProperties(PublicInstance), p => string.Equals(p.Name, name, StringComparison.Ordinal));
 
     /// <summary>The property <see cref="Find"/> returns, or a <see cref="MetadataException"/> when none.</summary>
     public static PropertyInfo Require(Type type, string name) =>
@@ -29,7 +29,7 @@ internal static class KeyLookup
     /// </summary>
     public static string Absence(Type holder, string name, string kind = "key", string? resolution = null)
     {
-        var label = resolution is null ? holder.Name : $"{holder.Name} ({resolution})";
+        var label = Label(holder, resolution);
         return NearMiss(holder, name) is { } nearMiss
             ? $"{label} has no property '{name}'; it has '{nearMiss.Name}' — " +
               $"{kind} names are case-sensitive. Write the {kind} as '{nearMiss.Name}'."
@@ -37,9 +37,17 @@ internal static class KeyLookup
               $"Name a property of {holder.Name} that holds the {kind}, or add '{name}' to {holder.Name}.";
     }
 
+    /// <summary>
+    /// The name of <paramref name="holder"/>, followed by <paramref name="resolution"/> in parentheses when
+    /// the declaration led to it by name.
+    /// </summary>
+    public static string Label(Type holder, string? resolution) =>
+        resolution is null ? holder.Name : $"{holder.Name} ({resolution})";
+
     private static PropertyInfo? NearMiss(Type type, string name) =>
-        type.GetProperties(PublicInstance)
-            .FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        Array.Find(
+            type.GetProperties(PublicInstance),
+            p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// True when the property is marked <c>[SugarColumn(IsIgnore = true)]</c> on its own declaration: it has
