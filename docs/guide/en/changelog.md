@@ -63,6 +63,12 @@
 - New public members: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`,
   `CoreSeedData.ContentRootPath`.
 
+### Changed
+
+- A disabled control in the admin (an input, textarea, select, checkbox, switch, radio button,
+  number field, or a button) shows the default cursor, where some of them showed the `not-allowed`
+  cursor. Greying and the rest of the disabled styling are unchanged.
+
 ### Fixed
 
 - In 0.31.0, a `POST` whose JSON body the server cannot read as a GraphQL request (for example an

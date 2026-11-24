@@ -53,6 +53,11 @@
 - 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`、`FieldMetadata.Ignored`、
   `CoreSeedData.ContentRootPath`。
 
+### 變更
+
+- 後台停用的控制項（輸入框、多行文字框、下拉選單、核取方塊、開關、單選鈕、數字欄位與按鈕）一律顯示
+  預設游標，部分控制項原本顯示 `not-allowed` 游標。變灰與其他停用樣式不變。
+
 ### 修正
 
 - 0.31.0 中，以 POST 送出、GraphQL 伺服器無法讀成請求的 JSON 本文（例如 `query` 為空字串、完全沒有

@@ -180,4 +180,23 @@
   button:not(:disabled):not([aria-disabled="true"]) {
     cursor: pointer;
   }
+
+  /* A disabled control shows the default cursor; a text field would otherwise show the text
+     cursor. */
+  :is(:disabled, [aria-disabled="true"], [data-disabled]) {
+    cursor: default;
+  }
+}
+
+/* The admin has no `not-allowed` cursor. The vendored components/ui/ files cannot be edited and
+   carry `disabled:cursor-not-allowed` (the label carries `peer-disabled:cursor-not-allowed`), so
+   Tailwind is told not to generate those classes; the rule above supplies the cursor. Every
+   variant of the class that appears under components/ui/ is listed here;
+   frontend/tests/disabledCursor.test.ts compares the list with those files. */
+@source not inline("{,disabled:,peer-disabled:}cursor-not-allowed");
+
+/* vue-sonner's own stylesheet sets `not-allowed` on a disabled toast button; the extra attribute
+   selector outranks it. */
+[data-sonner-toast][data-styled="true"] [data-disabled="true"][data-disabled] {
+  cursor: default;
 }

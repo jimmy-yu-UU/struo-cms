@@ -160,7 +160,7 @@ function onBoxClick(): void {
 
 // The field box: bordered and growing with its chips, or, as an add button, just the button's own width.
 const multipleBoxClass = computed(() => {
-  const cursor = props.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+  const cursor = props.disabled ? 'cursor-default opacity-50' : 'cursor-pointer'
   return props.addLabel
     ? 'inline-flex w-auto'
     : `border-input flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border bg-transparent px-2 py-1 text-sm ${cursor}`
@@ -291,7 +291,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
             v-else
             v-bind="controlAttrs()"
             :aria-label="multipleAccessibleName"
-            class="flex min-h-6 min-w-8 flex-1 items-center justify-between gap-2 self-stretch rounded-sm px-1 text-left disabled:cursor-not-allowed"
+            class="flex min-h-6 min-w-8 flex-1 items-center justify-between gap-2 self-stretch rounded-sm px-1 text-left"
             @keydown.down.prevent="openMenu"
           >
             <span :class="multipleSelected.length ? '' : 'text-muted-foreground'">
@@ -331,7 +331,7 @@ defineExpose({ loadOptions, ensureSelectedLabels, onChange, options, displayOpti
           <ComboboxTrigger
             v-bind="controlAttrs()"
             :aria-label="singleAccessibleName"
-            class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            class="border-input flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm disabled:opacity-50"
           >
             <span :class="singleSelectedOption ? '' : 'text-muted-foreground'">
               {{ singleSelectedOption ? singleSelectedOption.label : relation.label }}
