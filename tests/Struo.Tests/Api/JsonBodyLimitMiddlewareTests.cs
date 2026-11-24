@@ -76,20 +76,72 @@ public class JsonBodyLimitMiddlewareTests
         error.GetProperty("message").GetString().Should().NotContain("read failed");
     }
 
+    public static TheoryData<Exception> NonClientFailures() => new()
+    {
+        new BadHttpRequestException("read failed", StatusCodes.Status500InternalServerError),
+        new BadHttpRequestException("read failed", StatusCodes.Status503ServiceUnavailable),
+        new IOException("read failed"),
+        new InvalidOperationException("read failed"),
+    };
+
     [Theory]
-    [InlineData(StatusCodes.Status500InternalServerError)]
-    [InlineData(StatusCodes.Status503ServiceUnavailable)]
-    public async Task A_graphql_body_read_that_fails_without_a_client_error_status_propagates(int status)
+    [MemberData(nameof(NonClientFailures))]
+    public async Task A_graphql_body_read_that_fails_for_a_reason_that_is_not_the_clients_is_a_500_graphql_error(
+        Exception failure)
     {
         var called = false;
-        var failure = new BadHttpRequestException("read failed", status);
         var context = GraphQlContext("POST", new FailingStream(failure));
 
-        var thrown = await Assert.ThrowsAsync<BadHttpRequestException>(() =>
-            Middleware(_ => { called = true; return Task.CompletedTask; }).InvokeAsync(context));
+        await Middleware(_ => { called = true; return Task.CompletedTask; }).InvokeAsync(context);
 
-        thrown.Should().BeSameAs(failure);
         called.Should().BeFalse();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status500InternalServerError);
+        var error = ErrorOf(context);
+        error.GetProperty("extensions").GetProperty("code").GetString().Should().Be("INTERNAL_SERVER_ERROR");
+        error.GetProperty("message").GetString().Should().Be(DomainErrorMap.InternalErrorMessage);
+    }
+
+    [Theory]
+    [MemberData(nameof(NonClientFailures))]
+    public async Task A_graphql_body_read_failure_that_is_not_the_clients_writes_exactly_one_Error_with_the_exception(
+        Exception failure)
+    {
+        var logger = new RecordingLogger<JsonBodyLimitMiddleware>();
+        var context = GraphQlContext("POST", new FailingStream(failure));
+
+        await Middleware(_ => Task.CompletedTask, logger).InvokeAsync(context);
+
+        logger.Entries.Should().ContainSingle().Which.Should()
+            .Be((LogLevel.Error, "The GraphQL request body could not be read.", failure));
+    }
+
+    [Fact]
+    public async Task A_cancellation_thrown_by_the_graphql_body_read_propagates_without_an_answer_or_a_log_entry()
+    {
+        var logger = new ListLogger<JsonBodyLimitMiddleware>();
+        var failure = new OperationCanceledException("read cancelled");
+        var context = GraphQlContext("POST", new FailingStream(failure));
+
+        var act = () => Middleware(_ => Task.CompletedTask, logger).InvokeAsync(context);
+
+        (await act.Should().ThrowAsync<OperationCanceledException>()).Which.Should().BeSameAs(failure);
+        logger.Entries.Should().BeEmpty();
+        context.Response.Body.Length.Should().Be(0);
+    }
+
+    [Theory]
+    [MemberData(nameof(NonClientFailures))]
+    public async Task A_graphql_body_read_failure_that_is_not_the_clients_after_the_client_left_is_a_cancellation(
+        Exception failure)
+    {
+        var logger = new ListLogger<JsonBodyLimitMiddleware>();
+        var context = GraphQlContext("POST", new FailingStream(failure));
+        context.RequestAborted = new CancellationToken(canceled: true);
+
+        var act = () => Middleware(_ => Task.CompletedTask, logger).InvokeAsync(context);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        logger.Entries.Should().BeEmpty();
     }
 
     [Fact]

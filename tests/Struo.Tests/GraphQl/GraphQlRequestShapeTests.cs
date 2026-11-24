@@ -446,22 +446,132 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         AssertClientError(status, body, expected, Unreadable, warnings: 1);
     }
 
-    [Fact]
-    public async Task A_body_read_failure_that_is_not_a_client_error_is_an_internal_error_with_an_error_log()
+    private const string UnreadableTemplate = "The GraphQL request body could not be read.";
+    private const string ExceptionDetail = "secret-detail";
+
+    private sealed class UnknownLengthContent(byte[] bytes) : HttpContent
     {
-        using var host = Host(new BadHttpRequestException("server detail", StatusCodes.Status500InternalServerError));
-        var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath)
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+            stream.WriteAsync(bytes, 0, bytes.Length);
+
+        protected override bool TryComputeLength(out long length)
         {
-            Content = new StringContent(OperationsJson, Encoding.UTF8, "application/json"),
-        };
+            length = 0;
+            return false;
+        }
+    }
 
-        var (status, body) = await SendAsync(host, request, "S3 declared-length body read fails with 500");
+    private static Exception NonClientFailure(string kind) => kind switch
+    {
+        "io" => new IOException(ExceptionDetail),
+        "bad-request-500" => new BadHttpRequestException(ExceptionDetail, StatusCodes.Status500InternalServerError),
+        "invalid-operation" => new InvalidOperationException(ExceptionDetail),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+    };
 
-        status.Should().Be(HttpStatusCode.InternalServerError, body);
-        JsonDocument.Parse(body).RootElement.GetProperty("error").GetProperty("code").GetString()
-            .Should().Be("INTERNAL_SERVER_ERROR", body);
-        _sink.Events.Should().Contain(e => e.Level >= LogEventLevel.Error);
+    public static TheoryData<string, bool> NonClientFailures()
+    {
+        var data = new TheoryData<string, bool>();
+        foreach (var kind in new[] { "io", "bad-request-500", "invalid-operation" })
+            foreach (var declared in new[] { true, false })
+                data.Add(kind, declared);
+        return data;
+    }
+
+    private static HttpContent JsonBody(bool declaredLength)
+    {
+        var bytes = Encoding.UTF8.GetBytes(OperationsJson);
+        HttpContent content = declaredLength ? new ByteArrayContent(bytes) : new UnknownLengthContent(bytes);
+        content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+        return content;
+    }
+
+    // The Error entries that carry an exception: the request-completion entry of a 5xx has none.
+    private void AssertUnreadableLoggedOnce(Exception failure)
+    {
+        var errors = _requestEvents.Where(e => e.Level >= LogEventLevel.Error && e.Exception is not null).ToList();
+        var entry = errors.Should().ContainSingle().Subject;
+        entry.MessageTemplate.Text.Should().Be(UnreadableTemplate);
+        entry.Exception.Should().BeSameAs(failure);
         ReadWarnings().Should().BeEmpty();
+    }
+
+    [Theory]
+    [MemberData(nameof(NonClientFailures))]
+    public async Task A_body_read_that_fails_for_a_reason_that_is_not_the_clients_is_a_GraphQL_internal_error(
+        string kind, bool declaredLength)
+    {
+        var failure = NonClientFailure(kind);
+        using var host = Host(failure);
+        foreach (var accept in AcceptValues)
+        {
+            _requestEvents.Clear();
+            var request = new HttpRequestMessage(HttpMethod.Post, GraphQlPath) { Content = JsonBody(declaredLength) };
+            Accept(request, accept);
+
+            var (status, body) = await SendAsync(host, request,
+                $"S3 {kind} declared={declaredLength} accept={accept ?? "none"}");
+
+            status.Should().Be(HttpStatusCode.InternalServerError, body);
+            var root = JsonDocument.Parse(body).RootElement;
+            root.TryGetProperty("data", out _).Should().BeFalse(body);
+            root.TryGetProperty("success", out _).Should().BeFalse(body);
+            var error = root.GetProperty("errors").EnumerateArray().Should().ContainSingle().Subject;
+            error.GetProperty("message").GetString().Should().Be("An internal error occurred.");
+            var extensions = error.GetProperty("extensions");
+            extensions.GetProperty("code").GetString().Should().Be("INTERNAL_SERVER_ERROR");
+            extensions.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
+            error.TryGetProperty("exception", out _).Should().BeFalse();
+            body.Should().NotContain(ExceptionDetail);
+            AssertUnreadableLoggedOnce(failure);
+        }
+    }
+
+    // A cancellation is not a failed read: it is not turned into an answer or a log entry by the body read.
+    [Fact]
+    public async Task A_cancellation_thrown_by_the_body_read_is_not_answered_as_a_failed_read()
+    {
+        using var host = Host(new OperationCanceledException(ExceptionDetail));
+        var client = host.CreateClient();
+
+        using var response = await client.PostAsync(GraphQlPath, JsonBody(declaredLength: true));
+
+        (await response.Content.ReadAsStringAsync()).Should().NotContain("errors");
+        _sink.Events.Should().NotContain(e => e.MessageTemplate.Text == UnreadableTemplate);
+    }
+
+    // Pin: percent-encoded bytes that are not UTF-8, an encoded NUL and a raw non-ASCII character reach the
+    // check as text, never as invalid UTF-16, and are refused as invalid JSON without an Error entry.
+    [Theory]
+    [InlineData("variables", "%FF")]
+    [InlineData("variables", "%C0%80")]
+    [InlineData("variables", "%ED%A0%80")]
+    [InlineData("variables", "%F4%90%80%80")]
+    [InlineData("variables", "%E2%82")]
+    [InlineData("variables", "%00")]
+    [InlineData("variables", "é")]
+    [InlineData("extensions", "%FF")]
+    [InlineData("extensions", "%C0%80")]
+    [InlineData("extensions", "%ED%A0%80")]
+    [InlineData("extensions", "%F4%90%80%80")]
+    [InlineData("extensions", "%E2%82")]
+    [InlineData("extensions", "%00")]
+    [InlineData("extensions", "é")]
+    public async Task A_query_string_value_that_is_not_valid_text_is_refused_as_invalid_JSON(string name, string raw)
+    {
+        using var host = Host();
+        foreach (var accept in AcceptValues)
+        {
+            _requestEvents.Clear();
+            var uri = new Uri($"/graphql?query=%7B__typename%7D&{name}={raw}", UriKind.Relative);
+            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            Accept(request, accept);
+
+            var (status, body) = await SendAsync(host, request, $"S1 raw {name}={raw} accept={accept ?? "none"}");
+
+            AssertClientError(status, body, HttpStatusCode.BadRequest);
+            body.Should().Contain($"Invalid '{name}' value.").And.Contain("but got invalid JSON.");
+        }
     }
 
     [Theory]
@@ -470,7 +580,22 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     public async Task A_body_read_that_fails_after_the_client_left_ends_without_an_answer_and_logs_nothing(
         int serverStatus)
     {
-        using var host = Host(new BadHttpRequestException("server detail", serverStatus), clientGone: true);
+        await AssertClientLeftAsync(new BadHttpRequestException("server detail", serverStatus));
+    }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("bad-request-500")]
+    [InlineData("invalid-operation")]
+    public async Task A_non_client_body_read_failure_after_the_client_left_ends_without_an_answer_and_logs_nothing(
+        string kind)
+    {
+        await AssertClientLeftAsync(NonClientFailure(kind));
+    }
+
+    private async Task AssertClientLeftAsync(Exception failure)
+    {
+        using var host = Host(failure, clientGone: true);
         var client = host.CreateClient();
         var before = _sink.Events.Count;
         var content = new StringContent(OperationsJson, Encoding.UTF8, "application/json");

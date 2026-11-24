@@ -108,8 +108,8 @@ public sealed class JsonBodyLimitMiddleware(
             ?? !(HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method));
 
     // The whole body, or the HTTP status of why it could not be read: 413 once it passes the cap
-    // (including Kestrel's own 413 for the same cap), or the 4xx status the server put on a failed read.
-    // A failure the server did not call a client error is not caught here.
+    // (including Kestrel's own 413 for the same cap), the 4xx status the server put on a failed read, or 500
+    // for any other failure except a cancellation, which is not caught.
     private async Task<(MemoryStream? Body, int FailureStatus)> ReadWithinLimitAsync(HttpContext context)
     {
         var buffer = new MemoryStream();
@@ -130,6 +130,12 @@ public sealed class JsonBodyLimitMiddleware(
             RequestBodyReadLog.Rejected(logger, e);
             return (null, e.StatusCode);
         }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            context.RequestAborted.ThrowIfCancellationRequested();
+            RequestBodyReadLog.GraphQlFailed(logger, e);
+            return (null, StatusCodes.Status500InternalServerError);
+        }
         finally
         {
             ArrayPool<byte>.Shared.Return(chunk, clearArray: true);
@@ -139,13 +145,15 @@ public sealed class JsonBodyLimitMiddleware(
     }
 
     // /graphql reports transport errors as { errors: [...] }, not as the REST envelope.
-    private static Task WriteGraphQlErrorAsync(HttpContext context, int status = StatusCodes.Status413PayloadTooLarge)
-    {
-        var tooLarge = status == StatusCodes.Status413PayloadTooLarge;
-        return WriteGraphQlErrorAsync(context, status,
-            tooLarge ? ErrorCodes.PayloadTooLarge : ErrorCodes.BadUserInput,
-            tooLarge ? TooLargeMessage : UnreadableBodyMessage);
-    }
+    private static Task WriteGraphQlErrorAsync(HttpContext context, int status = StatusCodes.Status413PayloadTooLarge) =>
+        status switch
+        {
+            StatusCodes.Status413PayloadTooLarge =>
+                WriteGraphQlErrorAsync(context, status, ErrorCodes.PayloadTooLarge, TooLargeMessage),
+            StatusCodes.Status500InternalServerError =>
+                WriteGraphQlErrorAsync(context, status, ErrorCodes.Internal, DomainErrorMap.InternalErrorMessage),
+            _ => WriteGraphQlErrorAsync(context, status, ErrorCodes.BadUserInput, UnreadableBodyMessage),
+        };
 
     private static Task WriteGraphQlErrorAsync(HttpContext context, int status, string code, string message)
     {
