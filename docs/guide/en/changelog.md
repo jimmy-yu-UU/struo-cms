@@ -12,9 +12,10 @@
     and updating an item threw `NullReferenceException`. With an `Id` that is not marked, including
     an override of a marked `Id` that leaves the attribute out, or with two marked properties, items
     were created and every read, update and delete by id threw. Mark exactly one property.
-  - A many-to-many whose parent key or target key in `[Navigate]` names no property of the junction
-    type, or names one in another letter case, when the junction is not a collection: writing a
-    link through the relation threw. Write the key as the property is spelled, with `nameof`.
+  - A many-to-many whose parent key or target key in `[Navigate]` is written in another letter case
+    than the property of the junction type, or, when the junction is not a collection, names no
+    property of it: writing a link through the relation threw. Write the key as the property is
+    spelled, with `nameof`.
   - A many-to-one or one-to-one whose foreign key in `[Navigate]` is written in another letter case
     than the property: reads, writes and filters worked, and the purge of the target under
     `SetNull` threw `InvalidOperationException`. Write the key as the property is spelled.

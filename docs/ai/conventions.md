@@ -442,12 +442,13 @@ attribute counts, an override that leaves it out does not. `KeyLookup`
 `[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and with
 no integer widening: the many-to-one key against the target's primary key, the one-to-many child
 key against the declaring entity's, the junction's parent key against the declaring entity's and
-its target key against the target's. The comparison is skipped when the entity holding the primary
-key is not a scanned collection type; `RelationshipGraph` refuses a target that is not a collection
-when the host starts. Each refusal throws a `MetadataException` that names the relation as
-`Class.Property`, or the collection class, and what to declare. `InterfacePropertyTypeMatrixTests`,
-`InterfacePropertyTypeMessageTests`, `NavigateForeignKeyTests`, `KeyDeclarationCheckTests` and
-`RelationKeyTypeCheckTests` pin these.
+its target key against the target's. The entity holding the primary key is the scanned collection
+its collection name resolves to, which is how `RelationshipGraph` resolves a relation; a target whose
+name is no scanned collection is not compared, and `RelationshipGraph` refuses it when the host
+starts. Each refusal throws a `MetadataException` that names the relation or the class and what to
+declare. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
+`NavigateForeignKeyTests`, `KeyDeclarationCheckTests` and `RelationKeyTypeCheckTests` pin these;
+`docs/ai/decisions/relation-key-and-primary-key-declarations.md` holds the measurements.
 
 `WritableInput.RequireAny` (`src/Struo.Api/GraphQl/WritableInput.cs`) stops the host at startup,
 with a message that names the collection, when its GraphQL create input type would have no field,

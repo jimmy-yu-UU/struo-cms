@@ -269,10 +269,10 @@ public static class MetadataScanner
     /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
     /// junction keys. Every path that reads or writes the key handles it as the type of that primary key,
     /// so a key of another type makes an expansion read back empty or an empty list, or throws when the
-    /// relation is expanded, a link is written or a target is deleted. A target that is neither a scanned
-    /// <c>[CmsCollection]</c> class nor named like one is not compared; a target named like a collection
-    /// but not that collection class is refused. Runs for both
-    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// relation is expanded, a link is written or a target is deleted. The primary key is the one of the
+    /// scanned collection the target's collection name resolves to, which is how a relation is resolved
+    /// when it is read and written; a target whose name is no scanned collection is not compared. Runs
+    /// for both <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
     private static void ValidateRelationKeyTypes(IEnumerable<Type> types)
     {
@@ -290,16 +290,10 @@ public static class MetadataScanner
         foreach (var pair in RelationKeyPairs(type, prop, nav))
         {
             if (!collectionsByName.TryGetValue(CollectionNameOf(pair.Target), out var collection)) continue;
-            if (collection != pair.Target) throw NotTheCollectionClass(prop, pair.Target, collection);
-            RequireKeyType(prop, pair);
+            RequireKeyType(prop, pair with { Target = collection });
         }
     }
 
-    // The relation points at a class that is not the collection class its collection name belongs to.
-    private static MetadataException NotTheCollectionClass(PropertyInfo relation, Type target, Type collection) =>
-        new($"Relation '{RelationName(relation)}' points at class '{target.FullName}', which is not the collection class " +
-            $"'{collection.FullName}' that the collection name '{CollectionNameOf(collection)}' belongs to. " +
-            $"Declare the relation's type as {collection.Name}.");
 
     // Named by the type that declares the relation: that is the declaration to change.
     private static string RelationName(PropertyInfo relation) => $"{relation.DeclaringType!.Name}.{relation.Name}";

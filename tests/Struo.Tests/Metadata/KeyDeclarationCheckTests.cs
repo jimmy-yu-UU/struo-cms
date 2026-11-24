@@ -472,6 +472,18 @@ public class KeyDeclarationCheckTests
         [SugarColumn(IsIgnore = true)] public SameKeyElsewhere.Shared? Target { get; set; }
     }
 
+    [SugarTable("kdc_points_at_other_own_key")]
+    [CmsCollection("Points at other own key", Name = "kdcPointsAtOtherOwnKey")]
+    private sealed class PointsAtPlainClassWhoseOwnIdHasAnotherType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public OtherKeyElsewhere.Shared? Target { get; set; }
+    }
+
     [SugarTable("kdc_points_at_other")]
     [CmsCollection("Points at other", Name = "kdcPointsAtOther")]
     private sealed class PointsAtPlainClassWithAnotherKeyType
@@ -570,19 +582,24 @@ public class KeyDeclarationCheckTests
             .And.Contain("mark 'Id' on 'UnmarkedKeyBase' with [SugarColumn(IsPrimaryKey = true)]");
     }
 
+    // A relation is resolved by collection name, so the key is compared with the primary key of the
+    // collection Shared whatever the plain class of that name declares.
     [Theory]
-    [InlineData(typeof(PointsAtPlainClassWithTheCollectionKeyType), typeof(SameKeyElsewhere.Shared))]
-    [InlineData(typeof(PointsAtPlainClassWithAnotherKeyType), typeof(OtherKeyElsewhere.Shared))]
-    [InlineData(typeof(PointsAtPlainClassWithoutId), typeof(KeylessElsewhere.Shared))]
-    public void A_relation_to_a_plain_class_that_shares_a_collection_name_is_refused_and_names_both_classes(
-        Type owner, Type plain)
+    [InlineData(typeof(PointsAtPlainClassWithTheCollectionKeyType))]
+    [InlineData(typeof(PointsAtPlainClassWhoseOwnIdHasAnotherType))]
+    [InlineData(typeof(PointsAtPlainClassWithoutId))]
+    public void A_key_of_the_collection_key_type_passes_when_the_relation_names_a_plain_class_of_that_name(Type owner) =>
+        MetadataScanner.ScanTypes([owner, typeof(Shared)]).Should().HaveCount(2);
+
+    [Fact]
+    public void A_key_of_another_type_is_refused_against_the_collection_a_plain_class_shares_its_name_with()
     {
-        var scan = () => MetadataScanner.ScanTypes([owner, typeof(Shared)]);
+        var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtPlainClassWithAnotherKeyType), typeof(Shared)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().StartWith($"Relation '{owner.Name}.Target' points at class '{plain.FullName}'")
-            .And.Contain($"not the collection class '{typeof(Shared).FullName}'")
-            .And.Contain("collection name 'shared'").And.Contain("Declare the relation's type as Shared");
+        message.Should().StartWith("Relation 'PointsAtPlainClassWithAnotherKeyType.Target' uses the key")
+            .And.Contain("'PointsAtPlainClassWithAnotherKeyType.TargetId', a long property")
+            .And.Contain("the primary key 'Shared.Id', a Guid property");
     }
 
     [Fact]

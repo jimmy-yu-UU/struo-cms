@@ -10,8 +10,9 @@
     時，建立、讀取、更新項目都丟出 `NullReferenceException`。`Id` 沒有標記（包含覆寫一個有標記的
     `Id` 卻沒帶 attribute），或標了兩個屬性時，項目建得起來，之後以 id 讀取、更新、刪除全部丟出
     例外。剛好標一個屬性。
-  - 多對多在 `[Navigate]` 裡的父端鍵或目標端鍵對不到 junction 型別上的屬性，或只有大小寫不同，
-    而 junction 不是集合：透過這個關聯寫入連結時丟出例外。照屬性的拼法寫鍵名，用 `nameof`。
+  - 多對多在 `[Navigate]` 裡的父端鍵或目標端鍵和 junction 型別上的屬性只有大小寫不同，或者
+    junction 不是集合而鍵名對不到它的任何屬性：透過這個關聯寫入連結時丟出例外。照屬性的拼法寫
+    鍵名，用 `nameof`。
   - 多對一或一對一在 `[Navigate]` 裡的外鍵和屬性只有大小寫不同：讀取、寫入、篩選都正常，在
     `SetNull` 下 purge 目標時丟出 `InvalidOperationException`。照屬性的拼法寫鍵名。
 :::
