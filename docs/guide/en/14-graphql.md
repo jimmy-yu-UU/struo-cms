@@ -515,13 +515,13 @@ more than once is read as its values joined with commas.
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
 holds whether the request declared its length or streamed the body, and the message is the fixed
-`Request body is too large.`, which names no limit. A body that cannot be read for another reason,
-declared length or not, answers with the status of that failure and one error with
+`Request body is too large.`, which names no limit. A body the server stops reading with a
+client-error status, declared length or not, answers with that status and one error with
 `BAD_USER_INPUT` and the message `The request body could not be read.`: `408` when the client
 stops sending and the read times out, `400` when the body arrives broken, such as a chunk with a
-bad size. The server writes one warning-level log entry for such a failure. A body read that fails
-on the server's side answers HTTP `500` in the same `errors` shape with `INTERNAL_SERVER_ERROR` and
-the masked message, and is logged at error level.
+bad size. The server writes one warning-level log entry for such a failure. A read that fails in
+any other way answers HTTP `500` in the same `errors` shape with `INTERNAL_SERVER_ERROR` and the
+masked message, and is logged at error level with the exception.
 
 A `multipart/form-data` request to `/graphql` is refused before its body is read, with HTTP `415`
 and one error with `BAD_USER_INPUT` and the message

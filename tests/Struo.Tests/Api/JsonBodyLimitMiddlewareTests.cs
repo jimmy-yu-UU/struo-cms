@@ -14,8 +14,9 @@ namespace Struo.Tests.Api;
 
 /// <summary>
 /// The GraphQL buffering path of <see cref="JsonBodyLimitMiddleware"/>, driven without a server: a body
-/// that fails to read for a reason other than the cap is answered as a GraphQL error carrying that
-/// failure's status, and a request that cannot have a body is passed on untouched.
+/// read the server fails with a 4xx is answered as a GraphQL error carrying that status, any other
+/// failure but a cancellation as a GraphQL 500, and a request that cannot have a body is passed on
+/// untouched.
 /// </summary>
 public class JsonBodyLimitMiddlewareTests
 {

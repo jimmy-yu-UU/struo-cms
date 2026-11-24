@@ -18,7 +18,9 @@ namespace Struo.Api.Http;
 /// GraphQL sees it: one that passes the cap is answered 413 <c>PAYLOAD_TOO_LARGE</c>, and one whose read
 /// fails with a 4xx from the server (such as a timeout) is answered with that status and
 /// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>; a read that fails
-/// after the client left ends as a cancellation, with no answer and no log entry. Any request to
+/// after the client left ends as a cancellation, with no answer and no log entry; a read that fails in any
+/// other way is answered 500 <c>INTERNAL_SERVER_ERROR</c> in the same shape and logged once as an Error
+/// with the exception. Any request to
 /// <c>/graphql</c> whose media type is <c>multipart/form-data</c> is answered 415 <c>BAD_USER_INPUT</c>
 /// (<see cref="MultipartMessage"/>) before its size is checked and before its body is read. A GET to
 /// <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string value fails

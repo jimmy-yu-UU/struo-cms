@@ -17,8 +17,9 @@ using Xunit.Abstractions;
 namespace Struo.Tests.GraphQl;
 
 /// <summary>
-/// Requests to <c>/graphql</c> whose query string, multipart body or body read is bad: each is a client
-/// error answered the same way under every <c>Accept</c> value, and none is logged as an error.
+/// Requests to <c>/graphql</c> whose query string, multipart body or body read is bad: a client error is
+/// answered the same way under every <c>Accept</c> value and is not logged as an error; a body read that
+/// fails in another way is a 500 in the GraphQL shape with one error-level entry that carries the exception.
 /// </summary>
 [Collection("ApiIntegration")]
 public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper output)

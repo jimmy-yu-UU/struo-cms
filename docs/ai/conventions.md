@@ -613,10 +613,10 @@ body read the server failed with a 4xx other than 413, from the middleware on `/
 `StruoExceptionHandler` elsewhere; the upload reader writes its own Warning for a form read that
 timed out. A refused request shape writes none, and neither does a read that fails after the client
 has left: the middleware lets that one end as a cancellation. A `/graphql` body read that fails
-for any other reason than a cancellation is answered by the middleware as 500 in the `errors`
-shape with `INTERNAL_SERVER_ERROR` and `DomainErrorMap.InternalErrorMessage`, and logged once at
-Error with the exception (`RequestBodyReadLog.GraphQlFailed`), so a GraphQL client never receives
-the REST envelope.
+in any other way, a cancellation aside, is answered by the middleware as 500 in the `errors` shape
+with `INTERNAL_SERVER_ERROR` and `DomainErrorMap.InternalErrorMessage`, and the middleware logs it
+once at Error with the exception (`RequestBodyReadLog.GraphQlFailed`), so a failed `/graphql` body
+read is not answered in the REST envelope.
 
 `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
 exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`
