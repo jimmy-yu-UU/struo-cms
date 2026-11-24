@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
@@ -11,8 +12,9 @@ namespace Struo.Api.Http;
 /// <see cref="ApiOptions.MaxJsonBodyBytes"/>. A declared length over the cap is rejected before the body
 /// is read. An undeclared (chunked) REST body is cut off by a counting stream once it passes the cap and
 /// surfaces as <see cref="PayloadTooLargeException"/>, which the exception handler answers with the 413
-/// error envelope; an undeclared GraphQL body is read up to the cap before GraphQL sees it, so an
-/// over-cap one is refused here. Every path answers 413 <c>PAYLOAD_TOO_LARGE</c> with
+/// error envelope; a GraphQL body is read up to the cap before GraphQL sees it, so an
+/// over-cap one is refused here, and so is one whose read fails (a 4xx from the server, such as a timeout).
+/// A GET to <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> is JSON of a kind GraphQL does not accept is refused here too. Every path answers 413 <c>PAYLOAD_TOO_LARGE</c> with
 /// <see cref="TooLargeMessage"/>, which names no limit. Multipart uploads are not JSON and keep
 /// <c>Struo:Files:MaxUploadBytes</c>.
 /// </summary>
@@ -37,6 +39,12 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         }
 
         var isGraphQl = IsGraphQl(context.Request);
+        if (isGraphQl && QueryStringProblem(context.Request) is { } problem)
+        {
+            await WriteGraphQlErrorAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
+            return;
+        }
+
         if (context.Request.ContentLength > _limit)
         {
             if (!isGraphQl) throw new PayloadTooLargeException(TooLargeMessage);
@@ -48,22 +56,26 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         if (feature is { IsReadOnly: false }) feature.MaxRequestBodySize = _limit;
 
         if (!isGraphQl)
-        {
             context.Request.Body = new LimitedReadStream(context.Request.Body, _limit);
-        }
-        else if (context.Request.ContentLength is null && CanHaveBody(context))
-        {
-            // GraphQL turns a failed body read into its own transport error, so the cap is checked
-            // before it reads: a GraphQL body is at most the cap, which is small.
-            var (buffered, failureStatus) = await ReadWithinLimitAsync(context);
-            if (buffered is null)
-            {
-                await WriteGraphQlErrorAsync(context, failureStatus);
-                return;
-            }
-            context.Request.Body = buffered;
-        }
+        else if (!await BufferGraphQlBodyAsync(context))
+            return;
         await next(context);
+    }
+
+    // GraphQL turns a failed body read into its own transport error, so the body is read here, up to
+    // the cap, before GraphQL sees it. A declared length over the cap was refused before this point and
+    // Kestrel enforces the cap on the rest, so the buffer holds at most the cap, which is small.
+    private async Task<bool> BufferGraphQlBodyAsync(HttpContext context)
+    {
+        if (!CanHaveBody(context)) return true;
+        var (buffered, failureStatus) = await ReadWithinLimitAsync(context);
+        if (buffered is null)
+        {
+            await WriteGraphQlErrorAsync(context, failureStatus);
+            return false;
+        }
+        context.Request.Body = buffered;
+        return true;
     }
 
     // A GET or HEAD, or a request the server already knows has no body, is passed on unread.
@@ -72,7 +84,8 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
             ?? !(HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method));
 
     // The whole body, or the HTTP status of why it could not be read: 413 once it passes the cap
-    // (including Kestrel's own 413 for the same cap), or the status of any other bad request.
+    // (including Kestrel's own 413 for the same cap), or the 4xx status the server put on a failed read.
+    // A failure the server did not call a client error is not caught here.
     private async Task<(MemoryStream? Body, int FailureStatus)> ReadWithinLimitAsync(HttpContext context)
     {
         var buffer = new MemoryStream();
@@ -86,7 +99,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
                 await buffer.WriteAsync(chunk.AsMemory(0, read), context.RequestAborted);
             }
         }
-        catch (BadHttpRequestException e)
+        catch (BadHttpRequestException e) when (e.StatusCode is >= StatusCodes.Status400BadRequest and < StatusCodes.Status500InternalServerError)
         {
             return (null, e.StatusCode);
         }
@@ -97,20 +110,74 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
     // /graphql reports transport errors as { errors: [...] }, not as the REST envelope.
     private static Task WriteGraphQlErrorAsync(HttpContext context, int status = StatusCodes.Status413PayloadTooLarge)
     {
-        context.Response.StatusCode = status;
         var tooLarge = status == StatusCodes.Status413PayloadTooLarge;
+        return WriteGraphQlErrorAsync(context, status,
+            tooLarge ? ErrorCodes.PayloadTooLarge : ErrorCodes.BadUserInput,
+            tooLarge ? TooLargeMessage : UnreadableBodyMessage);
+    }
+
+    private static Task WriteGraphQlErrorAsync(HttpContext context, int status, string code, string message)
+    {
+        context.Response.StatusCode = status;
         var error = new Dictionary<string, object?>
         {
-            ["message"] = tooLarge ? TooLargeMessage : UnreadableBodyMessage,
+            ["message"] = message,
             ["extensions"] = new Dictionary<string, object?>
             {
-                ["code"] = tooLarge ? ErrorCodes.PayloadTooLarge : ErrorCodes.BadUserInput,
+                ["code"] = code,
                 ["traceId"] = RequestTraceId.For(context),
             },
         };
         return context.Response.WriteAsJsonAsync(
             new Dictionary<string, object?> { ["errors"] = new[] { error } }, context.RequestAborted);
     }
+
+    // GraphQL reads the query-string `variables` and `extensions` of a GET as JSON and answers a value
+    // that is not JSON, or is JSON of a kind it does not accept, as an internal error.
+    private static string? QueryStringProblem(HttpRequest request) =>
+        HttpMethods.IsGet(request.Method)
+            ? QueryStringRules
+                .Select(rule => KindProblem(rule, request.Query[rule.Name].ToString()))
+                .FirstOrDefault(problem => problem is not null)
+            : null;
+
+    private static string? KindProblem(QueryStringRule rule, string value)
+    {
+        if (value.Length == 0) return null;
+        var found = KindOf(value);
+        return found is { } kind && rule.Allowed.Contains(kind)
+            ? null
+            : $"Invalid '{rule.Name}' value. Expected {rule.Expected}, but got {KindName(found)}.";
+    }
+
+    private static JsonValueKind? KindOf(string value)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(value);
+            return document.RootElement.ValueKind;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string KindName(JsonValueKind? kind) => kind switch
+    {
+        null => "invalid JSON",
+        JsonValueKind.True or JsonValueKind.False => "Boolean",
+        _ => kind.ToString()!,
+    };
+
+    private sealed record QueryStringRule(string Name, string Expected, JsonValueKind[] Allowed);
+
+    private static readonly QueryStringRule[] QueryStringRules =
+    [
+        new("variables", "object, array, or null",
+            [JsonValueKind.Object, JsonValueKind.Array, JsonValueKind.Null]),
+        new("extensions", "object", [JsonValueKind.Object]),
+    ];
 
     internal static bool IsCapped(HttpRequest request) => IsGraphQl(request) || IsJson(request.ContentType);
 

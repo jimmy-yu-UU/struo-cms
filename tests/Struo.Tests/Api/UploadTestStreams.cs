@@ -53,6 +53,20 @@ internal sealed class RecordingLimitFeature(bool isReadOnly = false) : IHttpMaxR
     public long? MaxRequestBodySize { get; set; } = 30_000_000;
 }
 
+/// <summary>A typed logger that keeps what it is asked to write.</summary>
+internal sealed class RecordingLogger<T> : ILogger<T>
+{
+    private readonly RecordingLogger _inner = new();
+
+    public List<(LogLevel Level, string Message, Exception? Exception)> Entries => _inner.Entries;
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) => _inner.Log(logLevel, eventId, state, exception, formatter);
+}
+
 /// <summary>A logger that keeps what it is asked to write, exceptions included.</summary>
 internal sealed class RecordingLogger : ILogger
 {

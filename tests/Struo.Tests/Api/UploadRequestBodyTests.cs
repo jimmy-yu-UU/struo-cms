@@ -270,7 +270,7 @@ public class UploadRequestBodyTests
     }
 
     [Fact]
-    public async Task Another_request_the_server_rejected_keeps_its_own_failure_and_is_not_turned_into_a_bad_input_error()
+    public async Task Another_request_the_server_rejected_is_passed_on_for_the_shared_error_map_to_answer_as_a_client_error()
     {
         var rejected = new BadHttpRequestException("Bad chunk.", StatusCodes.Status400BadRequest);
         var context = Multipart(new FailingBodyStream(rejected));
@@ -278,7 +278,12 @@ public class UploadRequestBodyTests
 
         var act = () => UploadRequestBody.ReadFormAsync(context.Request, MaxUploadBytes, logger, CancellationToken.None);
 
-        (await act.Should().ThrowAsync<BadHttpRequestException>()).Which.Should().BeSameAs(rejected);
+        var thrown = (await act.Should().ThrowAsync<BadHttpRequestException>()).Which;
+        thrown.Should().BeSameAs(rejected);
+        var (status, body) = StruoExceptionHandler.Map(thrown, authenticated: true);
+        status.Should().Be(StatusCodes.Status400BadRequest);
+        body.Code.Should().Be("BAD_USER_INPUT");
+        body.Message.Should().Be("The request body could not be read.");
         logger.Entries.Should().BeEmpty();
     }
 

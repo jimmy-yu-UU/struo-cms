@@ -27,9 +27,10 @@ public static class DomainErrorMap
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
     /// host), a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
     /// constraint, index or column) and a database deadlock victim (<see cref="DeadlockMessage"/>). The
-    /// fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an over-limit request body, which maps
-    /// to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
-    /// any other <c>BadHttpRequestException</c> is not mapped. Any other unmapped type collapses to
+    /// fourth is Kestrel's <c>BadHttpRequestException</c>: its 413, an over-limit request body, maps
+    /// to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text, and any other 4xx (a request body that
+    /// timed out or that the server rejected) maps to <see cref="ErrorCodes.BadUserInput"/> with
+    /// <see cref="JsonBodyLimitMiddleware.UnreadableBodyMessage"/>; one whose status is not 4xx is not mapped. Any other unmapped type collapses to
     /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
     /// logging of that case is the caller's responsibility.
     /// </summary>
@@ -50,6 +51,8 @@ public static class DomainErrorMap
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
                 (ErrorCodes.PayloadTooLarge, JsonBodyLimitMiddleware.TooLargeMessage),
+            BadHttpRequestException { StatusCode: >= StatusCodes.Status400BadRequest and < StatusCodes.Status500InternalServerError } =>
+                (ErrorCodes.BadUserInput, JsonBodyLimitMiddleware.UnreadableBodyMessage),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
@@ -102,10 +105,15 @@ public static class DomainErrorMap
 
     /// <summary>
     /// REST-only: the HTTP status for <paramref name="exception"/>. A <see cref="StruoDomainException"/>
-    /// carries its own status; any other exception takes the status of its mapped <paramref name="code"/>.
+    /// carries its own status, so does a Kestrel 4xx <c>BadHttpRequestException</c>; any other exception takes the status of its mapped <paramref name="code"/>.
     /// </summary>
-    public static int StatusFor(Exception exception, string code) =>
-        exception is StruoDomainException domain ? domain.Status : StatusFor(code);
+    public static int StatusFor(Exception exception, string code) => exception switch
+    {
+        StruoDomainException domain => domain.Status,
+        BadHttpRequestException { StatusCode: >= StatusCodes.Status400BadRequest and < StatusCodes.Status500InternalServerError } rejected =>
+            rejected.StatusCode,
+        _ => StatusFor(code),
+    };
 
     /// <summary>
     /// REST-only: derives the HTTP status for a mapped <paramref name="code"/>. Co-located with the
