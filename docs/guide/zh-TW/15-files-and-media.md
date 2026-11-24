@@ -114,7 +114,7 @@ HTTP_STATUS:201
 同一句訊息與同樣的 details。讀不出來的請求表單（沒有 boundary、本文被截斷、表單值超過表單的個數
 上限）是 `400`／`BAD_USER_INPUT`，訊息是 `The request form could not be read.`。讀表單時請求本文
 逾時是 `408`／`BAD_USER_INPUT`，訊息是 `The request body could not be read.`；讀表單時本文因為其他
-原因被伺服器拒絕，回該拒絕的狀態（例如 `400`），代碼與訊息相同。沒有檔案寫入權限的
+原因被伺服器拒絕，回 `BAD_USER_INPUT` 與該拒絕的狀態（例如 `400`）。沒有檔案寫入權限的
 呼叫端在讀表單之前就收到 `403`。後台映像的 nginx 有自己的上限，會先以 HTML 頁面回應，見
 [第 20 章](20-deployment.md)。
 

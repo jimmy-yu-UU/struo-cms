@@ -9,8 +9,8 @@
   log entry. It answered `400` with `INTERNAL_SERVER_ERROR` for a value that is not JSON, and
   `500` (`200` under `Accept: application/json`) with no code for a string, a number or a Boolean;
   both wrote an error-level log entry. A `variables` array whose elements are not objects or `null`
-  is refused the same way; it answered `INTERNAL_SERVER_ERROR` when the query used a variable
-  ([Chapter 14](14-graphql.md#error-shapes)).
+  is refused the same way; it answered `INTERNAL_SERVER_ERROR` when the query used a variable and
+  was executed when the query used none ([Chapter 14](14-graphql.md#error-shapes)).
 - A `POST /graphql` body with a declared length that the server cannot read answers with
   `BAD_USER_INPUT` and the message `The request body could not be read.`, as a body without a
   declared length does: `408` when the client stops sending and the read times out. It answered

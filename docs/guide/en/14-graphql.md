@@ -507,10 +507,10 @@ A `GET` whose `variables` or `extensions` query parameter the server cannot take
 answer: HTTP `400` with those three `Accept` values and with `application/graphql-response+json`,
 no `data` key, one error with `BAD_USER_INPUT`, and no error-level log entry. `variables` takes a
 JSON object, `null`, or an array whose elements are objects or `null`; `extensions` takes a JSON
-object. A value that is not JSON, or is nested more than 64 levels deep, is refused with
-`Invalid 'variables' value. Expected object, array, or null, but got invalid JSON.`; a value of
-another kind is named in the message, as in `but got String.`. A parameter that appears more than
-once is read as its values joined with commas.
+object. A value that is not JSON, or is nested more than 64 levels deep, is refused with a message
+such as `Invalid 'variables' value. Expected object, array, or null, but got invalid JSON.`; a
+value of another kind is named in the message, as in `but got String.`. A parameter that appears
+more than once is read as its values joined with commas.
 
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That

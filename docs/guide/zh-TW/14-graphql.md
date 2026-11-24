@@ -413,7 +413,7 @@ HTTP_STATUS:400
 以 GET 送出、而查詢參數 `variables` 或 `extensions` 的值伺服器不收時，回應相同：上面三種 `Accept`
 與 `application/graphql-response+json` 都回 HTTP `400`，沒有 `data` 鍵，只有一則 `BAD_USER_INPUT`
 的錯誤，不寫 error 等級的記錄。`variables` 收 JSON 物件、`null`，或元素是物件或 `null` 的陣列；
-`extensions` 收 JSON 物件。值不是 JSON，或巢狀超過 64 層時，訊息是
+`extensions` 收 JSON 物件。值不是 JSON，或巢狀超過 64 層時，訊息像
 `Invalid 'variables' value. Expected object, array, or null, but got invalid JSON.`；是 JSON 但種類
 不對時，訊息點出收到的種類，像 `but got String.`。同一個參數出現多次時，讀到的是各個值以逗號相接
 的結果。

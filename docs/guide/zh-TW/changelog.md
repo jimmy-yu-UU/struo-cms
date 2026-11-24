@@ -8,7 +8,8 @@
   `400` 與 `BAD_USER_INPUT`，不寫 error 等級的記錄。先前值不是 JSON 時回 `400` 與
   `INTERNAL_SERVER_ERROR`；值是字串、數字或布林時回 `500`（`Accept: application/json` 時是 `200`）、
   沒有代碼；兩種都寫了 error 等級的記錄。`variables` 是陣列而元素不是物件或 `null` 時同樣被拒絕；
-  先前查詢有用到變數時回 `INTERNAL_SERVER_ERROR`（[第 14 章](14-graphql.md#錯誤形狀)）。
+  先前查詢有用到變數時回 `INTERNAL_SERVER_ERROR`，沒用到變數時照常執行
+  （[第 14 章](14-graphql.md#錯誤形狀)）。
 - `POST /graphql` 的 body 宣告了長度而伺服器讀不出來時，和沒有宣告長度的 body 一樣回
   `BAD_USER_INPUT` 與訊息 `The request body could not be read.`：用戶端送到一半停住、讀取逾時是
   `408`。先前回 `400` 與 `INTERNAL_SERVER_ERROR`，並寫 error 等級的記錄
