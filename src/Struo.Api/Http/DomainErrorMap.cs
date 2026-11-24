@@ -17,7 +17,7 @@ namespace Struo.Api.Http;
 public static class DomainErrorMap
 {
     /// <summary>The masked message of <see cref="ErrorCodes.Internal"/>; it names no detail of the failure.</summary>
-    public const string InternalErrorMessage = "An internal error occurred.";
+    internal const string InternalErrorMessage = "An internal error occurred.";
 
     /// <summary>
     /// Maps <paramref name="exception"/> to an <c>(code, message)</c> pair using

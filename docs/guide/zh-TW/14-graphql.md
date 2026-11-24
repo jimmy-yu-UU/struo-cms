@@ -423,7 +423,9 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 結果都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。body 因為其他原因讀不
 出來時，不論有沒有宣告長度，都回該失敗的狀態，內容是一則 `BAD_USER_INPUT` 的錯誤，訊息是
 `The request body could not be read.`：用戶端送到一半停住、讀取逾時是 `408`；body 送來就是壞的，
-例如 chunk 大小寫錯，是 `400`。伺服器為這樣的失敗寫一筆 warning 等級的記錄。
+例如 chunk 大小寫錯，是 `400`。伺服器為這樣的失敗寫一筆 warning 等級的記錄。讀 body 時是伺服器這
+一端出錯的話，回 HTTP `500`，形狀同樣是 `errors`，代碼是 `INTERNAL_SERVER_ERROR`，訊息是遮罩過的
+那一句，並寫一筆 error 等級的記錄。
 
 送到 `/graphql` 的 `multipart/form-data` 請求在讀 body 之前就被拒絕：HTTP `415`，內容是一則
 `BAD_USER_INPUT` 的錯誤，訊息是
