@@ -23,6 +23,13 @@ job、init container，或 `docker run --rm … <映像> migrate`。也可以設
 `MigrateOnStartup`。PostgreSQL 的鎖是 session 層級的 advisory lock，交易模式的連線池（例如
 PgBouncer）可能把取得和釋放分給不同的伺服器 session。`migrate` 這一步要直接連資料庫，不要經過連線池。
 
+命令列的命令從 content root 讀設定檔；content root 預設是目前的工作目錄，加 `--contentRoot <目錄>`
+就改讀那個目錄。請在放著 `appsettings.json` 的目錄執行 `migrate`，或用 `--contentRoot`
+指向那個目錄。`migrate` 套用植入 migration 的那一次，最後一行說明有沒有建立管理員：
+`Bootstrap admin created: <email>.`，或
+`No bootstrap admin was created: Auth:BootstrapAdmin:Email is not set.`，後面接著設定檔是從哪個
+目錄讀的。
+
 Migration 只往前走，沒有回滾命令，跑之前先備份資料庫。正式環境啟動時不做結構檢查，`migrate` 之後
 自己跑一次 `migrate:check`。命令與鎖的細節見[第 21 章：資料庫結構管理與升級](21-schema-and-upgrades.md)。
 
@@ -628,8 +635,9 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 
 第三道指令最後印出 `Applied 202610080000  CreateCoreSchema`、`Applied 202610080001  SeedCoreData`、
 `Applied 202611030000  AddLanguageCodeUniqueIndex`、`Applied 202611040000  CreateRoleCapabilities`、
-`Applied 202611060000  DropRoleCapabilities` 與
-`Applied 202611170000  ConvertStringColumnsToUtf8Mb4`。沒有 bootstrap 密碼的話，植入 migration 會以
+`Applied 202611060000  DropRoleCapabilities`、
+`Applied 202611170000  ConvertStringColumnsToUtf8Mb4` 與
+`Bootstrap admin created: admin@admin.com.`。沒有 bootstrap 密碼的話，植入 migration 會以
 `Auth__BootstrapAdmin__Password is required` 失敗。
 少了 `migrate` 這一步，`api` 容器會以上面〈啟動時會快速失敗的事〉的訊息結束。
 

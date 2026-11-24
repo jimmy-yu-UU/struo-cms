@@ -19,6 +19,8 @@ namespace Struo.Infrastructure.Migrations;
 /// <summary>Applies pending migrations and reports status against the prefixed version table.</summary>
 public sealed class MigrationHost(MigrationHostOptions options, ILoggerFactory loggerFactory)
 {
+    internal CoreSeedData? Seed => options.Seed;
+
     /// <summary>Runs every pending migration in version order; returns the ones applied by this run.</summary>
     public async Task<IReadOnlyList<MigrationInfo>> ApplyAsync(CancellationToken ct)
     {

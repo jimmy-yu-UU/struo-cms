@@ -85,7 +85,7 @@ public sealed class RelationPath
             ?? throw new QueryException($"Unknown collection '{current}' in path '{path}'.");
         var leafKnown =
             string.Equals(leaf, "id", StringComparison.OrdinalIgnoreCase) ||
-            terminal.Fields.Any(f => !f.Hidden && string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
+            terminal.Fields.Any(f => !f.Hidden && !f.Ignored && string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
         if (!leafKnown)
             throw new QueryException(
                 $"Unknown field '{leaf}' on collection '{current}' in path '{path}'.");
@@ -144,7 +144,7 @@ public sealed class RelationPath
             ?? throw new QueryException($"Unknown collection '{junctionCollection}' in path '{ctx.Path}'.");
 
         var leaf = ctx.Parts[^1];
-        var leafKnown = junctionMeta.Fields.Any(f => !f.Hidden && string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
+        var leafKnown = junctionMeta.Fields.Any(f => !f.Hidden && !f.Ignored && string.Equals(f.Name, leaf, StringComparison.OrdinalIgnoreCase));
         if (!leafKnown)
             throw new QueryException(
                 $"Unknown field '{leaf}' on collection '{junctionCollection}' in path '{ctx.Path}'.");

@@ -55,10 +55,12 @@ Development，讀你的 `appsettings.Development.json`。發佈出去的成品�
 API 映像的進入點就是它，所以 `docker run --rm … <映像> <命令>` 也行。
 
 命令讀的設定跟 API 一樣：appsettings 加上 `Section__Key` 環境變數，設定鍵也可以接在命令後面，
-例如 `--Database:ConnectionString=…`。結束代碼 `0` 是成功，`1` 是失敗，`2` 是用法錯誤。
+例如 `--Database:ConnectionString=…`。appsettings 從 content root 讀，預設是目前的工作目錄；
+`--contentRoot <目錄>` 改讀另一個目錄。結束代碼 `0` 是成功，`1` 是失敗，`2` 是用法錯誤。
 
-`migrate` 先印出 FluentMigrator 每一步的紀錄，最後每套用一支印一行 `Applied <版本>  <名稱>`；
-沒有東西要套用時只印 `Nothing to migrate.`。`migrate:status` 每支 migration 一行：
+`migrate` 先印出 FluentMigrator 每一步的紀錄，接著每套用一支印一行 `Applied <版本>  <名稱>`；
+套用到植入 migration 的那一次，最後再多一行說明有沒有建立管理員。沒有東西要套用時只印
+`Nothing to migrate.`。`migrate:status` 每支 migration 一行：
 
 ```
 $ dotnet run --project src/Struo.Api -- migrate:status

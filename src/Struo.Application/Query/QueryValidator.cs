@@ -29,7 +29,7 @@ public static class QueryValidator
         ctx.ValidateFilter(q.Filter, meta, hopsUsed: 0, logicalDepth: 1);
 
         foreach (var s in q.Sort) ctx.CheckField(s.Field, meta, forSort: true);
-        if (q.Fields is not null) foreach (var f in q.Fields) ctx.CheckField(f, meta, allowRelation: false);
+        if (q.Fields is not null) foreach (var f in q.Fields) ctx.CheckField(f, meta, allowRelation: false, selection: true);
         var facets = ctx.ValidateFacets(q.Facets, meta);
         ctx.ValidateAggregate(q.Aggregate, meta);
 
@@ -47,7 +47,7 @@ public static class QueryValidator
     }
 
     public static IReadOnlyList<string> SearchableFields(CollectionMetadata meta) =>
-        meta.Fields.Where(f => f.Searchable && !f.Hidden).Select(f => f.Name).ToList();
+        meta.Fields.Where(f => f.Searchable && !f.Hidden && !f.Ignored).Select(f => f.Name).ToList();
 
     /// <summary>
     /// Resolves each of a validated QueryModel's facet paths against the same collection metadata
@@ -128,7 +128,7 @@ public static class QueryValidator
 
         private void ValidateAggregateField(AggregateOp op, string field, CollectionMetadata meta)
         {
-            if (!Known(meta).Contains(field))
+            if (!Known(meta, selection: false).Contains(field))
                 throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'.");
             var fm = meta.Fields.FirstOrDefault(f => string.Equals(f.Name, field, StringComparison.OrdinalIgnoreCase));
             if (fm is { Translatable: true })
@@ -226,13 +226,14 @@ public static class QueryValidator
 
             var junctionMeta = metadata.GetCollection(junctionCollection)
                 ?? throw new QueryException($"Unknown collection '{junctionCollection}' in path '{fieldPath}'.");
-            var known = junctionMeta.Fields.Any(f => !f.Hidden && string.Equals(f.Name, remainder, StringComparison.OrdinalIgnoreCase));
+            var known = junctionMeta.Fields.Any(f => !f.Hidden && !f.Ignored && string.Equals(f.Name, remainder, StringComparison.OrdinalIgnoreCase));
             if (!known)
                 throw new QueryException($"Unknown field '{remainder}' on collection '{junctionCollection}' in path '{fieldPath}'.");
         }
 
         public void CheckField(
-            string path, CollectionMetadata meta, bool forSort = false, bool allowRelation = true, int hopsUsed = 0)
+            string path, CollectionMetadata meta, bool forSort = false, bool allowRelation = true, int hopsUsed = 0,
+            bool selection = false)
         {
             if (RelationPath.IsRelationPath(path))
             {
@@ -265,7 +266,7 @@ public static class QueryValidator
             }
             // "id" is always projected (PK); it is not in meta.Fields but is always valid.
             if (string.Equals(path, "id", StringComparison.OrdinalIgnoreCase)) return;
-            if (!Known(meta).Contains(path))
+            if (!Known(meta, selection).Contains(path))
                 throw new QueryException($"Unknown field '{path}' on collection '{meta.Name}'.");
         }
 
@@ -279,17 +280,20 @@ public static class QueryValidator
         // filterable/sortable, meta.total would become a blind-extraction oracle
         // (?filter[password][_startsWith]=...) that leaks the value one character at a time.
         //
+        // A field without a column (Ignored) is known only to field selection, which projects in memory.
+        //
         // Computed lazily per collection and cached: a quantified predicate's inner filter runs
         // against the target collection's metadata, which differs from the root's on every recursion.
-        private HashSet<string> Known(CollectionMetadata meta)
+        private HashSet<string> Known(CollectionMetadata meta, bool selection)
         {
-            if (knownCache.TryGetValue(meta.Name, out var cached)) return cached;
-            var known = meta.Fields.Where(f => !f.Hidden).Select(f => f.Name)
+            var key = selection ? "select:" + meta.Name : meta.Name;
+            if (knownCache.TryGetValue(key, out var cached)) return cached;
+            var known = meta.Fields.Where(f => !f.Hidden && (selection || !f.Ignored)).Select(f => f.Name)
                 .Concat(meta.Relations
                     .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
                     .Select(r => r.ForeignKey!))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            knownCache[meta.Name] = known;
+            knownCache[key] = known;
             return known;
         }
 

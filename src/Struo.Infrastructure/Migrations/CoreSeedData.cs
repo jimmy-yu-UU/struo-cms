@@ -38,6 +38,9 @@ public sealed record CoreSeedData(
     public bool CreatesDefaultAdminInProduction =>
         IsProduction && HasAdmin && string.Equals(AdminEmail, DefaultAdminEmail, StringComparison.Ordinal);
 
+    /// <summary>The directory the host read its configuration files from; null when it is not known.</summary>
+    public string? ContentRootPath { get; init; }
+
     public bool HasAdmin => AdminEmail is not null && AdminPasswordHash is not null;
 
     /// <summary>A copy that hides the admin password hash; unchanged when there is no admin.</summary>
@@ -82,6 +85,7 @@ public sealed record CoreSeedData(
     public static CoreSeedData FromServices(IServiceProvider services)
     {
         var configuration = services.GetRequiredService<IConfiguration>();
+        var environment = services.GetService<IHostEnvironment>();
         return From(
             services.GetRequiredService<IOptions<LocalizationOptions>>().Value,
             services.GetRequiredService<IPasswordHasher>(),
@@ -89,6 +93,6 @@ public sealed record CoreSeedData(
             configuration["Auth:BootstrapAdmin:Password"],
             configuration.GetSection("Rbac:PublicReadCollections").Get<string[]>() ?? [],
             services.GetService<IOptions<PasswordPolicyOptions>>()?.Value)
-            with { IsProduction = services.GetService<IHostEnvironment>()?.IsProduction() == true };
+            with { IsProduction = environment?.IsProduction() == true, ContentRootPath = environment?.ContentRootPath };
     }
 }

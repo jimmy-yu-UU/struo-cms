@@ -13,6 +13,9 @@ public sealed record FieldMetadata
     public bool ReadOnly { get; init; }
     public bool Hidden { get; init; }
     public bool Translatable { get; init; }
+
+    /// <summary>The property is marked <c>[SugarColumn(IsIgnore = true)]</c>, so the collection has no column for it. It can be selected but not filtered, sorted, faceted, aggregated or searched.</summary>
+    public bool Ignored { get; init; }
     public int Sort { get; init; }
     public string? HelpText { get; init; }
     public string? Group { get; init; }

@@ -483,6 +483,15 @@ public class JunctionPayloadGraphQlTests
     }
 
     [Fact]
+    public async Task A_payload_field_without_a_column_is_selectable_but_not_a_junction_filter_field()
+    {
+        var sdl = await BuildSdlAsync();
+
+        InputBlock(sdl, "ParentChildrenJunctionFilterInput").Should().NotContain("badge").And.Contain("note");
+        TypeBlock(sdl, "ParentChildrenJunction").Should().Contain("badge: String");
+    }
+
+    [Fact]
     public async Task Junction_filter_inside_some_reaches_the_query_model()
     {
         QueryModel? captured = null;

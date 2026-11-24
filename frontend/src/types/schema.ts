@@ -16,6 +16,7 @@ export type FieldMeta = {
   readOnly: boolean
   hidden: boolean
   translatable: boolean
+  ignored?: boolean // the property has no column: it can be selected but not filtered, sorted or searched
   sort: number
   maxLength?: number | null // effective CMS-layer limit resolved by the backend scanner; null = unlimited
   helpText?: string | null

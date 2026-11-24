@@ -36,6 +36,12 @@
   - Every other pair passes, including `decimal(18,4)` and `numeric(18,4)` on a `decimal`;
     `bit`, `boolean`, `tinyint` and the integer types on a `bool`; the array types such as
     `float4[]` and `text[]`; and a `double` or `float` property on a floating-point column.
+- The scanner stops the host at start, with a `MetadataException` that names "Class.Property", when
+  a `[CmsField]` with `Searchable = true` or `Sortable = true` sits on a property with
+  `[SugarColumn(IsIgnore = true)]`. Such a property has no column; the host used to start, and a
+  request that filtered or sorted by it answered `500`. Remove `Searchable` or `Sortable` from the
+  property, or remove `IsIgnore` so it is stored in a column; a table that exists needs a migration
+  when a column is added ([Chapter 5](05-collections.md)).
 - The scanner stops the host at start, with a `MetadataException`, when the key of a `[CmsRelation]`
   has a type other than the primary key it points at, each compared without `?`, so `int` against
   `long` is refused too; the message names the relation as "Class.Property", the key and the
@@ -67,7 +73,24 @@
   along one path of an operation; the default is `3`, the value the GraphQL server applied before,
   and a value below `1` or above `65535` stops the host at start, with the key in the message
   ([Chapter 4](04-configuration.md), [Chapter 14](14-graphql.md)).
-- New public member: `GraphQlOptions.MaxFieldCycleDepth`.
+- `migrate` and a `Database:MigrateOnStartup` start say whether the run that applied the core seed
+  created the bootstrap admin. `migrate` prints one more line after the `Applied` lines: the admin's
+  email, or that `Auth:BootstrapAdmin:Email` is not set and which directory the configuration files
+  were read from. The start writes the same text to the log, at `Information` when the admin was
+  created and at `Warning` when it was not. Exit codes are unchanged, and
+  `--contentRoot <directory>` reads the configuration files from another directory
+  ([Chapter 20](20-deployment.md)).
+- `FieldMetadata.Ignored` is `true` for a `[CmsField]` on a property with
+  `[SugarColumn(IsIgnore = true)]`, and `GET /api/schema` lists it as `ignored` on every field
+  ([Chapter 5](05-collections.md)).
+- New public members: `GraphQlOptions.MaxFieldCycleDepth`, `FieldMetadata.Ignored`,
+  `CoreSeedData.ContentRootPath`.
+
+### Changed
+
+- A disabled control in the admin (an input, textarea, select, checkbox, switch, radio button,
+  number field, or a button) shows the default cursor, where some of them showed the `not-allowed`
+  cursor. Greying and the rest of the disabled styling are unchanged.
 
 ### Fixed
 
@@ -83,6 +106,12 @@
   answered with `500` `INTERNAL_SERVER_ERROR`. It is `408` with `BAD_USER_INPUT` and the message
   `The request body could not be read.`, and the server logs a warning
   ([Chapter 15](15-files-and-media.md)).
+- In 0.31.0, filtering, sorting, faceting or aggregating by a `[CmsField]` on a property with
+  `[SugarColumn(IsIgnore = true)]`, or ending a relation path in one, answered `500`
+  `INTERNAL_SERVER_ERROR`, and the same filter in GraphQL answered `INTERNAL_SERVER_ERROR`. REST now
+  answers `400` with the message of an unknown field, and the GraphQL filter input type has no
+  entry for the field, so the request is rejected before it runs and the answer has no `data` key;
+  `fields=` selects it ([Chapter 10](10-query-basics.md)).
 
 ## 0.31.0 — 2026-11-23
 

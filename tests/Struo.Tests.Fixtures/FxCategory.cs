@@ -20,6 +20,11 @@ public sealed class FxCategory : AuditableEntity, ISoftDeletable
     [CmsField(Label = "Name", Interface = FieldInterface.Text, Required = true, Searchable = true, Sort = 1)]
     public string Name { get; set; } = string.Empty;
 
+    // No column: the property only carries its initial value, so it can be selected but not queried.
+    [CmsField(Label = "Badge", Interface = FieldInterface.Text, Sort = 2)]
+    [SugarColumn(IsIgnore = true)]
+    public string Badge { get; set; } = "fx-badge";
+
     [SugarColumn(IsNullable = true)]
     public Guid? ParentId { get; set; }
 

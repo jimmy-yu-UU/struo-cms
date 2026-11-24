@@ -31,6 +31,11 @@
   - 其他組合照常通過，包含 `decimal` 配 `decimal(18,4)` 與 `numeric(18,4)`；`bool` 配 `bit`、
     `boolean`、`tinyint` 與整數型別；`float4[]`、`text[]` 這類陣列型別；以及 `double` 或 `float`
     屬性配浮點欄位。
+- 當屬性帶 `[SugarColumn(IsIgnore = true)]`，又在 `[CmsField]` 上設 `Searchable = true` 或
+  `Sortable = true`，掃描器就讓主機在啟動時失敗，丟出 `MetadataException`，訊息點名「類別.屬性」。
+  這種屬性沒有欄位；主機原本能啟動，依它篩選或排序的請求回 `500`。把屬性上的 `Searchable` 或
+  `Sortable` 拿掉，或拿掉 `IsIgnore` 讓它存進欄位；加欄位時，已存在的表需要 migration
+  （見 [第 5 章](05-collections.md)）。
 - 當 `[CmsRelation]` 的鍵，型別和它指向的主鍵不同（兩邊各自去掉 `?` 再比，所以 `int` 對 `long`
   也被擋），掃描器就讓主機在啟動時失敗，丟出 `MetadataException`，訊息以「類別.屬性」點名關聯，
   點名鍵與主鍵（各含所在類別與型別），以及該宣告的型別（[第 8 章](08-relations.md)）。要比的鍵是
@@ -56,7 +61,20 @@
 - `GraphQl:MaxFieldCycleDepth` 設定同一個欄位（型別加欄位名稱）在一次操作的同一條路徑上最多出現幾
   次；預設 `3`，與先前 GraphQL 伺服器套用的值相同；小於 `1` 或大於 `65535` 的值讓主機啟動失敗，
   訊息帶上這個鍵（見 [第 4 章](04-configuration.md)、[第 14 章](14-graphql.md)）。
-- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`。
+- `migrate` 與 `Database:MigrateOnStartup` 的啟動會說明套用核心植入的那一次有沒有建立 bootstrap
+  管理員。`migrate` 在 `Applied` 各行之後多印一行：管理員的 email，或
+  `Auth:BootstrapAdmin:Email` 沒設、設定檔是從哪個目錄讀的。啟動則把同樣的文字寫進記錄，建了用
+  `Information`，沒建用 `Warning`。結束代碼不變，`--contentRoot <目錄>` 改讀另一個目錄的設定檔
+  （見 [第 20 章](20-deployment.md)）。
+- `[CmsField]` 所在屬性帶 `[SugarColumn(IsIgnore = true)]` 時，`FieldMetadata.Ignored` 為 `true`，
+  `GET /api/schema` 在每個欄位上列出 `ignored`（見 [第 5 章](05-collections.md)）。
+- 新增的公開成員：`GraphQlOptions.MaxFieldCycleDepth`、`FieldMetadata.Ignored`、
+  `CoreSeedData.ContentRootPath`。
+
+### 變更
+
+- 後台停用的控制項（輸入框、多行文字框、下拉選單、核取方塊、開關、單選鈕、數字欄位與按鈕）一律顯示
+  預設游標，部分控制項原本顯示 `not-allowed` 游標。變灰與其他停用樣式不變。
 
 ### 修正
 
@@ -70,6 +88,11 @@
 - 0.31.0 中，上傳請求的本文在伺服器讀取 multipart 表單時逾時，會回 `500` `INTERNAL_SERVER_ERROR`。
   現在回 `408`，代碼 `BAD_USER_INPUT`，訊息 `The request body could not be read.`，伺服器記一則警告
   （見 [第 15 章](15-files-and-media.md)）。
+- 0.31.0 中，依屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 篩選、排序、做 facet 或彙總，
+  或讓關聯路徑以它結尾，會回 `500` `INTERNAL_SERVER_ERROR`；GraphQL 的同一個篩選回
+  `INTERNAL_SERVER_ERROR`。REST 現在回 `400`，訊息與未知欄位的相同；GraphQL 的篩選輸入型別沒有
+  這個欄位，請求在執行前就被拒絕，回應沒有 `data` 鍵；`fields=` 選得到它
+  （見 [第 10 章](10-query-basics.md)）。
 
 ## 0.31.0 — 2026-11-23
 
