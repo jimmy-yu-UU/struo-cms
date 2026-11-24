@@ -55,8 +55,9 @@ public sealed class Announcement : AuditableEntity
 
 `AuditableEntity` 把 `Id` 宣告成 `abstract`，忘記覆寫是編譯期錯誤；覆寫上要帶
 `[SugarColumn(IsPrimaryKey = true)]`，因為繼承來的 `Id` 上沒有 attribute，SqlSugar 認不出它
-是主鍵。它同時供應 `CreatedAt`／`CreatedBy`／`UpdatedAt`／`UpdatedBy`，四個都不用加
-`[CmsField]`——掃描器自動把它們變成系統欄位。
+是主鍵。一個集合要剛好有一個這樣標記的屬性：一個都沒有，或有兩個以上，主機啟動時就停下並丟出
+`MetadataException`，訊息點名類別。`AuditableEntity` 同時供應 `CreatedAt`／`CreatedBy`／
+`UpdatedAt`／`UpdatedBy`，四個都不用加 `[CmsField]`——掃描器自動把它們變成系統欄位。
 
 `AuditableEntity` 還有一個樂觀鎖定用的 `Version`，不用加 `[CmsField]`。項目回應裡的 `version`
 只有繼承 `AuditableEntity` 的集合才有，`Language`、`ArticleTag` 這類集合沒有。

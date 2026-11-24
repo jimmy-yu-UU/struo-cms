@@ -60,7 +60,9 @@ reports the missing table and refuses to start.
 
 `AuditableEntity` declares `Id` as `abstract`, so forgetting to override it is a compile error; the
 override must carry `[SugarColumn(IsPrimaryKey = true)]`, because the inherited `Id` carries no
-attribute and SqlSugar doesn't recognize it as the primary key. It also supplies
+attribute and SqlSugar doesn't recognize it as the primary key. A collection has exactly one
+property marked this way: with none, or with two or more, the host stops at start with a
+`MetadataException` that names the class. `AuditableEntity` also supplies
 `CreatedAt`/`CreatedBy`/`UpdatedAt`/`UpdatedBy` — none of the four needs a `[CmsField]`; the scanner
 turns them into system fields automatically.
 
