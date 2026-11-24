@@ -824,6 +824,7 @@ public static class MetadataScanner
     /// </remarks>
     public static IReadOnlyList<RelationMetadata> ScanRelations(Type type)
     {
+        RelationDeclarationCheck.RequirePublicInstanceRelations(type);
         var list = new List<RelationMetadata>();
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {

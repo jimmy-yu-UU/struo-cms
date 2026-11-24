@@ -1,17 +1,24 @@
 using System.Reflection;
 using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
 
 namespace Struo.Infrastructure.Metadata;
 
 /// <summary>
-/// The scan-time checks of what a <c>[CmsRelation]</c> property names: each key property and the
-/// junction <c>SortField</c> must exist, spelled exactly, and have a column, and a <c>SortField</c> belongs
-/// to a many-to-many relation. The relation is named by the class that declares the property.
+/// The scan-time checks of what a <c>[CmsRelation]</c> property declares: each key property must exist,
+/// spelled exactly, and have a column; a many-to-many names two different key properties; <c>OnDelete</c>
+/// belongs to a relation held by a many-to-one key; the junction <c>SortField</c> follows
+/// <see cref="SortFieldCheck"/>; and the relation is a public instance property. The relation is named by
+/// the class that declares the property.
 /// </summary>
 internal static class RelationDeclarationCheck
 {
     private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
+
+    private const BindingFlags EveryDeclared =
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static |
+        BindingFlags.DeclaredOnly;
 
     // Named by the type that declares the relation: that is the declaration to change.
     public static string RelationName(PropertyInfo relation) => $"{relation.DeclaringType!.Name}.{relation.Name}";
@@ -51,20 +58,53 @@ internal static class RelationDeclarationCheck
             KeyLookup.Absence(holder, name, kind, resolution));
 
     /// <summary>
-    /// Every relation of every scanned collection: the keys it names and its <c>SortField</c> are properties
-    /// with a column, and a one-to-many child key is read off the collection class the element type is
-    /// named after.
+    /// Every relation of every scanned collection: the keys it names are properties with a column, a
+    /// many-to-many names two different keys, <c>OnDelete</c> stays on a many-to-one or one-to-one relation,
+    /// <c>SortField</c> follows <see cref="SortFieldCheck"/>, and a one-to-many child key is read off the
+    /// collection class the element type is named after.
     /// </summary>
     public static void Require(IReadOnlyDictionary<string, Type> collections)
     {
         var relations = collections.Values
             .SelectMany(type => type.GetProperties(PublicInstance))
-            .Where(prop => prop.IsDefined(typeof(CmsRelationAttribute), inherit: true));
-        foreach (var prop in relations)
-            RequireRelation(prop, collections);
+            .SelectMany(prop => prop.GetCustomAttributes<CmsRelationAttribute>().Take(1)
+                .Select(attribute => (Property: prop, Attribute: attribute)));
+        foreach (var (prop, attribute) in relations)
+            RequireRelation(prop, attribute, collections);
     }
 
-    private static void RequireRelation(PropertyInfo prop, IReadOnlyDictionary<string, Type> collections)
+    /// <summary>
+    /// A <c>[CmsRelation]</c> property of <paramref name="collection"/> or of a base class is a public
+    /// instance property: the scan reads no other.
+    /// </summary>
+    public static void RequirePublicInstanceRelations(Type collection)
+    {
+        var misplaced = Hierarchy(collection)
+            .SelectMany(type => type.GetProperties(EveryDeclared))
+            .FirstOrDefault(
+                prop => prop.IsDefined(typeof(CmsRelationAttribute), inherit: false) && !IsPublicInstance(prop));
+        if (misplaced is null) return;
+
+        var what = misplaced.GetAccessors(nonPublic: true)[0].IsStatic ? "static" : "not public";
+        throw new MetadataException(
+            $"Relation '{RelationName(misplaced)}' has [CmsRelation] but is {what}, so the relation is not served. " +
+            "A relation is a public instance property: declare it public and without static.");
+    }
+
+    private static IEnumerable<Type> Hierarchy(Type type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+            yield return current;
+    }
+
+    private static bool IsPublicInstance(PropertyInfo prop)
+    {
+        var accessors = prop.GetAccessors(nonPublic: true);
+        return accessors.Any(accessor => accessor.IsPublic) && !accessors[0].IsStatic;
+    }
+
+    private static void RequireRelation(
+        PropertyInfo prop, CmsRelationAttribute attribute, IReadOnlyDictionary<string, Type> collections)
     {
         if (NavigateShape.Of(prop) is not { } nav) return;
 
@@ -74,8 +114,32 @@ internal static class RelationDeclarationCheck
             RequireColumn(
                 prop, holder, declaration, key, "key", "the relation cannot read or store the key", resolution);
         }
-        if (prop.GetCustomAttribute<CmsRelationAttribute>()?.SortField is { } sortField)
-            RequireSortField(prop, nav, sortField);
+        if (nav.IsJunction) RequireDistinctJunctionKeys(prop, nav);
+        RequireOnDeleteOnManyToOne(prop, nav, attribute);
+        if (attribute.SortField is { } sortField)
+            SortFieldCheck.Require(prop, nav, sortField);
+    }
+
+    private static void RequireDistinctJunctionKeys(PropertyInfo prop, NavigateShape nav)
+    {
+        if (!string.Equals(nav.ParentKey, nav.TargetKey, StringComparison.Ordinal)) return;
+
+        throw new MetadataException(
+            $"Relation '{RelationName(prop)}' declares the same junction property '{nav.ParentKey}' as parent key " +
+            $"and as target key in [Navigate]: a link would store both ids in one column. {nav.JunctionType!.Name} " +
+            "needs one key property per side; name a different property for each.");
+    }
+
+    private static void RequireOnDeleteOnManyToOne(
+        PropertyInfo prop, NavigateShape nav, CmsRelationAttribute attribute)
+    {
+        if (attribute.OnDelete == OnDelete.Restrict || !NavigateShape.IsListProperty(prop)) return;
+
+        var kind = nav.IsJunction ? "many-to-many" : "one-to-many";
+        throw new MetadataException(
+            $"Relation '{RelationName(prop)}' declares OnDelete = {attribute.OnDelete} in [CmsRelation], but " +
+            "OnDelete decides what happens to the items that point at a deleted target through a many-to-one key, " +
+            $"so it has no effect on a {kind} relation. Remove OnDelete from it.");
     }
 
     // The description, the class that holds the property, the property name and how the holder was resolved
@@ -100,24 +164,16 @@ internal static class RelationDeclarationCheck
         }
     }
 
-    private static void RequireSortField(PropertyInfo prop, NavigateShape nav, string sortField)
-    {
-        if (!nav.IsJunction)
-            throw new MetadataException(
-                $"Relation '{RelationName(prop)}' declares SortField '{sortField}', but SortField orders the links of "
-                + "a many-to-many relation and this relation is not one. Remove SortField from it.");
-
-        RequireColumn(
-            prop, nav.JunctionType!, $"SortField '{sortField}' in [CmsRelation]", sortField, "sort field",
-            "the links cannot be ordered by it");
-    }
-
-    private static void RequireColumn(
+    /// <summary>
+    /// The property <paramref name="name"/> of <paramref name="holder"/> when it exists and has a column;
+    /// otherwise a <see cref="MetadataException"/> that names the relation and what to declare.
+    /// </summary>
+    public static PropertyInfo RequireColumn(
         PropertyInfo relation, Type holder, string declaration, string name, string kind, string consequence,
         string? resolution = null)
     {
         var property = RequireProperty(relation, holder, declaration, name, kind, resolution);
-        if (!KeyLookup.HasNoColumn(property)) return;
+        if (!KeyLookup.HasNoColumn(property)) return property;
 
         throw new MetadataException(
             $"Relation '{RelationName(relation)}' declares {declaration}, but "

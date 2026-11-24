@@ -567,4 +567,332 @@ public class RelationDeclarationCheckTests
         scan.Should().Throw<MetadataException>().Which.Message
             .Should().StartWith("Relation 'MissingNavigateAndAnUnknownSortField.Unnavigated'");
     }
+
+    // ── OnDelete belongs to a relation held by a many-to-one key ─────────────
+
+    [SugarTable("rdc_od_o2m")]
+    [CmsCollection("Od o2m", Name = "rdcOdO2m")]
+    private sealed class OneToManyWithOnDelete
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, nameof(Kid.ParentId))]
+        [CmsRelation(Interface = RelationInterface.RelatedList, OnDelete = OnDelete.SetNull)]
+        [SugarColumn(IsIgnore = true)] public List<Kid> Kids { get; set; } = [];
+    }
+
+    [SugarTable("rdc_od_m2m")]
+    [CmsCollection("Od m2m", Name = "rdcOdM2m")]
+    private sealed class ManyToManyWithOnDelete
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect, OnDelete = OnDelete.Cascade)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_od_m2o")]
+    [CmsCollection("Od m2o", Name = "rdcOdM2o")]
+    private sealed class ManyToOneWithOnDelete
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public Guid? TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.SetNull)]
+        [SugarColumn(IsIgnore = true)] public Target? Target { get; set; }
+    }
+
+    [SugarTable("rdc_od_o2o")]
+    [CmsCollection("Od o2o", Name = "rdcOdO2o")]
+    private sealed class OneToOneWithOnDelete
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public Guid? TargetId { get; set; }
+
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, OnDelete = OnDelete.Cascade)]
+        [SugarColumn(IsIgnore = true)] public Target? Target { get; set; }
+    }
+
+    [SugarTable("rdc_od_two_rules")]
+    [CmsCollection("Od two rules", Name = "rdcOdTwoRules")]
+    private sealed class OnDeleteAndAnUnknownSortField
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect, OnDelete = OnDelete.Cascade, SortField = "NoSuchSort")]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [Theory]
+    [InlineData(typeof(OneToManyWithOnDelete), "OneToManyWithOnDelete.Kids", "SetNull", "one-to-many")]
+    [InlineData(typeof(ManyToManyWithOnDelete), "ManyToManyWithOnDelete.Tags", "Cascade", "many-to-many")]
+    public void OnDelete_on_a_relation_that_is_not_held_by_a_many_to_one_key_is_refused(
+        Type owner, string relation, string value, string kind)
+    {
+        var scan = () => MetadataScanner.ScanTypes([owner, typeof(Target), typeof(Kid)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith($"Relation '{relation}' declares OnDelete = {value} in [CmsRelation]")
+            .And.Contain("what happens to the items that point at a deleted target through a many-to-one key")
+            .And.Contain($"no effect on a {kind} relation").And.Contain("Remove OnDelete from it");
+    }
+
+    // Pins: OnDelete decides the delete of a many-to-one and a one-to-one relation.
+    [Fact]
+    public void OnDelete_on_a_many_to_one_or_one_to_one_relation_passes()
+    {
+        MetadataScanner.ScanTypes([typeof(ManyToOneWithOnDelete), typeof(Target)]).Should().HaveCount(2);
+        MetadataScanner.ScanTypes([typeof(OneToOneWithOnDelete), typeof(Target)]).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void OnDelete_is_reported_before_the_sort_field_of_the_same_relation()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OnDeleteAndAnUnknownSortField), typeof(Target)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Contain("OnDelete = Cascade");
+    }
+
+    // ── a many-to-many names one key property per side ───────────────────────
+
+    [SugarTable("rdc_shared_junction")]
+    private sealed class SharedKeyJunction
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid LinkId { get; set; }
+        public long Shared { get; set; }
+    }
+
+    [SugarTable("rdc_same_key")]
+    [CmsCollection("Same key", Name = "rdcSameKey")]
+    private sealed class JunctionKeysAreOneProperty
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(SharedKeyJunction), nameof(SharedKeyJunction.LinkId), nameof(SharedKeyJunction.LinkId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_same_key_type")]
+    [CmsCollection("Same key type", Name = "rdcSameKeyType")]
+    private sealed class JunctionKeysAreOnePropertyOfAnotherType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(SharedKeyJunction), nameof(SharedKeyJunction.Shared), nameof(SharedKeyJunction.Shared))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_self_junction")]
+    private sealed class SelfJunction
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid FromId { get; set; }
+        public Guid ToId { get; set; }
+    }
+
+    [SugarTable("rdc_self_linked")]
+    [CmsCollection("Self linked", Name = "rdcSelfLinked")]
+    private sealed class SelfLinked
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(SelfJunction), nameof(SelfJunction.FromId), nameof(SelfJunction.ToId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<SelfLinked> Related { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_many_to_many_that_names_one_property_for_both_keys_is_refused()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(JunctionKeysAreOneProperty), typeof(Target)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith("Relation 'JunctionKeysAreOneProperty.Tags' declares the same junction property " +
+                                   "'LinkId' as parent key and as target key in [Navigate]")
+            .And.Contain("a link would store both ids in one column")
+            .And.Contain("SharedKeyJunction needs one key property per side");
+    }
+
+    [Fact]
+    public void Keys_that_are_one_property_are_reported_before_the_key_types_are_compared()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(JunctionKeysAreOnePropertyOfAnotherType), typeof(Target)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("the same junction property 'Shared'").And.NotContain("primary key");
+    }
+
+    // Pin: a self-referencing many-to-many names two different properties of the junction.
+    [Fact]
+    public void A_self_referencing_many_to_many_with_two_key_properties_passes() =>
+        MetadataScanner.ScanTypes([typeof(SelfLinked)]).Should().ContainSingle();
+
+    // ── a relation is a public instance property ─────────────────────────────
+
+
+    [SugarTable("rdc_vis_private")]
+    [CmsCollection("Vis private", Name = "rdcVisPrivate")]
+    private sealed class PrivateRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] private List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_internal")]
+    [CmsCollection("Vis internal", Name = "rdcVisInternal")]
+    private sealed class InternalRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] internal List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_protected")]
+    [CmsCollection("Vis protected", Name = "rdcVisProtected")]
+    private class ProtectedRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] protected List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_private_protected")]
+    [CmsCollection("Vis private protected", Name = "rdcVisPrivateProtected")]
+    private class PrivateProtectedRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] private protected List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_protected_internal")]
+    [CmsCollection("Vis protected internal", Name = "rdcVisProtectedInternal")]
+    private class ProtectedInternalRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] protected internal List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_static")]
+    [CmsCollection("Vis static", Name = "rdcVisStatic")]
+    private sealed class StaticRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public static List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_private_static")]
+    [CmsCollection("Vis private static", Name = "rdcVisPrivateStatic")]
+    private sealed class PrivateStaticRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] private static List<Target> Tags { get; set; } = [];
+    }
+
+    private abstract class BaseWithPrivateRelation
+    {
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] private List<Target> Hidden { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_base_private")]
+    [CmsCollection("Vis base private", Name = "rdcVisBasePrivate")]
+    private sealed class SubclassOfAPrivateRelation : BaseWithPrivateRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    private abstract class BaseWithPublicRelation
+    {
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rdc_vis_base_public")]
+    [CmsCollection("Vis base public", Name = "rdcVisBasePublic")]
+    private sealed class SubclassOfAPublicRelation : BaseWithPublicRelation
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    [SugarTable("rdc_vis_two_rules")]
+    [CmsCollection("Vis two rules", Name = "rdcVisTwoRules")]
+    private sealed class PrivateRelationAndAMissingNavigate
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Unnavigated { get; set; } = [];
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] private List<Target> Hidden { get; set; } = [];
+    }
+
+    public static TheoryData<Type, string, string> NonPublicInstanceRelations() => new()
+    {
+        { typeof(PrivateRelation), "PrivateRelation.Tags", "not public" },
+        { typeof(InternalRelation), "InternalRelation.Tags", "not public" },
+        { typeof(ProtectedRelation), "ProtectedRelation.Tags", "not public" },
+        { typeof(PrivateProtectedRelation), "PrivateProtectedRelation.Tags", "not public" },
+        { typeof(ProtectedInternalRelation), "ProtectedInternalRelation.Tags", "not public" },
+        { typeof(StaticRelation), "StaticRelation.Tags", "static" },
+        { typeof(PrivateStaticRelation), "PrivateStaticRelation.Tags", "static" },
+        { typeof(SubclassOfAPrivateRelation), "BaseWithPrivateRelation.Hidden", "not public" },
+    };
+
+    [Theory]
+    [MemberData(nameof(NonPublicInstanceRelations))]
+    public void A_relation_that_is_not_a_public_instance_property_is_refused_and_names_what_it_is(
+        Type owner, string relation, string what)
+    {
+        var scan = () => MetadataScanner.ScanTypes([owner, typeof(Target)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith($"Relation '{relation}' has [CmsRelation] but is {what}")
+            .And.Contain("the relation is not served")
+            .And.Contain("A relation is a public instance property");
+    }
+
+    // Pin: a public instance relation declared on a base class is read.
+    [Fact]
+    public void A_public_instance_relation_declared_on_a_base_class_passes() =>
+        MetadataScanner.ScanTypes([typeof(SubclassOfAPublicRelation), typeof(Target)]).Should().HaveCount(2);
+
+    [Fact]
+    public void A_non_public_relation_is_reported_before_a_missing_navigate_of_the_same_class()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(PrivateRelationAndAMissingNavigate), typeof(Target)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().StartWith("Relation 'PrivateRelationAndAMissingNavigate.Hidden' has [CmsRelation]")
+            .And.Contain("but is not public");
+    }
 }
