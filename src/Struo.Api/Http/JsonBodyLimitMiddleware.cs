@@ -91,8 +91,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
     // A failure the server did not call a client error is not caught here.
     private async Task<(MemoryStream? Body, int FailureStatus)> ReadWithinLimitAsync(HttpContext context)
     {
-        var declared = context.Request.ContentLength ?? 0;
-        var buffer = new MemoryStream((int)Math.Min(declared, Math.Min(_limit, int.MaxValue)));
+        var buffer = new MemoryStream();
         var chunk = ArrayPool<byte>.Shared.Rent(BufferChunkBytes);
         try
         {
