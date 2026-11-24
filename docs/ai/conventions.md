@@ -428,27 +428,31 @@ A `Repeater` sub-field has no column, so only the type checks run on it
 (`ColumnDeclarationCheck.RequireSubFieldType`: the interface table and the `object` walk above), and
 none of them runs when the `Repeater` property carries `[SugarColumn(IsIgnore = true)]`. A
 `MultiSelect` or `CheckboxGroup` property with no `[CmsOptions]`, or one that lists no value, is
-rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsRelation]` property's `[Navigate]` is
-checked by `NavigateShape`: a many-to-one or one-to-one foreign-key name must be a property of the
-declaring entity, matched exactly, and a one-to-many one a property of the list's element type,
-matched without regard to case. `MetadataScanner.ValidateJunctionKeyProperties` requires both key
-names of a many-to-many to match a property of the junction type exactly, and runs before the other
-junction checks. `MetadataScanner.ValidateCollectionPrimaryKeys` requires every collection to have
-exactly one property that carries `[SugarColumn(IsPrimaryKey = true)]` on its own declaration, read
-without attribute inheritance as SqlSugar reads it: an inherited property that carries the
-attribute counts, an override that leaves it out does not. `KeyLookup`
-(`src/Struo.Infrastructure/Metadata/KeyLookup.cs`) holds the lookups these checks share.
-`MetadataScanner.ValidateRelationKeyTypes` then compares the type of each key of a
-`[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and with
-no integer widening: the many-to-one key against the target's primary key, the one-to-many child
-key against the declaring entity's, the junction's parent key against the declaring entity's and
-its target key against the target's. A key is compared when the collection name of the class it
-points at is a scanned collection, and the primary key is read off that class; a target whose name
-is no scanned collection is not compared, and `RelationshipGraph` refuses it when the host starts.
-Each refusal throws a `MetadataException` that names the relation or the class and
-what to declare. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
-`NavigateForeignKeyTests`, `KeyDeclarationCheckTests` and `RelationKeyTypeCheckTests` pin these;
-`docs/ai/decisions/relation-key-and-primary-key-declarations.md` holds the measurements.
+rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsRelation]` property is checked at
+scan, and each refusal is a `MetadataException` that names the relation by the class declaring it
+and says what to declare. `MetadataScanner.ScanRelations` refuses one that is static or not public
+(`RelationDeclarationCheck.RequirePublicInstanceRelations`) and one with no `[Navigate]`;
+`NavigateShape` refuses an unsupported `[Navigate]` form and a many-to-one or one-to-one
+foreign-key name that is no property of the declaring entity.
+`MetadataScanner.ValidateJunctionKeyProperties` requires both key names of a many-to-many to be
+properties of the junction type and runs before the other junction checks.
+`MetadataScanner.ValidateCollectionPrimaryKeys` requires every collection to have exactly one
+property that carries `[SugarColumn(IsPrimaryKey = true)]` on its own declaration.
+`RelationDeclarationCheck.Require` then refuses a key that names a property without a column, a
+one-to-many child key the target collection's class does not declare, a many-to-many whose two
+keys are one property, an `OnDelete` other than the default on a to-many relation, and, through
+`SortFieldCheck`, a `SortField` that is not on a many-to-many, names no junction property, names a
+key or the primary key, has no column or no setter, or has a type the link writer cannot order by.
+`MetadataScanner.ValidateRelationKeyTypes` last compares the type of each key with the type of the
+primary key it points at, each without `Nullable<T>` and with no integer widening. Every name is
+matched exactly; `[SugarColumn]` is read off the property's own declaration, as SqlSugar reads it
+(`KeyLookup`); and a target or element type is resolved by collection name to the scanned
+collection class, which is how `RelationshipGraph` resolves a relation. A target whose name is no
+scanned collection is not compared, and `RelationshipGraph` refuses it when the host starts.
+`InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`, `NavigateForeignKeyTests`,
+`KeyDeclarationCheckTests`, `RelationKeyTypeCheckTests`, `RelationDeclarationCheckTests` and
+`SortFieldCheckTests` pin these; `docs/ai/decisions/relation-key-and-primary-key-declarations.md`
+holds the measurements.
 
 `WritableInput.RequireAny` (`src/Struo.Api/GraphQl/WritableInput.cs`) stops the host at startup,
 with a message that names the collection, when its GraphQL create input type would have no field,

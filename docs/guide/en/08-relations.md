@@ -7,8 +7,9 @@ read, and what gets cleaned up when the target is deleted.
 
 Every relation is declared on a navigation property carrying two attributes together: SqlSugar's
 `[Navigate]` decides the join shape, and `[CmsRelation]` handles everything else CMS-specific.
-Both are required — a property missing either one is skipped entirely by the scanner, not
-rejected as an error.
+Both are required, on a public instance property. A `[Navigate]` without `[CmsRelation]` is not a
+relation and the scanner ignores it. A `[CmsRelation]` without `[Navigate]`, or on a property that
+is static or not public, stops startup with a message naming the property.
 
 `RelationKind` has exactly three values — `ManyToOne`, `OneToMany`, `ManyToMany` — and the
 scanner infers which applies from the property's own shape: a scalar or nullable-scalar reference
@@ -32,12 +33,13 @@ empty or blank key or junction type, and a subclass of `Navigate` (the CMS reads
 itself). The message names the entity class, the property, the declaration it found and the two
 forms.
 
-Every key name in `[Navigate]` must name a property. For many-to-one and one-to-one it is a
-property of the entity that declares the relation, and for many-to-many both keys are properties of
-the junction type; these names are case-sensitive. For one-to-many it is a property of the list's
-element type, matched without regard to case. When none matches, startup fails with a message
-naming the relation, the key and the type to look in, and the property that differs only in case
-when there is one.
+Every key name in `[Navigate]` must name a property, spelled exactly as the property is. For
+many-to-one and one-to-one it is a property of the entity that declares the relation; for
+one-to-many, a property of the target collection's class; for many-to-many, both keys are
+properties of the junction type, and they are two different properties. A key property is stored
+in a column: one that carries `[SugarColumn(IsIgnore = true)]` is refused. When a declaration
+breaks one of these rules, startup fails with a message naming the relation, the key and the type
+to look in, and the property that differs only in case when there is one.
 
 A key must have the type of the primary key it points at, each without `?`: `long?` matches `long`,
 and `int` against `long` does not. Four keys are compared:
@@ -45,13 +47,20 @@ and `int` against `long` does not. Four keys are compared:
 | Relation | Key property | Must have the type of |
 |---|---|---|
 | Many-to-one | The foreign key on the declaring entity | The target's primary key |
-| One-to-many | The foreign key on the list's element type | The declaring entity's primary key |
+| One-to-many | The foreign key on the target collection's class | The declaring entity's primary key |
 | Many-to-many | The junction's parent key | The declaring entity's primary key |
 | Many-to-many | The junction's target key | The target's primary key |
 
 Any other pairing stops startup. The message names the relation, the key and its type, the primary
 key and its type, and the type to declare. A column that already exists with another type needs a
 migration.
+
+`SortField` names the junction property that holds the position of a link, so it belongs on a
+many-to-many only. The property is on the junction type under exactly that name, is stored in a
+column, has a setter, and is neither of the two keys nor the junction's primary key. Its type is
+`short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`
+or `string`, nullable or not. Any other declaration stops startup with a message naming the
+relation and the property.
 
 The checks above apply to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
 relation and is ignored; a many-to-many one is read only for its junction type, to check that a
@@ -271,8 +280,8 @@ keeps the value of a field the element omits.
 
 `OnDelete` decides what happens when the target is deleted. Trashing (soft delete) and purging
 (permanent removal) are two different moments — the table below describes purge behavior.
-`OnDelete` only applies to many-to-one relations; declaring it on a one-to-many or many-to-many
-relation is ignored.
+`OnDelete` only applies to many-to-one relations; `Cascade` or `SetNull` on a one-to-many or
+many-to-many relation stops startup with a message naming the relation.
 
 | Value | Behavior |
 |---|---|
@@ -324,9 +333,8 @@ Per-parent sorting and pagination happen in memory over the rows already fetched
 exactly what keeps the batched fetch free of the N+1 problem: `null` sorts first, and a value
 that can't be compared is treated as equal to keep the order stable.
 
-With no nested sort, a one-to-many keeps fetch order and a many-to-many keeps junction order —
-when the relation declares no `SortField`, or the column isn't numeric, it degrades to insertion
-order rather than failing.
+With no nested sort, a one-to-many keeps fetch order and a many-to-many keeps junction order: the
+order of its `SortField`, or insertion order when the relation declares none.
 
 The whole `deep` tree is validated before the search lookup or the root query, independent of row count — an
 over-depth or unknown relation name fails even on an empty page: `Relation nesting too deep (depth

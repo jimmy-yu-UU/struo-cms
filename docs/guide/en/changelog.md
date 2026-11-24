@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.34.0
+
+::: danger Breaking
+- The scanner stops the host at start, with a `MetadataException` that names the relation and what
+  to declare, for relation declarations that started the host and then failed, were ignored or
+  damaged data; each was measured on SQLite below the HTTP layer, so the HTTP answers were not
+  observed ([Chapter 8](08-relations.md)):
+  - `[CmsRelation]` on a property with no `[Navigate]`, or on a property that is static or not
+    public: the relation was not served, and expanding or filtering by its name answered "Unknown
+    relation". Add the `[Navigate]`, make it a public instance property, or remove `[CmsRelation]`.
+  - A key in `[Navigate]` that names a property with `[SugarColumn(IsIgnore = true)]`: the
+    expansion read back `null` or nothing, and filters, link writes and purges failed with "no such
+    column". Name a property that is stored in a column.
+  - A one-to-many child key written in another letter case than the property. This spelling
+    worked; key names are case-sensitive in every position. Write the key as the property is
+    spelled, with `nameof`.
+  - A many-to-many whose parent key and target key are the same junction property: links stored
+    the wrong ids, the expansion was empty and a purge of the owner left junction rows. Give the
+    junction one key property per side.
+  - `SortField` on a relation that is not a many-to-many, where it had no effect, or naming no
+    property of the junction type, a property in another letter case or one with `IsIgnore`, where
+    the order of the links was ignored. Remove it, or name a junction property stored in a column.
+  - `SortField` naming a junction key or the junction's primary key: with integer keys the
+    position overwrote the key, so links pointed at other rows and were not removed with their
+    owner; with `Guid` keys every link write threw. Give the junction a property of its own for
+    the order.
+  - `SortField` naming a property with no setter, or of a type other than `short`, `ushort`, `int`,
+    `uint`, `long`, `ulong`, `float`, `double`, `decimal` or `string`: a `DateTime`, `Guid`, enum
+    or `char` property, and one with no setter, failed on the first link write; a `bool` lost the
+    order; a `byte` or `sbyte` overflowed past 255 or 127 links.
+  - `OnDelete = Cascade` or `SetNull` on a one-to-many or many-to-many relation: it had no effect.
+    Remove it.
+  - A relation whose property is typed with a class that only has the name of a collection, when
+    the key does not have the type of that collection's primary key, or, for a one-to-many, when
+    the collection's class does not declare the child key: expansion, sorting, link writes and
+    purges threw, or filters matched nothing. With a key of the collection's type the declaration
+    passes, whatever the class of that name declares.
+:::
+
 ## 0.33.0 — 2026-11-24
 
 ::: danger Breaking
