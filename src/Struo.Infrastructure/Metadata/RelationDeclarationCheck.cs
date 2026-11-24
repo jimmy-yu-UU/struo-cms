@@ -31,14 +31,15 @@ internal static class RelationDeclarationCheck
     /// How a one-to-many element type led to the collection class <paramref name="resolved"/>, or null when
     /// the class is the element type itself or no scanned collection is named after it.
     /// </summary>
-    public static string? ResolutionNote(Type element, Type? resolved) =>
-        resolved is null || resolved == element
-            ? null
-            : element.Name == resolved.Name
-                ? $"the collection class {Qualified(resolved)} that the element type {Qualified(element)} " +
-                  $"resolves to by name '{MetadataScanner.CollectionNameOf(element)}'"
-                : $"the collection the element type {Describe(element)} " +
-                  $"resolves to by name '{MetadataScanner.CollectionNameOf(element)}'";
+    public static string? ResolutionNote(Type element, Type? resolved)
+    {
+        if (resolved is null || resolved == element) return null;
+
+        var byName = $"resolves to by name '{MetadataScanner.CollectionNameOf(element)}'";
+        return element.Name == resolved.Name
+            ? $"the collection class {Qualified(resolved)} that the element type {Qualified(element)} {byName}"
+            : $"the collection the element type {Describe(element)} {byName}";
+    }
 
     // A nested type with the class it is declared in, as it is written in the declaration.
     private static string Describe(Type type) =>
