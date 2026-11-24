@@ -410,11 +410,20 @@ HTTP_STATUS:400
 `extensions` 的型別不對，訊息像 `Invalid 'query' value. Expected string or null, but got Number.`。
 這類請求不會寫 error 等級的記錄。
 
+以 GET 送出、而查詢參數 `variables` 或 `extensions` 的值伺服器不收時，回應相同：上面三種 `Accept`
+與 `application/graphql-response+json` 都回 HTTP `400`，沒有 `data` 鍵，只有一則 `BAD_USER_INPUT`
+的錯誤，不寫 error 等級的記錄。`variables` 收 JSON 物件、`null`，或元素是物件或 `null` 的陣列；
+`extensions` 收 JSON 物件。值不是 JSON，或巢狀超過 64 層時，訊息是
+`Invalid 'variables' value. Expected object, array, or null, but got invalid JSON.`；是 JSON 但種類
+不對時，訊息點出收到的種類，像 `but got String.`。同一個參數出現多次時，讀到的是各個值以逗號相接
+的結果。
+
 JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是一則 `extensions.code` 為
 `PAYLOAD_TOO_LARGE` 的錯誤，形狀同樣是 `errors`，沒有 `data` 鍵。請求不論是宣告了長度還是串流送出，
-結果都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。以串流送出、沒有宣告長度
-的 body 因為其他原因讀不出來時，回該失敗的狀態 `400` 或 `408`，內容是一則 `BAD_USER_INPUT` 的錯誤，
-訊息是 `The request body could not be read.`。
+結果都一樣，訊息是固定的 `Request body is too large.`，句子裡不帶任何上限。body 因為其他原因讀不
+出來時，不論有沒有宣告長度，都回該失敗的狀態，內容是一則 `BAD_USER_INPUT` 的錯誤，訊息是
+`The request body could not be read.`：用戶端送到一半停住、讀取逾時是 `408`；body 送來就是壞的，
+例如 chunk 大小寫錯，是 `400`。
 
 共用驗證器對 `sort` 引數與關聯路徑的訊息——未知欄位、未知關聯、跨多對多或一對多關聯的排序、超過
 `Query:MaxRelationDepth` 的 `sort`／`filter` 路徑與選擇集，內容見[第 10 章](10-query-basics.md)與

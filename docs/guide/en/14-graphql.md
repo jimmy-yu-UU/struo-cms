@@ -503,12 +503,23 @@ a body that is not JSON (`Invalid JSON document.`), a body with no `query` or an
 (`Invalid 'query' value. Expected string or null, but got Number.`). The server writes no
 error-level log entry for these requests.
 
+A `GET` whose `variables` or `extensions` query parameter the server cannot take gets the same
+answer: HTTP `400` with those three `Accept` values and with `application/graphql-response+json`,
+no `data` key, one error with `BAD_USER_INPUT`, and no error-level log entry. `variables` takes a
+JSON object, `null`, or an array whose elements are objects or `null`; `extensions` takes a JSON
+object. A value that is not JSON, or is nested more than 64 levels deep, is refused with
+`Invalid 'variables' value. Expected object, array, or null, but got invalid JSON.`; a value of
+another kind is named in the message, as in `but got String.`. A parameter that appears more than
+once is read as its values joined with commas.
+
 A JSON request body over `Api:MaxJsonBodyBytes` is answered with HTTP `413` and one error whose
 `extensions.code` is `PAYLOAD_TOO_LARGE`, in the same `errors` shape; there is no `data` key. That
 holds whether the request declared its length or streamed the body, and the message is the fixed
-`Request body is too large.`, which names no limit. A streamed body (no declared length) that cannot
-be read for another reason answers with the status of that failure, `400` or `408`, and one error
-with `BAD_USER_INPUT` and the message `The request body could not be read.`.
+`Request body is too large.`, which names no limit. A body that cannot be read for another reason,
+declared length or not, answers with the status of that failure and one error with
+`BAD_USER_INPUT` and the message `The request body could not be read.`: `408` when the client
+stops sending and the read times out, `400` when the body arrives broken, such as a chunk with a
+bad size.
 
 The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
 field, an unknown relation, a sort across a to-many relation, a `sort` or `filter` path or a

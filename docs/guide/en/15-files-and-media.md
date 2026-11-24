@@ -134,7 +134,9 @@ passes the cap, so up to the cap is buffered before it is refused. Either way th
 `413`/`PAYLOAD_TOO_LARGE`, message and details. A request form that cannot be read (no boundary, a
 truncated body, more form values than the form limit) is `400`/`BAD_USER_INPUT` with the message
 `The request form could not be read.`. A request body that times out while the form is read is
-`408`/`BAD_USER_INPUT` with the message `The request body could not be read.`. A caller who may
+`408`/`BAD_USER_INPUT` with the message `The request body could not be read.`, and a body the
+server rejects for another reason while the form is read answers with the status of that rejection,
+such as `400`, with the same code and message. A caller who may
 not write files is refused with `403` before the form is read. The admin image's nginx has a limit
 of its own that answers first with an HTML page; see [Chapter 20](20-deployment.md).
 
