@@ -77,7 +77,8 @@ no `Id`, and the expansion returned the rows of the collection.
   the key that class declares, while the item service reads the collection's. The scan therefore
   refuses a key of the collection's type when the plain class declares an `Id` of another type,
   which the measurement above shows working, and accepts a key of the plain class's type, which was
-  not measured. The same holds for the child key of a one-to-many whose element type is such a class.
+  not measured. The same holds for the child key of a one-to-many whose element type is such a
+  class.
 
 ## Referenced from
 
