@@ -9,8 +9,8 @@
   - `[CmsRelation]` 掛在沒有 `[Navigate]` 的屬性上，或掛在 static、非 public 的屬性上：這個關聯沒有
     被提供，用它的名稱展開或篩選會回「Unknown relation」。補上 `[Navigate]`、改成 public 的 instance
     屬性，或拿掉 `[CmsRelation]`。
-  - `[Navigate]` 裡的鍵對到帶 `[SugarColumn(IsIgnore = true)]` 的屬性：展開讀回 `null` 或空的，篩選、
-    寫入連結與 purge 以「no such column」失敗。改指到有自己欄位的屬性。
+  - `[Navigate]` 裡的鍵對到帶 `[SugarColumn(IsIgnore = true)]` 的屬性：展開讀回 `null` 或空的，
+    篩選、寫入連結與 purge 以「no such column」失敗。改指到有自己欄位的屬性。
   - 一對多的子端鍵和屬性只有大小寫不同。這種寫法原本能用；鍵名在每個位置都分大小寫。照屬性的拼法
     寫鍵名，用 `nameof`。
   - 多對多的父端鍵與目標端鍵是 junction 上的同一個屬性：連結存進去的 id 是錯的，展開是空的，purge
@@ -19,9 +19,10 @@
     指到帶 `IsIgnore` 的屬性（連結的順序被忽略）。拿掉它，或改指到 junction 上有欄位的屬性。
   - `SortField` 指到 junction 的鍵或主鍵：鍵是整數時，順序編號覆寫了鍵，連結指到別的列，也不會隨
     擁有者一起移除；鍵是 `Guid` 時，每次寫入連結都丟出例外。給 junction 一個專門放順序的屬性。
-  - `SortField` 指到沒有 setter 的屬性，或型別不是 `short`、`ushort`、`int`、`uint`、`long`、`ulong`、
-    `float`、`double`、`decimal`、`string` 的屬性：`DateTime`、`Guid`、列舉、`char` 與沒有 setter 的
-    屬性在第一次寫入連結時失敗；`bool` 會遺失順序；`byte` 與 `sbyte` 在超過 255 與 127 個連結時溢位。
+  - `SortField` 指到沒有 setter 的屬性，或型別不是 `short`、`ushort`、`int`、`uint`、`long`、
+    `ulong`、`float`、`double`、`decimal`、`string` 的屬性：`DateTime`、`Guid`、列舉、`char` 與沒有
+    setter 的屬性在第一次寫入連結時失敗；`bool` 會遺失順序；`byte` 與 `sbyte` 在超過 255 與 127 個
+    連結時溢位。
   - 一對多或多對多的關聯上寫 `OnDelete = Cascade` 或 `SetNull`：沒有作用。拿掉它。
   - 關聯的屬性型別是一個只和某個集合同名的類別，而鍵的型別不是那個集合主鍵的型別，或者（一對多）
     那個集合的類別沒有宣告子端鍵：展開、排序、寫入連結與 purge 丟出例外，或篩選沒有符合的列。鍵的

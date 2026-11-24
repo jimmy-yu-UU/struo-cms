@@ -118,8 +118,8 @@ name is that collection's:
   bounded by `Query:MaxRelationLinks`.
 - The field scan reads `IsIgnore` with inheritance: a property that overrides an ignored one without
   the attribute has a column and is not exposed as a field.
-- `[CmsRelation]` on a class that is not a collection is never scanned, and an override that does not
-  repeat `[CmsRelation]` is not a relation.
+- `[CmsRelation]` on a class that is not a collection is never scanned, and an override that does
+  not repeat `[CmsRelation]` is not a relation.
 
 ## Referenced from
 
