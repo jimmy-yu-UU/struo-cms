@@ -396,6 +396,18 @@ public class KeyDeclarationCheckTests
         public Guid Id { get; set; }
     }
 
+    private abstract class UnmarkedVirtualKeyBase
+    {
+        public virtual Guid Id { get; set; }
+    }
+
+    [SugarTable("kdc_overrides_unmarked")]
+    [CmsCollection("Overrides unmarked", Name = "kdcOverridesUnmarked")]
+    private sealed class OverridesUnmarkedId : UnmarkedVirtualKeyBase
+    {
+        public override Guid Id { get; set; }
+    }
+
     [SugarTable("kdc_inherits_unmarked")]
     [CmsCollection("Inherits unmarked", Name = "kdcInheritsUnmarked")]
     private sealed class InheritsUnmarkedId : UnmarkedKeyBase
@@ -573,6 +585,16 @@ public class KeyDeclarationCheckTests
     }
 
     [Fact]
+    public void An_override_of_an_unmarked_Id_is_told_to_mark_the_override()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OverridesUnmarkedId)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("'Id' is declared on 'OverridesUnmarkedId' but not marked").And.NotContain("must repeat")
+            .And.Contain("mark 'Id' on 'OverridesUnmarkedId' with [SugarColumn(IsPrimaryKey = true)]");
+    }
+
+    [Fact]
     public void An_unmarked_Id_inherited_from_a_base_class_is_marked_on_the_base_class()
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(InheritsUnmarkedId)]);
@@ -582,24 +604,24 @@ public class KeyDeclarationCheckTests
             .And.Contain("mark 'Id' on 'UnmarkedKeyBase' with [SugarColumn(IsPrimaryKey = true)]");
     }
 
-    // A relation is resolved by collection name, so the key is compared with the primary key of the
-    // collection Shared whatever the plain class of that name declares.
+    // A relation typed with a plain class that has the name of a collection: the key is compared with
+    // the key that class declares, and not compared when it declares none.
     [Theory]
     [InlineData(typeof(PointsAtPlainClassWithTheCollectionKeyType))]
-    [InlineData(typeof(PointsAtPlainClassWhoseOwnIdHasAnotherType))]
+    [InlineData(typeof(PointsAtPlainClassWithAnotherKeyType))]
     [InlineData(typeof(PointsAtPlainClassWithoutId))]
-    public void A_key_of_the_collection_key_type_passes_when_the_relation_names_a_plain_class_of_that_name(Type owner) =>
+    public void A_key_that_matches_the_Id_of_a_plain_class_named_like_a_collection_passes_and_so_does_one_without_Id(Type owner) =>
         MetadataScanner.ScanTypes([owner, typeof(Shared)]).Should().HaveCount(2);
 
     [Fact]
-    public void A_key_of_another_type_is_refused_against_the_collection_a_plain_class_shares_its_name_with()
+    public void A_key_of_another_type_than_the_Id_of_a_plain_class_named_like_a_collection_is_refused()
     {
-        var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtPlainClassWithAnotherKeyType), typeof(Shared)]);
+        var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtPlainClassWhoseOwnIdHasAnotherType), typeof(Shared)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().StartWith("Relation 'PointsAtPlainClassWithAnotherKeyType.Target' uses the key")
-            .And.Contain("'PointsAtPlainClassWithAnotherKeyType.TargetId', a long property")
-            .And.Contain("the primary key 'Shared.Id', a Guid property");
+        message.Should().StartWith("Relation 'PointsAtPlainClassWhoseOwnIdHasAnotherType.Target' uses the key")
+            .And.Contain("'PointsAtPlainClassWhoseOwnIdHasAnotherType.TargetId', a Guid property")
+            .And.Contain("the primary key 'Shared.Id', a long property");
     }
 
     [Fact]
@@ -612,7 +634,8 @@ public class KeyDeclarationCheckTests
         var scan = () => MetadataScanner.ScanTypes([typeof(WithTwoPrimaryKeys)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain("WithTwoPrimaryKeys").And.Contain("WithTwoPrimaryKeys.Id, WithTwoPrimaryKeys.Code")
+        message.Should().Contain("'WithTwoPrimaryKeys' marks 2 properties")
+            .And.Contain("WithTwoPrimaryKeys.Id").And.Contain("WithTwoPrimaryKeys.Code")
             .And.Contain("has one primary key property");
     }
 
@@ -631,7 +654,8 @@ public class KeyDeclarationCheckTests
         var scan = () => MetadataScanner.ScanTypes([typeof(WithThreePrimaryKeys)]);
 
         scan.Should().Throw<MetadataException>().Which.Message
-            .Should().Contain("WithThreePrimaryKeys.Id, WithThreePrimaryKeys.Code, WithThreePrimaryKeys.Region");
+            .Should().Contain("marks 3 properties").And.Contain("WithThreePrimaryKeys.Id")
+            .And.Contain("WithThreePrimaryKeys.Code").And.Contain("WithThreePrimaryKeys.Region");
     }
 
     [Fact]

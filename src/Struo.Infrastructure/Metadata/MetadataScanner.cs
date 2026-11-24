@@ -210,13 +210,12 @@ public static class MetadataScanner
         RequireJunctionKeyProperty(prop, nav.JunctionType!, "target", nav.TargetKey);
     }
 
-    // Named by the type that declares the relation: that is the declaration to change.
     private static void RequireJunctionKeyProperty(PropertyInfo relation, Type junction, string side, string key)
     {
         if (KeyLookup.Find(junction, key) is not null) return;
 
         throw new MetadataException(
-            $"Relation '{relation.DeclaringType!.Name}.{relation.Name}' declares the junction {side} key '{key}' " +
+            $"Relation '{RelationName(relation)}' declares the junction {side} key '{key}' " +
             $"in [Navigate], but {KeyLookup.Absence(junction, key)}");
     }
 
@@ -255,45 +254,44 @@ public static class MetadataScanner
         if (KeyLookup.Find(type, KeyLookup.DefaultPrimaryKeyName) is not { } id) return "";
 
         var declaring = id.DeclaringType!.Name;
-        var advice = IsOverride(id)
+        var advice = OverridesMarkedProperty(id)
             ? $"an override of '{id.Name}' must repeat [SugarColumn(IsPrimaryKey = true)]."
             : $"mark '{id.Name}' on '{declaring}' with [SugarColumn(IsPrimaryKey = true)].";
         return $" '{id.Name}' is declared on '{declaring}' but not marked, and an unmarked '{id.Name}' is not a primary key; {advice}";
     }
 
-    private static bool IsOverride(PropertyInfo property) =>
-        property.GetMethod is { } getter && getter.GetBaseDefinition() != getter;
+    // True when a base class marks the property of this name as the primary key.
+    private static bool OverridesMarkedProperty(PropertyInfo property) =>
+        property.DeclaringType!.BaseType is { } baseType
+        && KeyLookup.PrimaryKeyProperties(baseType).Exists(p => p.Name == property.Name);
 
     /// <summary>
     /// Fail-fast: the key a <c>[CmsRelation]</c> names must have the type of the primary key it points at
     /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
     /// junction keys. Every path that reads or writes the key handles it as the type of that primary key,
     /// so a key of another type makes an expansion read back empty or an empty list, or throws when the
-    /// relation is expanded, a link is written or a target is deleted. The primary key is the one of the
-    /// scanned collection the target's collection name resolves to, which is how a relation is resolved
-    /// when it is read and written; a target whose name is no scanned collection is not compared. Runs
-    /// for both <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// relation is expanded, a link is written or a target is deleted. A key is compared when the
+    /// collection name of the class it points at is a scanned collection; the primary key is read off
+    /// that class, and a class of that name that declares no primary key is not compared. Runs for both
+    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
     private static void ValidateRelationKeyTypes(IEnumerable<Type> types)
     {
-        var byName = types.Where(t => CollectionAttributeOf(t) is not null)
-            .ToDictionary(CollectionNameOf, StringComparer.OrdinalIgnoreCase);
-        foreach (var type in byName.Values)
+        var collectionTypes = types.Where(t => CollectionAttributeOf(t) is not null).ToList();
+        var names = collectionTypes.Select(CollectionNameOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var type in collectionTypes)
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                ValidateOneRelationKeyTypes(type, prop, byName);
+                ValidateOneRelationKeyTypes(type, prop, names);
     }
 
     // Per-property body of ValidateRelationKeyTypes.
-    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, Dictionary<string, Type> collectionsByName)
+    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, HashSet<string> collectionNames)
     {
         if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) return;
-        foreach (var pair in RelationKeyPairs(type, prop, nav))
-        {
-            if (!collectionsByName.TryGetValue(CollectionNameOf(pair.Target), out var collection)) continue;
-            RequireKeyType(prop, pair with { Target = collection });
-        }
+        var compared = RelationKeyPairs(type, prop, nav).Where(p => collectionNames.Contains(CollectionNameOf(p.Target)));
+        foreach (var pair in compared)
+            RequireKeyType(prop, pair);
     }
-
 
     // Named by the type that declares the relation: that is the declaration to change.
     private static string RelationName(PropertyInfo relation) => $"{relation.DeclaringType!.Name}.{relation.Name}";
@@ -331,12 +329,13 @@ public static class MetadataScanner
         return Nullable.GetUnderlyingType(target) ?? target;
     }
 
-    // The key names and the primary keys were checked before this runs; Require and the index fail loudly on a miss.
+    // The key names were checked before this runs. A scanned collection has its one primary key; a class
+    // that only has a collection's name may declare none, and is then not compared.
     private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair)
     {
         var relationName = RelationName(relation);
         var key = KeyLookup.Require(pair.KeyOwner, pair.Key, pair.CaseSensitive);
-        var primaryKey = KeyLookup.PrimaryKeyProperties(pair.Target)[^1];
+        if (KeyLookup.Find(pair.Target, PrimaryKeyName(pair.Target), caseSensitive: false) is not { } primaryKey) return;
 
         var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;

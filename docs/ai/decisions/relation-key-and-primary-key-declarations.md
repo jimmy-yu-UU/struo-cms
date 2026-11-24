@@ -2,8 +2,8 @@
 
 ## Decision
 
-The metadata scan refuses a key declaration that the item service cannot use, with a
-`MetadataException`, and accepts one that works:
+The metadata scan refuses, with a `MetadataException`, a key declaration that the item service
+cannot use:
 
 - A collection has exactly one property that carries `[SugarColumn(IsPrimaryKey = true)]` on its own
   declaration. The attribute is read without inheritance
@@ -12,10 +12,8 @@ The metadata scan refuses a key declaration that the item service cannot use, wi
   (`MetadataScanner.ValidateJunctionKeyProperties`).
 - A many-to-one or one-to-one foreign-key name matches a property of the declaring entity exactly;
   a one-to-many child key matches a property of the list's element type without regard to case
-  (`NavigateShape.RequireForeignKeyProperty`).
-- The key-type comparison (`MetadataScanner.ValidateRelationKeyTypes`) takes the primary key of the
-  scanned collection the target's collection name resolves to, whatever class the relation property
-  is typed with.
+  (`NavigateShape.RequireForeignKeyProperty`). The exact rule holds whatever `OnDelete` the relation
+  declares.
 
 ## Why
 
@@ -23,14 +21,17 @@ Each rule follows a measurement of what the item service does with the declarati
 ORM must agree on which property is the primary key: reading the attribute with inheritance reports
 a key on an override that carries none, and the ORM then has no key for every call by id. A key name
 is compared exactly where a consumer reads the property by the spelling in `[Navigate]`, and without
-regard to case where every consumer found tolerates another spelling. A relation is resolved by
-collection name when it is read and written, so the type comparison resolves it the same way.
+regard to case where every consumer found tolerates another spelling. The many-to-one rule does not
+follow `OnDelete`: the purge that reads the key by its spelling runs under `SetNull`, and a relation
+whose spelling is accepted under `Restrict` would start failing when its `OnDelete` is changed, with
+nothing at the scan to say why.
 
 ## Evidence
 
 Measured on SQLite through the item service (`TestItemService.Create` over `SqlSugarItemRepository`)
-with test-defined types, each next to a correct declaration as the control, on the commit before the
-checks existed. The probe tests are not in the repository.
+with test-defined types, each next to a correct declaration as the control. The primary-key and
+key-name rows were measured on the commit before the checks existed. The probe tests are not in the
+repository.
 
 Primary key:
 
@@ -62,18 +63,21 @@ Key names (the junction is a plain class unless stated):
 | Many-to-one or one-to-many key names no property | refused | by `NavigateShape` |
 
 A relation typed with a plain class that has the simple name of a collection (so its collection name
-is that collection's), many-to-one and one-to-many, with a key of the collection's key type: the
-scan passed and create, read, expansion, filter and purge worked whether the plain class declared an
-`Id` of the same type, an `Id` of another type or no `Id`. The expansion returned the rows of the
-collection.
+is that collection's), many-to-one and one-to-many, with a key of the collection's key type, was
+measured with the key-type comparison skipping such a target: create, read, expansion, filter and
+purge worked whether the plain class declared an `Id` of the same type, an `Id` of another type or
+no `Id`, and the expansion returned the rows of the collection.
 
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
 - A property hidden with `new` under another type, and a key declared on an interface, were not
   measured.
-- A relation typed with a plain class named like a collection was not measured with a key of
-  another type than the collection's.
+- For a relation typed with a plain class named like a collection, the key-type comparison reads
+  the key that class declares, while the item service reads the collection's. The scan therefore
+  refuses a key of the collection's type when the plain class declares an `Id` of another type,
+  which the measurement above shows working, and accepts a key of the plain class's type, which was
+  not measured. The same holds for the child key of a one-to-many whose element type is such a class.
 
 ## Referenced from
 

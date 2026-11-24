@@ -442,10 +442,10 @@ attribute counts, an override that leaves it out does not. `KeyLookup`
 `[CmsRelation]` with the type of the primary key it points at, each without `Nullable<T>` and with
 no integer widening: the many-to-one key against the target's primary key, the one-to-many child
 key against the declaring entity's, the junction's parent key against the declaring entity's and
-its target key against the target's. The entity holding the primary key is the scanned collection
-its collection name resolves to, which is how `RelationshipGraph` resolves a relation; a target
-whose name is no scanned collection is not compared, and `RelationshipGraph` refuses it when the
-host starts. Each refusal throws a `MetadataException` that names the relation or the class and
+its target key against the target's. A key is compared when the collection name of the class it
+points at is a scanned collection, and the primary key is read off that class; a target whose name
+is no scanned collection is not compared, and `RelationshipGraph` refuses it when the host starts.
+Each refusal throws a `MetadataException` that names the relation or the class and
 what to declare. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
 `NavigateForeignKeyTests`, `KeyDeclarationCheckTests` and `RelationKeyTypeCheckTests` pin these;
 `docs/ai/decisions/relation-key-and-primary-key-declarations.md` holds the measurements.
