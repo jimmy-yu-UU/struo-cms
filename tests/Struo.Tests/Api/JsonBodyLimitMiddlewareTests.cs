@@ -77,19 +77,23 @@ public class JsonBodyLimitMiddlewareTests
         error.GetProperty("message").GetString().Should().NotContain("read failed");
     }
 
-    public static TheoryData<Exception> NonClientFailures() => new()
+    public static TheoryData<string> NonClientFailures() =>
+        ["bad-request-500", "bad-request-503", "io", "invalid-operation"];
+
+    private static Exception NonClientFailure(string kind) => kind switch
     {
-        new BadHttpRequestException("read failed", StatusCodes.Status500InternalServerError),
-        new BadHttpRequestException("read failed", StatusCodes.Status503ServiceUnavailable),
-        new IOException("read failed"),
-        new InvalidOperationException("read failed"),
+        "bad-request-500" => new BadHttpRequestException("read failed", StatusCodes.Status500InternalServerError),
+        "bad-request-503" => new BadHttpRequestException("read failed", StatusCodes.Status503ServiceUnavailable),
+        "io" => new IOException("read failed"),
+        _ => new InvalidOperationException("read failed"),
     };
 
     [Theory]
     [MemberData(nameof(NonClientFailures))]
     public async Task A_graphql_body_read_that_fails_for_a_reason_that_is_not_the_clients_is_a_500_graphql_error(
-        Exception failure)
+        string kind)
     {
+        var failure = NonClientFailure(kind);
         var called = false;
         var context = GraphQlContext("POST", new FailingStream(failure));
 
@@ -105,8 +109,9 @@ public class JsonBodyLimitMiddlewareTests
     [Theory]
     [MemberData(nameof(NonClientFailures))]
     public async Task A_graphql_body_read_failure_that_is_not_the_clients_writes_exactly_one_Error_with_the_exception(
-        Exception failure)
+        string kind)
     {
+        var failure = NonClientFailure(kind);
         var logger = new RecordingLogger<JsonBodyLimitMiddleware>();
         var context = GraphQlContext("POST", new FailingStream(failure));
 
@@ -133,8 +138,9 @@ public class JsonBodyLimitMiddlewareTests
     [Theory]
     [MemberData(nameof(NonClientFailures))]
     public async Task A_graphql_body_read_failure_that_is_not_the_clients_after_the_client_left_is_a_cancellation(
-        Exception failure)
+        string kind)
     {
+        var failure = NonClientFailure(kind);
         var logger = new ListLogger<JsonBodyLimitMiddleware>();
         var context = GraphQlContext("POST", new FailingStream(failure));
         context.RequestAborted = new CancellationToken(canceled: true);
