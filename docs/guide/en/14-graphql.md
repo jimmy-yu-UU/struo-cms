@@ -519,7 +519,12 @@ holds whether the request declared its length or streamed the body, and the mess
 declared length or not, answers with the status of that failure and one error with
 `BAD_USER_INPUT` and the message `The request body could not be read.`: `408` when the client
 stops sending and the read times out, `400` when the body arrives broken, such as a chunk with a
-bad size.
+bad size. The server writes one warning-level log entry for such a failure.
+
+A `multipart/form-data` request to `/graphql` is refused before its body is read, with HTTP `415`
+and one error with `BAD_USER_INPUT` and the message
+`GraphQL does not accept multipart requests; upload a file through POST /api/files.`. Files go
+through the REST endpoint described in [Chapter 15](15-files-and-media.md).
 
 The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
 field, an unknown relation, a sort across a to-many relation, a `sort` or `filter` path or a

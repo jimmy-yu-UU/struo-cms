@@ -13,9 +13,14 @@
   `BAD_USER_INPUT` 與訊息 `The request body could not be read.`：用戶端送到一半停住、讀取逾時是
   `408`。先前回 `400` 與 `INTERNAL_SERVER_ERROR`，並寫 error 等級的記錄
   （[第 14 章](14-graphql.md#錯誤形狀)）。
+- 送到 `/graphql` 的 `multipart/form-data` 請求回 `415` 與 `BAD_USER_INPUT`，訊息指向上傳端點。
+  先前沒帶 `GraphQL-Preflight` 標頭時回 `400` 與 GraphQL 伺服器自己的代碼 `HC0077`；帶了標頭時，
+  沒有 boundary 或 body 被截斷的請求回 `400` 與 `INTERNAL_SERVER_ERROR`，格式正確的請求回 `500`
+  （[第 14 章](14-graphql.md#錯誤形狀)）。
 - REST 的請求 body 伺服器讀不出來時，讀取逾時回 `408`，body 送來就是壞的（例如 chunk 大小寫錯）回
-  `400`，代碼是 `BAD_USER_INPUT`，訊息是 `The request body could not be read.`。先前兩種都回 `500`
-  並寫 error 等級的記錄（[第 12 章](12-rest-conventions.md#json-body-大小)）。
+  `400`，代碼是 `BAD_USER_INPUT`，訊息是 `The request body could not be read.`，並寫一筆 warning
+  等級的記錄。先前兩種都回 `500` 並寫 error 等級的記錄
+  （[第 12 章](12-rest-conventions.md#json-body-大小)）。
 
 ## 0.32.0 — 2026-11-24
 

@@ -16,10 +16,15 @@
   declared length does: `408` when the client stops sending and the read times out. It answered
   `400` with `INTERNAL_SERVER_ERROR` and wrote an error-level log entry
   ([Chapter 14](14-graphql.md#error-shapes)).
+- A `multipart/form-data` request to `/graphql` answers `415` with `BAD_USER_INPUT` and a message
+  that points at the upload endpoint. It answered `400` with the GraphQL server's code `HC0077`
+  without a `GraphQL-Preflight` header; with the header, a request with no boundary or a truncated
+  body answered `400` with `INTERNAL_SERVER_ERROR` and a well-formed one answered `500`
+  ([Chapter 14](14-graphql.md#error-shapes)).
 - A REST request body the server cannot read answers `408` when the read times out and `400` when
   the body arrives broken, such as a chunk with a bad size, with `BAD_USER_INPUT` and the message
-  `The request body could not be read.`. Both answered `500` and wrote an error-level log entry
-  ([Chapter 12](12-rest-conventions.md#json-body-size)).
+  `The request body could not be read.`, and one warning-level log entry. Both answered `500` and
+  wrote an error-level log entry ([Chapter 12](12-rest-conventions.md#json-body-size)).
 
 ## 0.32.0 — 2026-11-24
 

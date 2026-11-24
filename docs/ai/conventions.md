@@ -603,7 +603,11 @@ before the GraphQL server runs: `JsonBodyLimitMiddleware` reads every body up to
 a 4xx read failure in the `errors` shape, and `GraphQlQueryStringCheck`
 (`src/Struo.Api/Http/GraphQlQueryStringCheck.cs`) refuses a `GET` whose `variables` or `extensions`
 value is not JSON of a kind the GraphQL server takes. `GraphQlRequestShapeTests` holds the
-measurements those two checks rest on.
+measurements those two checks rest on. The same middleware refuses a `multipart/form-data` request
+to `/graphql` with 415 and `BAD_USER_INPUT` before reading it: the GraphQL schema has no upload
+type. `RequestBodyReadLog` (`src/Struo.Api/Http/RequestBodyReadLog.cs`) writes the one Warning of a
+body read the server failed with a 4xx other than 413, from the middleware on `/graphql` and from
+`StruoExceptionHandler` elsewhere; a refused request shape writes none.
 
 `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
 exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`

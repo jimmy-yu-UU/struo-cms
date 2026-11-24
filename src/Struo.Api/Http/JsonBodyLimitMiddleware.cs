@@ -17,12 +17,13 @@ namespace Struo.Api.Http;
 /// once it passes the cap and surfaces as the same exception. A GraphQL body is read up to the cap before
 /// GraphQL sees it: one that passes the cap is answered 413 <c>PAYLOAD_TOO_LARGE</c>, and one whose read
 /// fails with a 4xx from the server (such as a timeout) is answered with that status and
-/// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>. Any request to <c>/graphql</c> whose media type is <c>multipart/form-data</c> is answered 415
-/// <c>BAD_USER_INPUT</c> (<see cref="MultipartMessage"/>) before its size is checked and before its body is read.
-/// A GET to <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string
-/// value fails <see cref="GraphQlQueryStringCheck"/> is answered 400 <c>BAD_USER_INPUT</c>. Every 413 carries
-/// <see cref="TooLargeMessage"/>, which names no limit. Multipart uploads are not JSON and keep
-/// <c>Struo:Files:MaxUploadBytes</c>.
+/// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>. Any request to
+/// <c>/graphql</c> whose media type is <c>multipart/form-data</c> is answered 415 <c>BAD_USER_INPUT</c>
+/// (<see cref="MultipartMessage"/>) before its size is checked and before its body is read. A GET to
+/// <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string value fails
+/// <see cref="GraphQlQueryStringCheck"/> is answered 400 <c>BAD_USER_INPUT</c>. Every 413 carries
+/// <see cref="TooLargeMessage"/>, which names no limit. Multipart uploads to the REST upload endpoint
+/// are not JSON and keep <c>Struo:Files:MaxUploadBytes</c>.
 /// </summary>
 public sealed class JsonBodyLimitMiddleware(
     RequestDelegate next, IOptions<ApiOptions> options, ILogger<JsonBodyLimitMiddleware> logger)

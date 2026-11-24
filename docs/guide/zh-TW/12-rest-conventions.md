@@ -138,8 +138,8 @@ body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 
 
 body 因為其他原因讀不出來時，回該失敗的狀態與 `BAD_USER_INPUT`，訊息是固定的
 `The request body could not be read.`：用戶端送到一半停住、讀取逾時是 `408`；body 送來就是壞的，
-例如 chunk 大小寫錯，是 `400`。每個會讀 body 的 REST 端點都一樣；`/graphql` 用它自己的形狀回，
-見[第 14 章](14-graphql.md#錯誤形狀)。
+例如 chunk 大小寫錯，是 `400`。每個會讀 body 的 REST 端點都一樣，伺服器為這次失敗寫一筆 warning
+等級的記錄；`/graphql` 用它自己的形狀回，見[第 14 章](14-graphql.md#錯誤形狀)。
 
 ### 自己的錯誤代碼
 
