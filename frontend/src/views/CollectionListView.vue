@@ -110,10 +110,11 @@ function formatDeletedAt(v: unknown): string {
 // body or a 7th-ranked slug never appears), while Searchable is what the backend's `search=`
 // honours and what the manual tells collection authors governs free-text search — so without this
 // second group those fields are unreachable from the list. Hidden fields are excluded because
-// QueryValidator refuses to filter them at all. An enum (select) field surfaces its options so
+// QueryValidator refuses to filter them at all, and so is a field without a column (ignored), which
+// the list shows and the API cannot filter by. An enum (select) field surfaces its options so
 // FilterBuilder renders a Select instead of a free-text Input for it.
 const filterFields = computed<FilterField[]>(() => {
-  const listed = columns.value.map((c: ListColumn) => {
+  const listed = columns.value.filter((c: ListColumn) => !fieldOf(c.field)?.ignored).map((c: ListColumn) => {
     const field = fieldOf(c.field)
     const choices = (field?.options as { label: string; value: string }[] | undefined)
     return {

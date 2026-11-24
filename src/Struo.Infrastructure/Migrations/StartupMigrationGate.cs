@@ -28,9 +28,20 @@ public static class StartupMigrationGate
     private static async Task ApplyAsync(MigrationHost host, ILogger logger, CancellationToken ct)
     {
         var appliedMigrations = await host.ApplyAsync(ct);
-        if (!logger.IsEnabled(LogLevel.Information)) return;
-        foreach (var applied in appliedMigrations)
-            logger.LogInformation("Applied migration {Version} {Description}.", applied.Version, applied.Description);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            foreach (var applied in appliedMigrations)
+                logger.LogInformation("Applied migration {Version} {Description}.", applied.Version, applied.Description);
+        }
+
+        LogBootstrapAdmin(BootstrapAdminReport.For(host.Seed, appliedMigrations), logger);
+    }
+
+    private static void LogBootstrapAdmin(BootstrapAdminReport? report, ILogger logger)
+    {
+        if (report is null) return;
+        var level = report.Created ? LogLevel.Information : LogLevel.Warning;
+        if (logger.IsEnabled(level)) logger.Log(level, "{Statement}", report.Message);
     }
 
     private static void RequireMigrated(ISqlSugarClient db, MigrationHost host, string tablePrefix, ILogger logger)

@@ -112,6 +112,11 @@ other type is a 400; the comparison operators on such a type keep passing the te
   collations. An empty value matches every row that is not null.
 - `Searchable = true` on a Repeater sub-field fails the scan too: a sub-field has no column and is
   never searched.
+- A `[CmsField]` on a property with `[SugarColumn(IsIgnore = true)]` has no column and carries
+  `FieldMetadata.Ignored`. `QueryValidator`, `FacetPath` and `RelationPath` leave it out of the
+  filter, sort, facet, aggregate, relation-leaf and junction-leaf allowlists, and `SearchableFields`
+  skips it; field selection accepts it. `Searchable = true` or `Sortable = true` on one fails
+  the scan, and the GraphQL filter input type has no entry for it.
 - A `POST /query` body is read as follows. The body is an object, and `filter` and `deep` (and each
   relation entry inside `deep`) are objects, `sort` and `fields` arrays of strings, `search` a
   string, `limit` and `offset` numbers, the same inside `deep`; anything else is a `QueryException`

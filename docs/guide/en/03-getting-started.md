@@ -125,25 +125,26 @@ dotnet run --project src/Struo.Api -- migrate
 
 `migrate` applies the migrations in order: first the framework tables, then the seed of languages,
 the `admin` and `public` roles, and the admin account. The output starts with
-FluentMigrator's log of each step and ends with one `Applied` line per migration; the exit code is
-`0`:
+FluentMigrator's log of each step, continues with one `Applied` line per migration and ends with a
+line that says whether the admin account was created; the exit code is `0`:
 
 ```text
 $ dotnet run --project src/Struo.Api -- migrate
-[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
-[07:38:51 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
-[07:38:51 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
-[07:38:51 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  Rolling back transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  VersionMigration migrating <s:FluentMigrator.Runner.MigrationRunner>
+[16:25:31 INF]  Beginning Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
 …
-[07:38:51 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
-[07:38:51 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
-[07:38:51 INF]  => 0.0031182s <s:FluentMigrator.Runner.MigrationRunner>
+[16:25:31 INF]  Committing Transaction <s:FluentMigrator.Runner.Processors.Postgres.Postgres15_0Processor>
+[16:25:31 INF]  202611170000: ConvertStringColumnsToUtf8Mb4 migrated <s:FluentMigrator.Runner.MigrationRunner>
+[16:25:31 INF]  => 0.0014508s <s:FluentMigrator.Runner.MigrationRunner>
 Applied 202610080000  CreateCoreSchema
 Applied 202610080001  SeedCoreData
 Applied 202611030000  AddLanguageCodeUniqueIndex
 Applied 202611040000  CreateRoleCapabilities
 Applied 202611060000  DropRoleCapabilities
 Applied 202611170000  ConvertStringColumnsToUtf8Mb4
+Bootstrap admin created: admin@example.com.
 ```
 
 This step is required: the copied settings file sets `Database:MigrateOnStartup` to `false`, and
@@ -174,7 +175,8 @@ A successful start shows:
 
 With `MigrateOnStartup` set to `false`, nothing about the database is logged before these lines;
 with `true`, they come after FluentMigrator's own log and one `Applied migration <version> <name>.`
-line per migration applied.
+line per migration applied; the start that applies the seed migration adds one line that says
+whether the admin was created.
 
 If startup fails, the log prints a single Fatal entry and the process exits with code 1. Skipping
 the previous step looks like this (stack trace omitted):

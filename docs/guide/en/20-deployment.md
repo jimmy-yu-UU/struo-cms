@@ -29,6 +29,14 @@ session-level advisory lock, and a pooler in transaction mode (PgBouncer, for ex
 acquire and the release to different server sessions. Point the `migrate` step at the database
 directly, not through the pooler.
 
+The command-line commands read the configuration files from the content root, which is the current
+working directory unless `--contentRoot <directory>` says otherwise. Run `migrate` from the
+directory that holds `appsettings.json`, or add `--contentRoot` with that directory. The run of
+`migrate` that applies the seed migration ends with a line that says whether the admin was
+created: `Bootstrap admin created: <email>.`, or
+`No bootstrap admin was created: Auth:BootstrapAdmin:Email is not set.` followed by the directory
+the configuration files were read from.
+
 Migrations only go forward and there is no rollback command, so back up the database first.
 Production does not run the schema check at startup; run `migrate:check` yourself after `migrate`.
 The commands and the lock are covered in
@@ -765,8 +773,9 @@ docker run --detach --name admin --network struo-verify --publish 8081:8080 stru
 
 The third command ends by printing `Applied 202610080000  CreateCoreSchema`,
 `Applied 202610080001  SeedCoreData`, `Applied 202611030000  AddLanguageCodeUniqueIndex`,
-`Applied 202611040000  CreateRoleCapabilities`, `Applied 202611060000  DropRoleCapabilities` and
-`Applied 202611170000  ConvertStringColumnsToUtf8Mb4`.
+`Applied 202611040000  CreateRoleCapabilities`, `Applied 202611060000  DropRoleCapabilities`,
+`Applied 202611170000  ConvertStringColumnsToUtf8Mb4` and
+`Bootstrap admin created: admin@admin.com.`
 Without the bootstrap password the seed migration fails with `Auth__BootstrapAdmin__Password is required`.
 Without the `migrate` step, the `api` container exits with the message shown in
 "What fails fast at startup" above.

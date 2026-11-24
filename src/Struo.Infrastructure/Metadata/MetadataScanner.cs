@@ -462,6 +462,19 @@ public static class MetadataScanner
             "text only. Remove Searchable = true from it, or make the property a string.");
     }
 
+    // A property with [SugarColumn(IsIgnore = true)] has no column, so a declaration that asks the
+    // database to search or order by it can never be honored.
+    private static void RequireNoColumnQueryDeclaration(PropertyInfo prop, CmsFieldAttribute attr)
+    {
+        if (attr.Searchable) throw NoColumnDeclaration(prop, "Searchable", "searched");
+        if (attr.Sortable) throw NoColumnDeclaration(prop, "Sortable", "sorted");
+    }
+
+    private static MetadataException NoColumnDeclaration(PropertyInfo prop, string declaration, string verb) =>
+        new($"Field '{prop.DeclaringType?.Name}.{prop.Name}' is marked {declaration} but also [SugarColumn(IsIgnore = true)]: " +
+            $"it has no column, so it cannot be {verb}. " +
+            $"Remove {declaration} = true from it, or remove IsIgnore so it is stored in a column.");
+
     internal static string TypeLabel(Type type)
     {
         if (Nullable.GetUnderlyingType(type) is { } inner) return TypeLabel(inner) + "?";
@@ -518,6 +531,9 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Field '{prop.DeclaringType?.Name}.{prop.Name}' declares MaxLength but is not a string property.");
 
+        var hasNoColumn = prop.GetCustomAttribute<SugarColumn>() is { IsIgnore: true };
+        var ignored = isColumn && hasNoColumn;
+        if (ignored) RequireNoColumnQueryDeclaration(prop, attr);
         RequireTextColumnForSearch(prop, attr, isColumn);
 
         // Without an explicit MaxLength a string field is limited to its column's width, if it has one.
@@ -527,7 +543,7 @@ public static class MetadataScanner
 
         IReadOnlyList<FieldMetadata>? childFields = null;
         if (attr.Interface == FieldInterface.Repeater)
-            childFields = BuildRepeaterChildFields(prop, prop.GetCustomAttribute<SugarColumn>() is not { IsIgnore: true });
+            childFields = BuildRepeaterChildFields(prop, !hasNoColumn);
 
         return new FieldMetadata
         {
@@ -537,6 +553,7 @@ public static class MetadataScanner
             Required = attr.Required,
             Searchable = attr.Searchable,
             Sortable = attr.Sortable,
+            Ignored = ignored,
             ReadOnly = attr.ReadOnly,
             Hidden = attr.Hidden,
             Translatable = attr.Translatable,

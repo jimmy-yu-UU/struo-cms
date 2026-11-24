@@ -81,8 +81,9 @@ public static class FacetPathResolver
 
     // Excludes hidden fields so a facet path can never reveal a hidden field's existence: an
     // unresolvable name and a hidden one both fall through to the same "Unknown field" message.
+    // A field without a column (Ignored) has nothing to facet on and is excluded the same way.
     private static FieldMetadata? VisibleField(CollectionMetadata meta, string name) =>
-        meta.Fields.FirstOrDefault(f => !f.Hidden && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+        meta.Fields.FirstOrDefault(f => !f.Hidden && !f.Ignored && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
 
     private static void RequireFacetable(CollectionMetadata meta, FieldMetadata field)
     {

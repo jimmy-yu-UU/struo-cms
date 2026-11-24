@@ -26,6 +26,8 @@ public class QueryValidatorTests
             // be usable as a filter/sort/search target — otherwise meta.total becomes a blind-extraction oracle.
             new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true, Searchable = true },
             new FieldMetadata { Name = "regions", Label = "Regions", Interface = FieldInterface.MultiSelect },
+            // A [CmsField] on a [SugarColumn(IsIgnore = true)] property: it has no column.
+            new FieldMetadata { Name = "badge", Label = "Badge", Interface = FieldInterface.Text, Ignored = true },
         ],
         // A OneToMany relation sharing its FK column name ("categoryId") with the ManyToOne "category"
         // relation below — mirrors the fixture FxCategory collection (M2O "parent" FK "parentId" / O2M
@@ -69,7 +71,11 @@ public class QueryValidatorTests
         public CollectionMetadata? GetCollection(string name) => name switch
         {
             "category" => new CollectionMetadata { Name = "category", Label = "Category", FieldGroups = [],
-                Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
+                Fields =
+                [
+                    new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text },
+                    new FieldMetadata { Name = "badge", Label = "Badge", Interface = FieldInterface.Text, Ignored = true },
+                ] },
             "categoryArchive" => new CollectionMetadata { Name = "categoryArchive", Label = "Category archive", FieldGroups = [],
                 Fields = [new FieldMetadata { Name = "name", Label = "Name", Interface = FieldInterface.Text }] },
             "tag" => new CollectionMetadata { Name = "tag", Label = "Tag", FieldGroups = [],
@@ -79,6 +85,7 @@ public class QueryValidatorTests
                 [
                     new FieldMetadata { Name = "note", Label = "Note", Interface = FieldInterface.Text },
                     new FieldMetadata { Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true },
+                    new FieldMetadata { Name = "memo", Label = "Memo", Interface = FieldInterface.Text, Ignored = true },
                 ] },
             "article" => Meta(),
             _ => null
@@ -684,5 +691,85 @@ public class QueryValidatorTests
         var resolved = QueryValidator.ResolveFacets(v, Meta(), Graph, Md);
         resolved.Select(r => r.Kind).Should().Equal(FacetPathKind.OwnField, FacetPathKind.RelationLeaf);
         resolved[1].LeafField.Should().Be("name");
+    }
+
+    // A field without a column is selectable but is not a filter, sort, facet, aggregate or search target.
+    private const string UnknownBadge = "Unknown field 'badge' on collection 'article'.";
+
+    private static QueryModel Filtering(string path) => Q(new ComparisonFilter(path, QueryOperator.Eq, "x"));
+
+    [Fact]
+    public void Ignored_field_filter_is_reported_as_unknown()
+    {
+        var act = () => QueryValidator.Validate(Filtering("badge"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage(UnknownBadge);
+    }
+
+    [Fact]
+    public void Ignored_field_sort_is_reported_as_unknown()
+    {
+        var q = new QueryModel(null, null, [new SortField("badge", false)], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage(UnknownBadge);
+    }
+
+    [Fact]
+    public void Ignored_field_selection_is_accepted()
+    {
+        var q = new QueryModel(["badge", "title"], null, [], 0, 0, null);
+        var act = () => QueryValidator.Validate(q, Meta(), Opts, Graph, Md, Perms);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Ignored_field_facet_is_reported_as_unknown()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("badge"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage(UnknownBadge);
+    }
+
+    [Fact]
+    public void Ignored_relation_leaf_facet_is_reported_as_unknown()
+    {
+        var act = () => QueryValidator.Validate(WithFacets("category.badge"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage("Unknown field 'badge' on collection 'category'.");
+    }
+
+    [Theory]
+    [InlineData(AggregateOp.Count)]
+    [InlineData(AggregateOp.Min)]
+    public void Ignored_field_aggregate_is_reported_as_unknown(AggregateOp op)
+    {
+        var act = () => QueryValidator.Validate(WithAggregate(op, "badge"), Meta(), Opts, Graph, Md, Perms);
+        act.Should().Throw<QueryException>().WithMessage(UnknownBadge);
+    }
+
+    [Fact]
+    public void Ignored_relation_leaf_filter_and_sort_are_reported_as_unknown()
+    {
+        var filter = () => QueryValidator.Validate(Filtering("category.badge"), Meta(), Opts, Graph, Md, Perms);
+        filter.Should().Throw<QueryException>().WithMessage("Unknown field 'badge' on collection 'category' in path 'category.badge'.");
+        var sortQuery = new QueryModel(null, null, [new SortField("category.badge", false)], 0, 0, null);
+        var sort = () => QueryValidator.Validate(sortQuery, Meta(), Opts, Graph, Md, Perms);
+        sort.Should().Throw<QueryException>().WithMessage("Unknown field 'badge' on collection 'category' in path 'category.badge'.");
+    }
+
+    [Fact]
+    public void Ignored_junction_leaf_is_reported_as_unknown_in_a_path_and_in_a_predicate()
+    {
+        var path = () => QueryValidator.Validate(Filtering("tags._junction.memo"), Meta(), Opts, Graph, Md, Perms);
+        path.Should().Throw<QueryException>().WithMessage("Unknown field 'memo' on collection 'articleTag' in path 'tags._junction.memo'.");
+        var predicate = () => QueryValidator.Validate(
+            Q(Some("tags", new ComparisonFilter("_junction.memo", QueryOperator.Eq, "x"))), Meta(), Opts, Graph, Md, Perms);
+        predicate.Should().Throw<QueryException>().WithMessage("Unknown field 'memo' on collection 'articleTag' in path '_junction.memo'.");
+    }
+
+    [Fact]
+    public void Search_fields_leave_out_an_ignored_field()
+    {
+        var meta = Meta() with { Fields = [.. Meta().Fields, new FieldMetadata
+            { Name = "blurb", Label = "Blurb", Interface = FieldInterface.Text, Searchable = true, Ignored = true }] };
+
+        QueryValidator.SearchableFields(meta).Should().NotContain("blurb").And.Contain("title");
     }
 }

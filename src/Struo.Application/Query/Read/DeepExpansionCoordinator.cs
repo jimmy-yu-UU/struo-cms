@@ -192,11 +192,11 @@ public sealed class DeepExpansionCoordinator(
         return new DeepSpec(relations);
     }
 
-    // The spellings QueryValidator admits for a sort field: a visible field, a many-to-one foreign key, or "id".
+    // The spellings QueryValidator admits for a sort field: a visible field with a column, a many-to-one foreign key, or "id".
     private static string MetadataSpelling(CollectionMetadata meta, string field)
     {
         bool Same(string name) => string.Equals(name, field, StringComparison.OrdinalIgnoreCase);
-        return meta.Fields.FirstOrDefault(f => !f.Hidden && Same(f.Name))?.Name
+        return meta.Fields.FirstOrDefault(f => !f.Hidden && !f.Ignored && Same(f.Name))?.Name
                ?? meta.Relations.FirstOrDefault(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null && Same(r.ForeignKey))?.ForeignKey
                ?? (Same("id") ? "id" : throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'."));
     }

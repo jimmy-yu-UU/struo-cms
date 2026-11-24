@@ -308,6 +308,11 @@ internal static class FakeMetadataFixtures
             {
                 Name = "secret", Label = "Secret", Interface = FieldInterface.Text, Hidden = true, Sort = 2,
             },
+            // A payload field without a column: selectable, never a filter input field.
+            new FieldMetadata
+            {
+                Name = "badge", Label = "Badge", Interface = FieldInterface.Text, Ignored = true, Sort = 3,
+            },
         ],
     };
 
@@ -394,6 +399,7 @@ internal static class FakeMetadataFixtures
         public Guid ChildId { get; set; }
         public string? Note { get; set; }
         public string? Secret { get; set; }
+        public string? Badge { get; set; }
     }
 
     // Exists purely to give M2MDescriptor.JunctionType (the "secretChildren" CRITICAL-fix
@@ -524,6 +530,7 @@ internal static class FakeMetadataFixtures
                 [
                     new JunctionPayloadField("note", "Note", Hidden: false),
                     new JunctionPayloadField("secret", "Secret", Hidden: true),
+                    new JunctionPayloadField("badge", "Badge", Hidden: false),
                 ]),
             new M2MDescriptor(
                 RelationName: "secretChildren",
