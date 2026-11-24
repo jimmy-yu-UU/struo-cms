@@ -88,6 +88,7 @@ Relation property:
 |---|---|---|
 | On a many-to-one or one-to-many | passed | identical to the control |
 | Names no junction property, one in another letter case, or one with `IsIgnore` | passed | the order after the replace did not change |
+| Empty or whitespace | passed | identical to a relation with no `SortField`: the order after the replace did not change |
 | Names the junction parent key, target key or primary key, `long` keys | passed | the position overwrote the column; links pointed at other rows and stayed after a purge of the owner |
 | The same, `Guid` keys | passed | every link write threw `InvalidCastException` |
 | `DateTime`, `Guid` or enum property | passed | the first link write threw `InvalidCastException` |
@@ -96,6 +97,8 @@ Relation property:
 | `byte` property, 300 links; `sbyte` property, 200 links | passed | `OverflowException` |
 | Property with no setter | passed | the first link write threw `ArgumentException` |
 | `init` or private setter | passed | ordered correctly |
+| Private setter declared on a base class of the junction | passed | the first link write threw `ArgumentException` |
+| `protected` or `init` setter declared on a base class of the junction | passed | ordered correctly |
 | `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `string`, and the nullable forms measured (`int?`, `long?`, `decimal?`) | passed | ordered correctly, also with 200 links |
 
 A relation typed with a plain class that has the simple name of a collection, so that its collection

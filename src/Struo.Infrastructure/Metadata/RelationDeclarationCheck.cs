@@ -16,10 +16,6 @@ internal static class RelationDeclarationCheck
 {
     private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
 
-    private const BindingFlags EveryDeclared =
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static |
-        BindingFlags.DeclaredOnly;
-
     // Named by the type that declares the relation: that is the declaration to change.
     public static string RelationName(PropertyInfo relation) => $"{relation.DeclaringType!.Name}.{relation.Name}";
 
@@ -86,12 +82,12 @@ internal static class RelationDeclarationCheck
     public static void RequirePublicInstanceRelations(Type collection)
     {
         var misplaced = Hierarchy(collection)
-            .SelectMany(type => type.GetProperties(EveryDeclared))
+            .SelectMany(type => type.GetTypeInfo().DeclaredProperties)
             .FirstOrDefault(
                 prop => prop.IsDefined(typeof(CmsRelationAttribute), inherit: false) && !IsPublicInstance(prop));
         if (misplaced is null) return;
 
-        var what = misplaced.GetAccessors(nonPublic: true)[0].IsStatic ? "static" : "not public";
+        var what = AccessorsOf(misplaced)[0].IsStatic ? "static" : "not public";
         throw new MetadataException(
             $"Relation '{RelationName(misplaced)}' has [CmsRelation] but is {what}, so the relation is not served. " +
             "A relation is a public instance property: declare it public and without static.");
@@ -105,9 +101,13 @@ internal static class RelationDeclarationCheck
 
     private static bool IsPublicInstance(PropertyInfo prop)
     {
-        var accessors = prop.GetAccessors(nonPublic: true);
+        var accessors = AccessorsOf(prop);
         return Array.Exists(accessors, accessor => accessor.IsPublic) && !accessors[0].IsStatic;
     }
+
+    // The getter and the setter a property declares, whatever their accessibility; it has at least one.
+    private static MethodInfo[] AccessorsOf(PropertyInfo prop) =>
+        new[] { prop.GetMethod, prop.SetMethod }.OfType<MethodInfo>().ToArray();
 
     private static void RequireRelation(
         PropertyInfo prop, CmsRelationAttribute attribute, IReadOnlyDictionary<string, Type> collections)

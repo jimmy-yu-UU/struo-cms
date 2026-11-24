@@ -10,8 +10,6 @@ namespace Struo.Infrastructure.Metadata;
 /// </summary>
 internal static class SortFieldCheck
 {
-    private const BindingFlags DeclaredAny =
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
 
     private static readonly Type[] OrderTypes =
     [
@@ -80,7 +78,7 @@ internal static class SortFieldCheck
         if (property.SetMethod is not null) return;
 
         var owner = property.DeclaringType!;
-        if (owner.GetProperty(property.Name, DeclaredAny)?.GetSetMethod(nonPublic: true) is not null)
+        if (owner.GetTypeInfo().GetDeclaredProperty(property.Name)?.SetMethod is not null)
             throw Refuse(
                 relation, property,
                 $"has a private setter on the base class {owner.Name}, which {junction.Name} cannot reach: the " +
