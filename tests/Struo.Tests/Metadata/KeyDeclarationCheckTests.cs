@@ -144,7 +144,43 @@ public class KeyDeclarationCheckTests
     {
         [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
 
-        [Navigate(typeof(Junction), "ownerid", "TARGETID")]
+        [Navigate(typeof(Junction), "ownerid", nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("kdc_owner_target_case")]
+    [CmsCollection("Owner target case", Name = "kdcOwnerTargetCase")]
+    private sealed class OwnerNamingTargetKeyInOtherCase : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), "TARGETID")]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    private abstract class OwnerBaseWithUnknownJunctionKey : AuditableEntity
+    {
+        [Navigate(typeof(Junction), "NoSuchOwnerId", nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("kdc_owner_subclass")]
+    [CmsCollection("Owner subclass", Name = "kdcOwnerSubclass")]
+    private sealed class OwnerSubclassOfBaseRelation : OwnerBaseWithUnknownJunctionKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+    }
+
+    [SugarTable("kdc_owner_two_keys_bad")]
+    [CmsCollection("Owner two keys bad", Name = "kdcOwnerTwoKeysBad")]
+    private sealed class OwnerOfTwoKeyJunctionWithUnknownKey : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [Navigate(typeof(JunctionCollectionWithTwoPrimaryKeys), "NoSuchOwnerId", nameof(JunctionCollectionWithTwoPrimaryKeys.TargetId))]
         [CmsRelation(Interface = RelationInterface.TagSelect)]
         [SugarColumn(IsIgnore = true)] public List<Target> Tags { get; set; } = [];
     }
@@ -221,14 +257,30 @@ public class KeyDeclarationCheckTests
             .Should().Throw<MetadataException>().Which.Message.Should().Contain("OwnerSharingAnUnknownKey.First").And.Contain("'NoSuchOwnerId'");
 
     [Fact]
-    public void An_unknown_key_of_a_junction_that_is_a_collection_is_refused_by_the_writable_key_check()
+    public void An_unknown_key_of_a_junction_that_is_a_collection_is_reported_as_a_missing_property()
     {
         var scan = () => MetadataScanner.ScanTypes(
             [typeof(OwnerOfJunctionCollectionWithUnknownKey), typeof(Target), typeof(JunctionCollection)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain("Junction collection 'kdcJunctionCollection'").And.Contain("'NoSuchOwnerId' and 'TargetId'")
-            .And.Contain("as writable [CmsField]s");
+        message.Should().Contain("OwnerOfJunctionCollectionWithUnknownKey.Tags").And.Contain("junction parent key 'NoSuchOwnerId'")
+            .And.Contain("JunctionCollection has no property with that name").And.NotContain("writable [CmsField]s");
+    }
+
+    [Fact]
+    public void An_unknown_key_of_a_junction_with_two_primary_keys_is_reported_as_a_missing_property() =>
+        FluentActions.Invoking(() => MetadataScanner.ScanTypes(
+                [typeof(OwnerOfTwoKeyJunctionWithUnknownKey), typeof(Target), typeof(JunctionCollectionWithTwoPrimaryKeys)]))
+            .Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("junction parent key 'NoSuchOwnerId'").And.NotContain("exactly one");
+
+    [Fact]
+    public void The_junction_key_message_names_the_class_that_declares_the_relation()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OwnerSubclassOfBaseRelation), typeof(Target)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("'OwnerBaseWithUnknownJunctionKey.Tags'").And.NotContain("OwnerSubclassOfBaseRelation");
     }
 
     [Fact]
@@ -253,8 +305,23 @@ public class KeyDeclarationCheckTests
         MetadataScanner.ScanTypes([typeof(OwnerOfInheritedJunctionKeys), typeof(Target)]).Should().HaveCount(2);
 
     [Fact]
-    public void Junction_keys_that_differ_only_in_case_pass() =>
-        MetadataScanner.ScanTypes([typeof(OwnerNamingKeysInOtherCase), typeof(Target)]).Should().HaveCount(2);
+    public void A_junction_parent_key_that_differs_only_in_case_is_refused_and_names_the_property_it_misses()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OwnerNamingKeysInOtherCase), typeof(Target)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("OwnerNamingKeysInOtherCase.Tags").And.Contain("junction parent key 'ownerid'")
+            .And.Contain("Junction has no property 'ownerid'; it has 'OwnerId'").And.Contain("key names are case-sensitive");
+    }
+
+    [Fact]
+    public void A_junction_target_key_that_differs_only_in_case_is_refused_and_names_the_property_it_misses()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OwnerNamingTargetKeyInOtherCase), typeof(Target)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("junction target key 'TARGETID'").And.Contain("Junction has no property 'TARGETID'; it has 'TargetId'");
+    }
 
     [Fact]
     public void A_junction_shared_by_two_relations_passes() =>
@@ -312,6 +379,53 @@ public class KeyDeclarationCheckTests
         public Guid Id { get; set; }
     }
 
+    private abstract class MarkedKeyBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public virtual Guid Id { get; set; }
+    }
+
+    [SugarTable("kdc_inherits_marked")]
+    [CmsCollection("Inherits marked", Name = "kdcInheritsMarked")]
+    private sealed class InheritsMarkedKey : MarkedKeyBase
+    {
+        public string Name { get; set; } = "";
+    }
+
+    [SugarTable("kdc_drops_attribute")]
+    [CmsCollection("Drops attribute", Name = "kdcDropsAttribute")]
+    private sealed class OverridesIdWithoutAttribute : MarkedKeyBase
+    {
+        public override Guid Id { get; set; }
+    }
+
+    // A plain class in another scope whose simple name is the name of the collection Shared.
+    private static class Elsewhere
+    {
+        public sealed class Shared
+        {
+            public string Name { get; set; } = "";
+        }
+    }
+
+    [SugarTable("kdc_shared")]
+    [CmsCollection("Shared")]
+    private sealed class Shared
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    [SugarTable("kdc_points_at_plain")]
+    [CmsCollection("Points at plain", Name = "kdcPointsAtPlain")]
+    private sealed class PointsAtPlainClassNamedLikeACollection
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public int TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public Elsewhere.Shared? Target { get; set; }
+    }
+
     [SugarTable("kdc_to_no_key")]
     [CmsCollection("To no key", Name = "kdcToNoKey")]
     private sealed class PointsAtCollectionWithoutPrimaryKey
@@ -334,14 +448,38 @@ public class KeyDeclarationCheckTests
     }
 
     [Fact]
-    public void A_collection_without_a_primary_key_property_names_the_class_and_both_ways_to_declare_one()
+    public void A_collection_without_a_primary_key_property_names_the_class_and_the_attribute_to_add()
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(WithoutPrimaryKey)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain("WithoutPrimaryKey").And.Contain("kdcNoKey").And.Contain("no primary key property")
-            .And.Contain("[SugarColumn(IsPrimaryKey = true)]").And.Contain("property named Id");
+        message.Should().Contain("'WithoutPrimaryKey'").And.Contain("kdcNoKey").And.Contain("no primary key property")
+            .And.Contain("[SugarColumn(IsPrimaryKey = true)]").And.NotContain("named Id").And.NotContain("is declared but not marked");
     }
+
+    [Fact]
+    public void An_Id_property_without_the_primary_key_attribute_is_refused_and_the_message_says_it_is_not_marked()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(WithUnmarkedId)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("'WithUnmarkedId'").And.Contain("kdcUnmarkedId").And.Contain("no primary key property")
+            .And.Contain("'Id' is declared on 'WithUnmarkedId' but not marked").And.Contain("must repeat")
+            .And.Contain("[SugarColumn(IsPrimaryKey = true)]").And.NotContain("property named");
+    }
+
+    [Fact]
+    public void An_override_of_Id_that_drops_the_attribute_is_refused()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OverridesIdWithoutAttribute)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("'OverridesIdWithoutAttribute'").And.Contain("'Id' is declared on 'OverridesIdWithoutAttribute' but not marked");
+    }
+
+    [Fact]
+    public void A_relation_to_a_plain_class_that_shares_a_collection_name_scans_without_a_crash() =>
+        MetadataScanner.ScanTypes([typeof(PointsAtPlainClassNamedLikeACollection), typeof(Shared)]).Should().HaveCount(2);
 
     [Fact]
     public void A_collection_with_two_primary_key_properties_names_both()
@@ -365,7 +503,7 @@ public class KeyDeclarationCheckTests
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtCollectionWithoutPrimaryKey), typeof(WithoutPrimaryKey)]);
 
-        scan.Should().Throw<MetadataException>().Which.Message.Should().Contain("WithoutPrimaryKey").And.Contain("no primary key property");
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Contain("'WithoutPrimaryKey'").And.Contain("no primary key property");
     }
 
     [Fact]
@@ -377,15 +515,12 @@ public class KeyDeclarationCheckTests
     }
 
     [Fact]
-    public void A_primary_key_that_is_inherited_overridden_or_not_named_Id_passes()
+    public void A_primary_key_that_is_inherited_overridden_with_the_attribute_or_not_named_Id_passes()
     {
+        MetadataScanner.ScanTypes([typeof(InheritsMarkedKey)]).Should().ContainSingle();
         MetadataScanner.ScanTypes([typeof(WithOverriddenId)]).Should().ContainSingle();
         MetadataScanner.ScanTypes([typeof(WithPrimaryKeyNotNamedId)]).Should().ContainSingle();
     }
-
-    [Fact]
-    public void An_Id_property_without_the_primary_key_attribute_passes() =>
-        MetadataScanner.ScanTypes([typeof(WithUnmarkedId)]).Should().ContainSingle();
 
     // ── the scan of whole assemblies ─────────────────────────────────────────
 

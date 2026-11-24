@@ -9,8 +9,8 @@ using Xunit;
 namespace Struo.Tests.Metadata;
 
 // The foreign-key name in a [CmsRelation] property's [Navigate] must be a property: of the declaring
-// entity for many-to-one and one-to-one, of the list's element type for one-to-many. Names match without
-// regard to case. A many-to-many relation names its keys on the junction type and is not checked here.
+// entity for many-to-one and one-to-one, of the list's element type for one-to-many. A many-to-one or
+// one-to-one key matches its property exactly; a one-to-many child key matches without regard to case. A many-to-many relation names its keys on the junction type and is not checked here.
 public sealed class NavigateForeignKeyTests
 {
     public sealed class Target
@@ -73,7 +73,7 @@ public sealed class NavigateForeignKeyTests
         public List<Child> Children { get; set; } = [];
     }
 
-    public sealed class DifferingOnlyInCase
+    public sealed class ManyToOneDifferingInCase
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         public Guid? TargetId { get; set; }
@@ -81,6 +81,21 @@ public sealed class NavigateForeignKeyTests
         [Navigate(NavigateType.ManyToOne, "targetid")]
         [CmsRelation(Interface = RelationInterface.Dropdown)]
         public Target? Target { get; set; }
+    }
+
+    public sealed class OneToOneDifferingInCase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid? TargetId { get; set; }
+
+        [Navigate(NavigateType.OneToOne, "TARGETID")]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        public Target? Target { get; set; }
+    }
+
+    public sealed class OneToManyDifferingInCase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
 
         [Navigate(NavigateType.OneToMany, "PARENTID")]
         [CmsRelation(Interface = RelationInterface.RelatedList)]
@@ -118,12 +133,33 @@ public sealed class NavigateForeignKeyTests
             .And.Contain(where).And.Contain("Name a property of");
     }
 
-    [Fact]
-    public void A_name_that_differs_only_in_case_is_accepted()
+    public static TheoryData<Type, string, string, string> DifferingInCase() => new()
     {
-        var relations = MetadataScanner.ScanRelations(typeof(DifferingOnlyInCase));
+        { typeof(ManyToOneDifferingInCase), "ManyToOneDifferingInCase.Target", "targetid", "TargetId" },
+        { typeof(OneToOneDifferingInCase), "OneToOneDifferingInCase.Target", "TARGETID", "TargetId" },
+    };
 
-        relations.Select(r => r.Name).Should().BeEquivalentTo("target", "children");
+    [Theory]
+    [MemberData(nameof(DifferingInCase))]
+    public void A_many_to_one_or_one_to_one_key_that_differs_only_in_case_is_refused_and_names_the_property_it_misses(
+        Type owner, string relation, string key, string property)
+    {
+        var act = () => MetadataScanner.ScanRelations(owner);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain($"Relation '{relation}'").And.Contain($"foreign key '{key}'")
+            .And.Contain($"{owner.Name} has no property '{key}'; it has '{property}'")
+            .And.Contain("key names are case-sensitive");
+    }
+
+    // Pin: a one-to-many child key in another case works for every operation measured (read, deep
+    // expansion, relation filter, purge of the parent), so it stays accepted.
+    [Fact]
+    public void A_one_to_many_key_that_differs_only_in_case_is_accepted()
+    {
+        var relations = MetadataScanner.ScanRelations(typeof(OneToManyDifferingInCase));
+
+        relations.Select(r => r.Name).Should().BeEquivalentTo("children");
     }
 
     [Fact]
