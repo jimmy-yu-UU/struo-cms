@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.32.0
+## 0.32.0 — 2026-11-24
 
 ::: danger Breaking
 - The scanner stops the host at start, with a `MetadataException` that names "Class.Property", the
