@@ -1,5 +1,6 @@
 using System.Reflection;
 using SqlSugar;
+using Struo.Domain.Metadata;
 
 namespace Struo.Infrastructure.Metadata;
 
@@ -18,6 +19,10 @@ internal static class KeyLookup
         type.GetProperties(PublicInstance).FirstOrDefault(p => string.Equals(
             p.Name, name, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The property <see cref="Find"/> returns, or a <see cref="MetadataException"/> when none.</summary>
+    public static PropertyInfo Require(Type type, string name, bool caseSensitive) =>
+        Find(type, name, caseSensitive) ?? throw new MetadataException(Absence(type, name));
+
     /// <summary>
     /// Why <paramref name="holder"/> has no property called <paramref name="key"/>; names the property
     /// that differs only in case when there is one.
@@ -31,9 +36,8 @@ internal static class KeyLookup
 
     /// <summary>
     /// The properties of <paramref name="type"/> that carry <c>[SugarColumn(IsPrimaryKey = true)]</c> on
-    /// their own declaration. SqlSugar reads the attribute off the property itself
-    /// (<c>GetCustomAttributes(typeof(SugarColumn), false)</c>): a key marked on a base class property is
-    /// found when the property is inherited, and an override that drops the attribute carries no key.
+    /// their own declaration, read without inheritance as SqlSugar does. Why:
+    /// docs/ai/decisions/relation-key-and-primary-key-declarations.md
     /// </summary>
     public static List<PropertyInfo> PrimaryKeyProperties(Type type) =>
         type.GetProperties(PublicInstance)

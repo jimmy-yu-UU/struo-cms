@@ -391,6 +391,30 @@ public class KeyDeclarationCheckTests
         public string Name { get; set; } = "";
     }
 
+    private abstract class UnmarkedKeyBase
+    {
+        public Guid Id { get; set; }
+    }
+
+    [SugarTable("kdc_inherits_unmarked")]
+    [CmsCollection("Inherits unmarked", Name = "kdcInheritsUnmarked")]
+    private sealed class InheritsUnmarkedId : UnmarkedKeyBase
+    {
+        public string Name { get; set; } = "";
+    }
+
+    private abstract class SecondMarkBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Code { get; set; }
+    }
+
+    [SugarTable("kdc_inherited_second_mark")]
+    [CmsCollection("Inherited second mark", Name = "kdcInheritedSecondMark")]
+    private sealed class InheritsASecondMark : SecondMarkBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
     [SugarTable("kdc_drops_attribute")]
     [CmsCollection("Drops attribute", Name = "kdcDropsAttribute")]
     private sealed class OverridesIdWithoutAttribute : MarkedKeyBase
@@ -398,13 +422,35 @@ public class KeyDeclarationCheckTests
         public override Guid Id { get; set; }
     }
 
-    // A plain class in another scope whose simple name is the name of the collection Shared.
-    private static class Elsewhere
+    // Plain classes in other scopes whose simple name is the name of the collection Shared.
+    private static class SameKeyElsewhere
+    {
+        public sealed class Shared
+        {
+            public Guid Id { get; set; }
+        }
+    }
+
+    private static class OtherKeyElsewhere
+    {
+        public sealed class Shared
+        {
+            public long Id { get; set; }
+        }
+    }
+
+    private static class KeylessElsewhere
     {
         public sealed class Shared
         {
             public string Name { get; set; } = "";
         }
+    }
+
+    // A plain class whose name is not the name of any collection.
+    private sealed class Unrelated
+    {
+        public string Name { get; set; } = "";
     }
 
     [SugarTable("kdc_shared")]
@@ -414,16 +460,52 @@ public class KeyDeclarationCheckTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
     }
 
-    [SugarTable("kdc_points_at_plain")]
-    [CmsCollection("Points at plain", Name = "kdcPointsAtPlain")]
-    private sealed class PointsAtPlainClassNamedLikeACollection
+    [SugarTable("kdc_points_at_same")]
+    [CmsCollection("Points at same", Name = "kdcPointsAtSame")]
+    private sealed class PointsAtPlainClassWithTheCollectionKeyType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public SameKeyElsewhere.Shared? Target { get; set; }
+    }
+
+    [SugarTable("kdc_points_at_other")]
+    [CmsCollection("Points at other", Name = "kdcPointsAtOther")]
+    private sealed class PointsAtPlainClassWithAnotherKeyType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public long TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public OtherKeyElsewhere.Shared? Target { get; set; }
+    }
+
+    [SugarTable("kdc_points_at_keyless")]
+    [CmsCollection("Points at keyless", Name = "kdcPointsAtKeyless")]
+    private sealed class PointsAtPlainClassWithoutId
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid TargetId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public KeylessElsewhere.Shared? Target { get; set; }
+    }
+
+    [SugarTable("kdc_points_at_unrelated")]
+    [CmsCollection("Points at unrelated", Name = "kdcPointsAtUnrelated")]
+    private sealed class PointsAtPlainClassWithAnUnrelatedName
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         public int TargetId { get; set; }
 
         [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
         [CmsRelation(Interface = RelationInterface.Dropdown)]
-        [SugarColumn(IsIgnore = true)] public Elsewhere.Shared? Target { get; set; }
+        [SugarColumn(IsIgnore = true)] public Unrelated? Target { get; set; }
     }
 
     [SugarTable("kdc_to_no_key")]
@@ -464,8 +546,8 @@ public class KeyDeclarationCheckTests
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain("'WithUnmarkedId'").And.Contain("kdcUnmarkedId").And.Contain("no primary key property")
-            .And.Contain("'Id' is declared on 'WithUnmarkedId' but not marked").And.Contain("must repeat")
-            .And.Contain("[SugarColumn(IsPrimaryKey = true)]").And.NotContain("property named");
+            .And.Contain("'Id' is declared on 'WithUnmarkedId' but not marked").And.NotContain("must repeat")
+            .And.Contain("mark 'Id' on 'WithUnmarkedId' with [SugarColumn(IsPrimaryKey = true)]").And.NotContain("property named");
     }
 
     [Fact]
@@ -474,12 +556,38 @@ public class KeyDeclarationCheckTests
         var scan = () => MetadataScanner.ScanTypes([typeof(OverridesIdWithoutAttribute)]);
 
         scan.Should().Throw<MetadataException>().Which.Message
-            .Should().Contain("'OverridesIdWithoutAttribute'").And.Contain("'Id' is declared on 'OverridesIdWithoutAttribute' but not marked");
+            .Should().Contain("'OverridesIdWithoutAttribute'").And.Contain("'Id' is declared on 'OverridesIdWithoutAttribute' but not marked")
+            .And.Contain("an override of 'Id' must repeat [SugarColumn(IsPrimaryKey = true)]");
     }
 
     [Fact]
-    public void A_relation_to_a_plain_class_that_shares_a_collection_name_scans_without_a_crash() =>
-        MetadataScanner.ScanTypes([typeof(PointsAtPlainClassNamedLikeACollection), typeof(Shared)]).Should().HaveCount(2);
+    public void An_unmarked_Id_inherited_from_a_base_class_is_marked_on_the_base_class()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(InheritsUnmarkedId)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("'Id' is declared on 'UnmarkedKeyBase' but not marked").And.NotContain("must repeat")
+            .And.Contain("mark 'Id' on 'UnmarkedKeyBase' with [SugarColumn(IsPrimaryKey = true)]");
+    }
+
+    [Theory]
+    [InlineData(typeof(PointsAtPlainClassWithTheCollectionKeyType), typeof(SameKeyElsewhere.Shared))]
+    [InlineData(typeof(PointsAtPlainClassWithAnotherKeyType), typeof(OtherKeyElsewhere.Shared))]
+    [InlineData(typeof(PointsAtPlainClassWithoutId), typeof(KeylessElsewhere.Shared))]
+    public void A_relation_to_a_plain_class_that_shares_a_collection_name_is_refused_and_names_both_classes(
+        Type owner, Type plain)
+    {
+        var scan = () => MetadataScanner.ScanTypes([owner, typeof(Shared)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith($"Relation '{owner.Name}.Target' points at class '{plain.FullName}'")
+            .And.Contain($"not the collection class '{typeof(Shared).FullName}'")
+            .And.Contain("collection name 'shared'").And.Contain("Declare the relation's type as Shared");
+    }
+
+    [Fact]
+    public void A_relation_to_a_plain_class_with_an_unrelated_name_is_not_compared() =>
+        MetadataScanner.ScanTypes([typeof(PointsAtPlainClassWithAnUnrelatedName), typeof(Shared)]).Should().HaveCount(2);
 
     [Fact]
     public void A_collection_with_two_primary_key_properties_names_both()
@@ -487,7 +595,17 @@ public class KeyDeclarationCheckTests
         var scan = () => MetadataScanner.ScanTypes([typeof(WithTwoPrimaryKeys)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain("WithTwoPrimaryKeys").And.Contain("Id, Code").And.Contain("has one primary key property");
+        message.Should().Contain("WithTwoPrimaryKeys").And.Contain("WithTwoPrimaryKeys.Id, WithTwoPrimaryKeys.Code")
+            .And.Contain("has one primary key property");
+    }
+
+    [Fact]
+    public void A_primary_key_mark_inherited_from_a_base_class_is_listed_with_the_class_that_declares_it()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(InheritsASecondMark)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("InheritsASecondMark.Id").And.Contain("SecondMarkBase.Code").And.NotContain("InheritsASecondMark.Code");
     }
 
     [Fact]
@@ -495,7 +613,8 @@ public class KeyDeclarationCheckTests
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(WithThreePrimaryKeys)]);
 
-        scan.Should().Throw<MetadataException>().Which.Message.Should().Contain("Id, Code, Region");
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("WithThreePrimaryKeys.Id, WithThreePrimaryKeys.Code, WithThreePrimaryKeys.Region");
     }
 
     [Fact]
@@ -503,7 +622,9 @@ public class KeyDeclarationCheckTests
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtCollectionWithoutPrimaryKey), typeof(WithoutPrimaryKey)]);
 
-        scan.Should().Throw<MetadataException>().Which.Message.Should().Contain("'WithoutPrimaryKey'").And.Contain("no primary key property");
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().StartWith("Collection class 'WithoutPrimaryKey'").And.NotStartWith("Relation '")
+            .And.Contain("no primary key property");
     }
 
     [Fact]

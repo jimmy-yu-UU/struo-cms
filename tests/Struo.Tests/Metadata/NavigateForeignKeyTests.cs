@@ -9,8 +9,9 @@ using Xunit;
 namespace Struo.Tests.Metadata;
 
 // The foreign-key name in a [CmsRelation] property's [Navigate] must be a property: of the declaring
-// entity for many-to-one and one-to-one, of the list's element type for one-to-many. A many-to-one or
-// one-to-one key matches its property exactly; a one-to-many child key matches without regard to case. A many-to-many relation names its keys on the junction type and is not checked here.
+// entity for many-to-one and one-to-one, of the list's element type for one-to-many. Only a one-to-many
+// child key may differ in letter case; a many-to-many relation is not checked here.
+// Why: docs/ai/decisions/relation-key-and-primary-key-declarations.md
 public sealed class NavigateForeignKeyTests
 {
     public sealed class Target
@@ -152,8 +153,7 @@ public sealed class NavigateForeignKeyTests
             .And.Contain("key names are case-sensitive");
     }
 
-    // Pin: a one-to-many child key in another case works for every operation measured (read, deep
-    // expansion, relation filter, purge of the parent), so it stays accepted.
+    // A one-to-many child key in another letter case is accepted (see the decision file above).
     [Fact]
     public void A_one_to_many_key_that_differs_only_in_case_is_accepted()
     {

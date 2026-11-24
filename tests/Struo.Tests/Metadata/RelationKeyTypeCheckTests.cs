@@ -158,6 +158,31 @@ public class RelationKeyTypeCheckTests
             .And.Contain("exists with another type needs a migration");
     }
 
+    private abstract class RelationDeclaredOnABase
+    {
+        [SugarColumn(IsNullable = true)] public int? TargetId { get; set; }
+
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public LongTarget? Target { get; set; }
+    }
+
+    [SugarTable("rkc_subclass")]
+    [CmsCollection("Subclass", Name = "rkcSubclass")]
+    private sealed class CollectionInheritingARelation : RelationDeclaredOnABase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    [Fact]
+    public void The_message_names_the_class_that_declares_the_relation()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(CollectionInheritingARelation), typeof(LongTarget)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith("Relation 'RelationDeclaredOnABase.Target'").And.NotContain("CollectionInheritingARelation");
+    }
+
     [Fact]
     public void Many_to_one_string_key_to_a_guid_key_is_refused()
     {
@@ -249,6 +274,42 @@ public class RelationKeyTypeCheckTests
     [Fact]
     public void One_to_many_child_key_of_the_primary_key_type_passes() =>
         MetadataScanner.ScanTypes([typeof(OneToManyOkParent), typeof(ChildLongKey)]).Should().HaveCount(2);
+
+    [SugarTable("rkc_parent_case_bad")]
+    [CmsCollection("Parent case bad", Name = "rkcParentCaseBad")]
+    private sealed class OneToManyBadParentNamingTheKeyInOtherCase
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "parentid")]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public List<ChildIntKey> Children { get; set; } = [];
+    }
+
+    [SugarTable("rkc_parent_case_ok")]
+    [CmsCollection("Parent case ok", Name = "rkcParentCaseOk")]
+    private sealed class OneToManyOkParentNamingTheKeyInOtherCase
+    {
+        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "parentid")]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)] public List<ChildLongKey> Children { get; set; } = [];
+    }
+
+    [Fact]
+    public void One_to_many_child_key_in_another_letter_case_of_the_primary_key_type_passes() =>
+        MetadataScanner.ScanTypes([typeof(OneToManyOkParentNamingTheKeyInOtherCase), typeof(ChildLongKey)]).Should().HaveCount(2);
+
+    [Fact]
+    public void One_to_many_child_key_in_another_letter_case_of_another_type_is_refused_as_a_type_mismatch()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OneToManyBadParentNamingTheKeyInOtherCase), typeof(ChildIntKey)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("uses the key 'ChildIntKey.ParentId'").And.Contain("an int? property")
+            .And.Contain("a long property").And.NotContain("no property");
+    }
 
     // ── many-to-many ─────────────────────────────────────────────────────────
 

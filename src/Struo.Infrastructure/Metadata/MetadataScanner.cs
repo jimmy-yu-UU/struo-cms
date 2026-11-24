@@ -240,7 +240,7 @@ public static class MetadataScanner
         if (marked.Count > 1)
             throw new MetadataException(
                 $"Collection class '{type.Name}' marks {marked.Count} properties with [SugarColumn(IsPrimaryKey = true)]: " +
-                $"{string.Join(", ", marked.Select(p => p.Name))}. A collection has one primary key property; " +
+                $"{string.Join(", ", marked.Select(p => $"{p.DeclaringType!.Name}.{p.Name}"))}. A collection has one primary key property; " +
                 "keep the attribute on one of them.");
 
         throw new MetadataException(
@@ -250,38 +250,62 @@ public static class MetadataScanner
     }
 
     // An Id that exists without the mark is the likely intent, so the message says why it does not count.
-    private static string UnmarkedIdHint(Type type) =>
-        KeyLookup.Find(type, KeyLookup.DefaultPrimaryKeyName) is { } id
-            ? $" '{id.Name}' is declared on '{id.DeclaringType!.Name}' but not marked, and an unmarked '{id.Name}' is not a primary key; " +
-              $"an override of '{id.Name}' must repeat [SugarColumn(IsPrimaryKey = true)]."
-            : "";
+    private static string UnmarkedIdHint(Type type)
+    {
+        if (KeyLookup.Find(type, KeyLookup.DefaultPrimaryKeyName) is not { } id) return "";
+
+        var declaring = id.DeclaringType!.Name;
+        var advice = IsOverride(id)
+            ? $"an override of '{id.Name}' must repeat [SugarColumn(IsPrimaryKey = true)]."
+            : $"mark '{id.Name}' on '{declaring}' with [SugarColumn(IsPrimaryKey = true)].";
+        return $" '{id.Name}' is declared on '{declaring}' but not marked, and an unmarked '{id.Name}' is not a primary key; {advice}";
+    }
+
+    private static bool IsOverride(PropertyInfo property) =>
+        property.GetMethod is { } getter && getter.GetBaseDefinition() != getter;
 
     /// <summary>
     /// Fail-fast: the key a <c>[CmsRelation]</c> names must have the type of the primary key it points at
     /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
     /// junction keys. Every path that reads or writes the key handles it as the type of that primary key,
     /// so a key of another type makes an expansion read back empty or an empty list, or throws when the
-    /// relation is expanded, a link is written or a target is deleted. Nothing is compared when the
-    /// entity holding the primary key is not a scanned <c>[CmsCollection]</c> type. Runs for both
+    /// relation is expanded, a link is written or a target is deleted. A target that is neither a scanned
+    /// <c>[CmsCollection]</c> class nor named like one is not compared; a target named like a collection
+    /// but not that collection class is refused. Runs for both
     /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
     private static void ValidateRelationKeyTypes(IEnumerable<Type> types)
     {
-        var collectionTypes = types.Where(t => CollectionAttributeOf(t) is not null).ToHashSet();
-        foreach (var type in collectionTypes)
+        var byName = types.Where(t => CollectionAttributeOf(t) is not null)
+            .ToDictionary(CollectionNameOf, StringComparer.OrdinalIgnoreCase);
+        foreach (var type in byName.Values)
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                ValidateOneRelationKeyTypes(type, prop, collectionTypes);
+                ValidateOneRelationKeyTypes(type, prop, byName);
     }
 
     // Per-property body of ValidateRelationKeyTypes.
-    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, HashSet<Type> collectionTypes)
+    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, Dictionary<string, Type> collectionsByName)
     {
         if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) return;
-        foreach (var pair in RelationKeyPairs(type, prop, nav).Where(p => collectionTypes.Contains(p.Target)))
-            RequireKeyType(type, prop, pair);
+        foreach (var pair in RelationKeyPairs(type, prop, nav))
+        {
+            if (!collectionsByName.TryGetValue(CollectionNameOf(pair.Target), out var collection)) continue;
+            if (collection != pair.Target) throw NotTheCollectionClass(prop, pair.Target, collection);
+            RequireKeyType(prop, pair);
+        }
     }
 
-    // CaseSensitive: a one-to-many child key is looked up without regard to case (NavigateShape), every other key exactly.
+    // The relation points at a class that is not the collection class its collection name belongs to.
+    private static MetadataException NotTheCollectionClass(PropertyInfo relation, Type target, Type collection) =>
+        new($"Relation '{RelationName(relation)}' points at class '{target.FullName}', which is not the collection class " +
+            $"'{collection.FullName}' that the collection name '{CollectionNameOf(collection)}' belongs to. " +
+            $"Declare the relation's type as {collection.Name}.");
+
+    // Named by the type that declares the relation: that is the declaration to change.
+    private static string RelationName(PropertyInfo relation) => $"{relation.DeclaringType!.Name}.{relation.Name}";
+
+    // CaseSensitive: a one-to-many child key is looked up without regard to case (NavigateShape);
+    // every other key exactly.
     private readonly record struct RelationKeyPair(Type KeyOwner, string Key, Type Target, bool CaseSensitive = true);
 
     // The key holder, the key name and the entity whose primary key it holds, for each key a relation declares.
@@ -313,18 +337,12 @@ public static class MetadataScanner
         return Nullable.GetUnderlyingType(target) ?? target;
     }
 
-    private static void RequireKeyType(Type owner, PropertyInfo relation, RelationKeyPair pair)
+    // The key names and the primary keys were checked before this runs; Require and Last fail loudly on a miss.
+    private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair)
     {
-        // The scan has refused every key name and every collection without a primary key before this runs;
-        // a miss here still fails as a MetadataException, never as a null.
-        var relationName = $"{owner.Name}.{relation.Name}";
-        var key = KeyLookup.Find(pair.KeyOwner, pair.Key, pair.CaseSensitive)
-            ?? throw new MetadataException(
-                $"Relation '{relationName}' declares the key '{pair.Key}' in [Navigate], but {KeyLookup.Absence(pair.KeyOwner, pair.Key)}");
-        var primaryKey = KeyLookup.PrimaryKeyProperties(pair.Target).LastOrDefault()
-            ?? throw new MetadataException(
-                $"Relation '{relationName}' points at '{pair.Target.Name}', which has no primary key property. " +
-                $"Mark one property of {pair.Target.Name} with [SugarColumn(IsPrimaryKey = true)].");
+        var relationName = RelationName(relation);
+        var key = KeyLookup.Require(pair.KeyOwner, pair.Key, pair.CaseSensitive);
+        var primaryKey = KeyLookup.PrimaryKeyProperties(pair.Target).Last();
 
         var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
