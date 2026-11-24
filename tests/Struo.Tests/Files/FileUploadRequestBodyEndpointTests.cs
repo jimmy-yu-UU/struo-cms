@@ -214,6 +214,31 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task A_form_read_the_server_rejected_with_a_400_is_a_400_BAD_USER_INPUT_with_a_fixed_message_and_no_error_log()
+    {
+        var sink = new CapturingLogSink();
+        var rejected = new BadHttpRequestException("server detail", StatusCodes.Status400BadRequest);
+        using var parent = Host();
+        using var host = parent.WithWebHostBuilder(b => b.ConfigureServices(services =>
+        {
+            services.AddSingleton<IStartupFilter>(new FailingBodyFilter(rejected));
+            services.AddSingleton<ILogEventSink>(sink);
+        }));
+        var client = await AdminAsync(host);
+
+        var resp = await client.PostAsync("/api/files", Multipart(8));
+        var body = await resp.Content.ReadAsStringAsync();
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+        var error = JsonDocument.Parse(body).RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        error.GetProperty("message").GetString().Should().Be("The request body could not be read.");
+        body.Should().NotContain("server detail");
+        sink.Events.Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        AssertOneReadWarning(sink, "The request body could not be read (status 400).");
+    }
+
+    [Fact]
     public async Task A_form_read_that_times_out_is_a_408_with_BAD_USER_INPUT_and_no_error_log()
     {
         var sink = new CapturingLogSink();
@@ -234,5 +259,11 @@ public class FileUploadRequestBodyEndpointTests(ApiFactory factory)
         error.GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
         error.GetProperty("message").GetString().Should().Be("The request body could not be read.");
         sink.Events.Should().NotContain(e => e.Level >= LogEventLevel.Error);
+        AssertOneReadWarning(sink, "The upload request body timed out.");
     }
+
+    // The sink also holds the host start-up and the login; only the entries about the body count.
+    private static void AssertOneReadWarning(CapturingLogSink sink, string message) =>
+        sink.Events.Where(e => e.Level == LogEventLevel.Warning && e.Exception is BadHttpRequestException)
+            .Should().ContainSingle().Which.RenderMessage().Should().Be(message);
 }

@@ -598,6 +598,22 @@ in `StruoErrorFilter` with the parser's message and is not logged; the same exce
 a path and stays masked. An upload whose form read times out (Kestrel's 408) becomes
 `RequestBodyTimeoutException`, a `StruoDomainException` with status 408 and `BAD_USER_INPUT`.
 
+Kestrel's `BadHttpRequestException` has two arms in `DomainErrorMap`: its 413 maps to
+`PAYLOAD_TOO_LARGE`, and any other 4xx (a body read that timed out or that the server rejected) maps
+to `BAD_USER_INPUT` with `JsonBodyLimitMiddleware.UnreadableBodyMessage` and keeps the status of the
+exception; one whose status is not 4xx stays masked. On `/graphql` the same failures are answered
+before the GraphQL server runs: `JsonBodyLimitMiddleware` reads the body of a request that has one,
+up to the cap, and answers a 4xx read failure in the `errors` shape, and `GraphQlQueryStringCheck`
+(`src/Struo.Api/Http/GraphQlQueryStringCheck.cs`) refuses a `GET` whose `variables` or `extensions`
+value is not JSON of a kind the GraphQL server takes. `GraphQlRequestShapeTests` holds the
+measurements those two checks rest on. The same middleware refuses a `multipart/form-data` request
+to `/graphql` with 415 and `BAD_USER_INPUT` before reading it: the GraphQL schema has no upload
+type. `RequestBodyReadLog` (`src/Struo.Api/Http/RequestBodyReadLog.cs`) writes the one Warning of a
+body read the server failed with a 4xx other than 413, from the middleware on `/graphql` and from
+`StruoExceptionHandler` elsewhere; the upload reader writes its own Warning for a form read that
+timed out. A refused request shape writes none, and neither does a read that fails after the client
+has left: the middleware lets that one end as a cancellation.
+
 `SearchUnavailableException` (`src/Struo.Domain/Query/SearchUnavailableException.cs`) is the one
 exception `DomainErrorMap.Map` does **not** surface verbatim: it maps to `ErrorCodes.SearchUnavailable`
 (`SEARCH_UNAVAILABLE`/503) with the fixed client-facing message

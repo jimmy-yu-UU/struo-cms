@@ -21,6 +21,30 @@
     `SetNull` threw `InvalidOperationException`. Write the key as the property is spelled.
 :::
 
+### Fixed
+
+- `GET /graphql` with a `variables` or `extensions` query parameter that is not JSON, or is JSON
+  of a kind the server does not take, answers `400` with `BAD_USER_INPUT` and writes no error-level
+  log entry. It answered `400` with `INTERNAL_SERVER_ERROR` for a value that is not JSON, and
+  `500` (`200` under `Accept: application/json`) with no code for a string, a number or a Boolean;
+  both wrote an error-level log entry. A `variables` array whose elements are not objects or `null`
+  is refused the same way; it answered `INTERNAL_SERVER_ERROR` when the query used a variable and
+  was executed when the query used none ([Chapter 14](14-graphql.md#error-shapes)).
+- A `POST /graphql` body with a declared length that the server cannot read answers with
+  `BAD_USER_INPUT` and the message `The request body could not be read.`, as a body without a
+  declared length does: `408` when the client stops sending and the read times out. It answered
+  `400` with `INTERNAL_SERVER_ERROR` and wrote an error-level log entry
+  ([Chapter 14](14-graphql.md#error-shapes)).
+- A `multipart/form-data` request to `/graphql` answers `415` with `BAD_USER_INPUT` and a message
+  that points at the upload endpoint. It answered `400` with the GraphQL server's code `HC0077`
+  without a `GraphQL-Preflight` header; with the header, a request with no boundary or a truncated
+  body answered `400` with `INTERNAL_SERVER_ERROR` and a well-formed one answered `500`
+  ([Chapter 14](14-graphql.md#error-shapes)).
+- A REST request body the server cannot read answers `408` when the read times out and `400` when
+  the body arrives broken, such as a chunk with a bad size, with `BAD_USER_INPUT` and the message
+  `The request body could not be read.`, and one warning-level log entry. Both answered `500` and
+  wrote an error-level log entry ([Chapter 12](12-rest-conventions.md#json-body-size)).
+
 ## 0.32.0 — 2026-11-24
 
 ::: danger Breaking

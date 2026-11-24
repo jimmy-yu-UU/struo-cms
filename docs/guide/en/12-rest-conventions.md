@@ -161,6 +161,13 @@ own shape, described in [Chapter 14](14-graphql.md). Every one of these paths, d
 not, answers with the same fixed message, `Request body is too large.`, which names no limit; only
 an upload over `Struo:Files:MaxUploadBytes` reports its limit, as `maxBytes` in `details`.
 
+A request body the server cannot read for another reason answers with the status of that failure
+and `BAD_USER_INPUT`, with the fixed message `The request body could not be read.`: `408` when the
+client stops sending and the read times out, `400` when the body arrives broken, such as a chunk
+with a bad size. That holds for every REST endpoint that reads a body, and the server writes one
+warning-level log entry for the failure; `/graphql` answers in its own shape, described in
+[Chapter 14](14-graphql.md#error-shapes).
+
 ### Your own error codes
 
 A fork adds its own client-facing error by deriving from `StruoDomainException` (in `Struo.Domain`) with a code,

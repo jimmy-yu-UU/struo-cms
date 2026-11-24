@@ -20,18 +20,19 @@ public static class DomainErrorMap
     /// Maps <paramref name="exception"/> to an <c>(code, message)</c> pair using
     /// <see cref="ErrorCodes"/> constants. An unauthenticated <see cref="PermissionDeniedException"/>
     /// yields <see cref="ErrorCodes.Unauthorized"/> (REST semantics govern); an authenticated one
-    /// yields <see cref="ErrorCodes.Forbidden"/>. A <see cref="StruoDomainException"/> (a fork's own error) is matched first and surfaces
-    /// its own code and message. Mapped domain exceptions surface their
+    /// yields <see cref="ErrorCodes.Forbidden"/>. A <see cref="StruoDomainException"/> (a fork's own error)
+    /// is matched first and surfaces its own code and message. Mapped domain exceptions surface their
     /// client-safe <see cref="System.Exception.Message"/> verbatim. Four cases carry a fixed message
     /// instead. Three because the exception's own text names internals:
     /// <see cref="SearchUnavailableException"/> (<see cref="SearchUnavailableMessage"/>, the provider
     /// host), a database unique-key violation (<see cref="UniqueViolationMessage"/>, the
     /// constraint, index or column) and a database deadlock victim (<see cref="DeadlockMessage"/>). The
-    /// fourth is Kestrel's own 413 <c>BadHttpRequestException</c>, an over-limit request body, which maps
-    /// to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text;
-    /// any other <c>BadHttpRequestException</c> is not mapped. Any other unmapped type collapses to
-    /// <see cref="ErrorCodes.Internal"/> with a masked generic message (no internal detail leaked);
-    /// logging of that case is the caller's responsibility.
+    /// fourth is Kestrel's <c>BadHttpRequestException</c>: its 413, an over-limit request body, maps
+    /// to <see cref="ErrorCodes.PayloadTooLarge"/> with a fixed text, and any other 4xx (a request body that
+    /// timed out or that the server rejected) maps to <see cref="ErrorCodes.BadUserInput"/> with
+    /// <see cref="JsonBodyLimitMiddleware.UnreadableBodyMessage"/>; one whose status is not 4xx is not mapped.
+    /// Any other unmapped type collapses to <see cref="ErrorCodes.Internal"/> with a masked generic message
+    /// (no internal detail leaked); logging of that case is the caller's responsibility.
     /// </summary>
     public static (string Code, string Message) Map(Exception exception, bool authenticated) =>
         exception switch
@@ -50,6 +51,8 @@ public static class DomainErrorMap
             PayloadTooLargeException => (ErrorCodes.PayloadTooLarge, exception.Message),
             BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge } =>
                 (ErrorCodes.PayloadTooLarge, JsonBodyLimitMiddleware.TooLargeMessage),
+            BadHttpRequestException rejected when HttpStatusClass.IsClientError(rejected.StatusCode) =>
+                (ErrorCodes.BadUserInput, JsonBodyLimitMiddleware.UnreadableBodyMessage),
             SessionRevocationFailedException => (ErrorCodes.SessionRevocationFailed, exception.Message),
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
@@ -59,8 +62,8 @@ public static class DomainErrorMap
 
     /// <summary>
     /// The field-level details a <see cref="QueryException"/> carries, or the limit a
-    /// <see cref="PayloadTooLargeException"/> names, or null when <paramref name="exception"/> has none. Shared by REST (<c>error.details</c>) and GraphQL
-    /// (the <c>details</c> error extension).
+    /// <see cref="PayloadTooLargeException"/> names, or null when <paramref name="exception"/> has none.
+    /// Shared by REST (<c>error.details</c>) and GraphQL (the <c>details</c> error extension).
     /// </summary>
     public static IReadOnlyList<ValidationDetail>? DetailsFor(Exception exception) => exception switch
     {
@@ -102,10 +105,16 @@ public static class DomainErrorMap
 
     /// <summary>
     /// REST-only: the HTTP status for <paramref name="exception"/>. A <see cref="StruoDomainException"/>
-    /// carries its own status; any other exception takes the status of its mapped <paramref name="code"/>.
+    /// carries its own status, so does a Kestrel 4xx <c>BadHttpRequestException</c>; any other exception
+    /// takes the status of its mapped <paramref name="code"/>.
     /// </summary>
-    public static int StatusFor(Exception exception, string code) =>
-        exception is StruoDomainException domain ? domain.Status : StatusFor(code);
+    public static int StatusFor(Exception exception, string code) => exception switch
+    {
+        StruoDomainException domain => domain.Status,
+        BadHttpRequestException rejected when HttpStatusClass.IsClientError(rejected.StatusCode) =>
+            rejected.StatusCode,
+        _ => StatusFor(code),
+    };
 
     /// <summary>
     /// REST-only: derives the HTTP status for a mapped <paramref name="code"/>. Co-located with the

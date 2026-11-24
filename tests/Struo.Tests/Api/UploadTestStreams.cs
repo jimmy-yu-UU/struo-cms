@@ -3,16 +3,25 @@ using Microsoft.Extensions.Logging;
 
 namespace Struo.Tests.Api;
 
-/// <summary>A request body whose every read fails with the given exception.</summary>
-internal sealed class FailingBodyStream(Exception failure) : Stream
+/// <summary>
+/// A request body whose every read fails with the given exception. <c>beforeFailing</c> runs first, as when
+/// the client leaves while the server reads.
+/// </summary>
+internal sealed class FailingBodyStream(Exception failure, Action? beforeFailing = null) : Stream
 {
+    private Exception Fail()
+    {
+        beforeFailing?.Invoke();
+        return failure;
+    }
+
     public override bool CanRead => true;
     public override bool CanSeek => false;
     public override bool CanWrite => false;
     public override long Length => throw new NotSupportedException();
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-    public override int Read(byte[] buffer, int offset, int count) => throw failure;
-    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw failure;
+    public override int Read(byte[] buffer, int offset, int count) => throw Fail();
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default) => throw Fail();
     public override void Flush() { }
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long value) => throw new NotSupportedException();
@@ -51,6 +60,20 @@ internal sealed class RecordingLimitFeature(bool isReadOnly = false) : IHttpMaxR
 {
     public bool IsReadOnly { get; } = isReadOnly;
     public long? MaxRequestBodySize { get; set; } = 30_000_000;
+}
+
+/// <summary>A typed logger that keeps what it is asked to write.</summary>
+internal sealed class RecordingLogger<T> : ILogger<T>
+{
+    private readonly RecordingLogger _inner = new();
+
+    public List<(LogLevel Level, string Message, Exception? Exception)> Entries => _inner.Entries;
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter) => _inner.Log(logLevel, eventId, state, exception, formatter);
 }
 
 /// <summary>A logger that keeps what it is asked to write, exceptions included.</summary>

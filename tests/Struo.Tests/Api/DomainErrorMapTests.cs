@@ -224,13 +224,32 @@ public class DomainErrorMapTests
         DomainErrorMap.StatusFor(code).Should().Be(413);
     }
 
-    [Fact]
-    public void Another_BadHttpRequestException_stays_masked_internal()
+    [Theory]
+    [InlineData(400)]
+    [InlineData(408)]
+    [InlineData(431)]
+    public void A_BadHttpRequestException_with_a_4xx_status_is_BAD_USER_INPUT_with_a_fixed_message_and_that_status(int status)
     {
-        var (code, message) = DomainErrorMap.Map(
-            new Microsoft.AspNetCore.Http.BadHttpRequestException("bad chunk", 400), authenticated: true);
+        var exception = new Microsoft.AspNetCore.Http.BadHttpRequestException("internal detail", status);
+
+        var (code, message) = DomainErrorMap.Map(exception, authenticated: true);
+
+        code.Should().Be("BAD_USER_INPUT");
+        message.Should().Be("The request body could not be read.");
+        DomainErrorMap.StatusFor(exception, code).Should().Be(status);
+    }
+
+    [Theory]
+    [InlineData(500)]
+    [InlineData(302)]
+    public void A_BadHttpRequestException_with_a_status_that_is_not_4xx_is_masked_internal(int status)
+    {
+        var exception = new Microsoft.AspNetCore.Http.BadHttpRequestException("bad chunk", status);
+
+        var (code, message) = DomainErrorMap.Map(exception, authenticated: true);
 
         code.Should().Be("INTERNAL_SERVER_ERROR");
         message.Should().Be("An internal error occurred.");
+        DomainErrorMap.StatusFor(exception, code).Should().Be(500);
     }
 }

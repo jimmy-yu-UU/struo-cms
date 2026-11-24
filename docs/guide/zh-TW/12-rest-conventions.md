@@ -136,6 +136,11 @@ body 是 JSON 的請求上限是 `Api:MaxJsonBodyBytes`（預設 4 MB，見[第 
 這幾條路徑都回同一句固定訊息 `Request body is too large.`，句子裡不帶任何上限；只有超過
 `Struo:Files:MaxUploadBytes` 的檔案上傳會在 `details` 的 `maxBytes` 回報上限。
 
+body 因為其他原因讀不出來時，回該失敗的狀態與 `BAD_USER_INPUT`，訊息是固定的
+`The request body could not be read.`：用戶端送到一半停住、讀取逾時是 `408`；body 送來就是壞的，
+例如 chunk 大小寫錯，是 `400`。每個會讀 body 的 REST 端點都一樣，伺服器為這次失敗寫一筆 warning
+等級的記錄；`/graphql` 用它自己的形狀回，見[第 14 章](14-graphql.md#錯誤形狀)。
+
 ### 自己的錯誤代碼
 
 fork 要加自己的、給客戶端看的錯誤，就繼承 `StruoDomainException`（在 `Struo.Domain`），給它代碼、HTTP 狀態與訊息：

@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Serilog.Core;
 using Serilog.Events;
 using Struo.Api.GraphQl;
+using Struo.Tests.Api;
 using Struo.Tests.Support;
 using Xunit;
 
@@ -88,9 +89,47 @@ public class GraphQlMalformedRequestTests(ApiFactory factory)
 
 public class StruoErrorFilterRequestErrorTests
 {
-    private static StruoErrorFilter Filter() =>
-        new(NullLoggerFactory.Instance.CreateLogger<StruoErrorFilter>(),
+    private static StruoErrorFilter Filter(ILogger<StruoErrorFilter>? logger = null) =>
+        new(logger ?? NullLoggerFactory.Instance.CreateLogger<StruoErrorFilter>(),
             new HttpContextAccessor { HttpContext = null });
+
+    [Fact]
+    public void A_JsonException_without_a_path_is_an_internal_error_and_is_logged_as_an_error()
+    {
+        var logger = new RecordingLogger<StruoErrorFilter>();
+        var error = ErrorBuilder.New().SetMessage("x").SetException(new JsonException("server fault")).Build();
+
+        var mapped = Filter(logger).OnError(error);
+
+        mapped.Code.Should().Be("INTERNAL_SERVER_ERROR");
+        mapped.Message.Should().Be("An internal error occurred.");
+        logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Error);
+    }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(408)]
+    public void A_request_body_the_server_rejected_is_BAD_USER_INPUT_with_a_fixed_message(int status)
+    {
+        var logger = new RecordingLogger<StruoErrorFilter>();
+        var error = ErrorBuilder.New().SetMessage("x")
+            .SetException(new BadHttpRequestException("server detail", status)).Build();
+
+        var mapped = Filter(logger).OnError(error);
+
+        mapped.Code.Should().Be("BAD_USER_INPUT");
+        mapped.Message.Should().Be("The request body could not be read.");
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void A_BadHttpRequestException_that_is_not_a_client_error_is_an_internal_error()
+    {
+        var error = ErrorBuilder.New().SetMessage("x")
+            .SetException(new BadHttpRequestException("server detail", 500)).Build();
+
+        Filter().OnError(error).Code.Should().Be("INTERNAL_SERVER_ERROR");
+    }
 
     [Fact]
     public void A_request_error_the_parser_raised_is_a_client_error_without_the_exception()

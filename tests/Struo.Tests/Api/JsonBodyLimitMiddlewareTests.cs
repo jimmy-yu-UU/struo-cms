@@ -2,7 +2,10 @@ using System.Text.Json;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Struo.Tests.Support;
 using Struo.Api.Http;
 using Struo.Application.Configuration;
 using Xunit;
@@ -36,8 +39,8 @@ public class JsonBodyLimitMiddlewareTests
         public bool CanHaveBody => false;
     }
 
-    private static JsonBodyLimitMiddleware Middleware(RequestDelegate next) =>
-        new(next, Options.Create(new ApiOptions { MaxJsonBodyBytes = 1024 }));
+    private static JsonBodyLimitMiddleware Middleware(RequestDelegate next, ILogger<JsonBodyLimitMiddleware>? logger = null) =>
+        new(next, Options.Create(new ApiOptions { MaxJsonBodyBytes = 1024 }), logger ?? NullLogger<JsonBodyLimitMiddleware>.Instance);
 
     private static DefaultHttpContext GraphQlContext(string method, Stream body)
     {
@@ -73,6 +76,22 @@ public class JsonBodyLimitMiddlewareTests
         error.GetProperty("message").GetString().Should().NotContain("read failed");
     }
 
+    [Theory]
+    [InlineData(StatusCodes.Status500InternalServerError)]
+    [InlineData(StatusCodes.Status503ServiceUnavailable)]
+    public async Task A_graphql_body_read_that_fails_without_a_client_error_status_propagates(int status)
+    {
+        var called = false;
+        var failure = new BadHttpRequestException("read failed", status);
+        var context = GraphQlContext("POST", new FailingStream(failure));
+
+        var thrown = await Assert.ThrowsAsync<BadHttpRequestException>(() =>
+            Middleware(_ => { called = true; return Task.CompletedTask; }).InvokeAsync(context));
+
+        thrown.Should().BeSameAs(failure);
+        called.Should().BeFalse();
+    }
+
     [Fact]
     public async Task A_graphql_body_over_the_cap_from_kestrel_is_still_413_PAYLOAD_TOO_LARGE()
     {
@@ -98,5 +117,78 @@ public class JsonBodyLimitMiddlewareTests
         await Middleware(c => { seen = c.Request.Body; return Task.CompletedTask; }).InvokeAsync(context);
 
         seen.Should().BeSameAs(original);
+    }
+
+    [Theory]
+    [InlineData(StatusCodes.Status408RequestTimeout)]
+    [InlineData(StatusCodes.Status400BadRequest)]
+    public async Task A_graphql_body_that_fails_to_read_writes_exactly_one_Warning_with_the_status(int status)
+    {
+        var logger = new ListLogger<JsonBodyLimitMiddleware>();
+        var context = GraphQlContext("POST", new FailingStream(new BadHttpRequestException("read failed", status)));
+
+        await Middleware(_ => Task.CompletedTask, logger).InvokeAsync(context);
+
+        logger.Entries.Should().ContainSingle().Which.Should()
+            .Be((LogLevel.Warning, $"The request body could not be read (status {status})."));
+    }
+
+    [Theory]
+    [InlineData(StatusCodes.Status408RequestTimeout)]
+    [InlineData(StatusCodes.Status400BadRequest)]
+    public async Task A_graphql_body_read_that_fails_after_the_client_left_is_a_cancellation_and_writes_no_log_entry(
+        int status)
+    {
+        var logger = new ListLogger<JsonBodyLimitMiddleware>();
+        var called = false;
+        var context = GraphQlContext("POST", new FailingStream(new BadHttpRequestException("read failed", status)));
+        context.RequestAborted = new CancellationToken(canceled: true);
+
+        var act = () => Middleware(_ => { called = true; return Task.CompletedTask; }, logger).InvokeAsync(context);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        called.Should().BeFalse();
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_graphql_body_over_the_cap_from_kestrel_writes_no_log_entry()
+    {
+        var logger = new ListLogger<JsonBodyLimitMiddleware>();
+        var context = GraphQlContext("POST",
+            new FailingStream(new BadHttpRequestException("too large", StatusCodes.Status413PayloadTooLarge)));
+
+        await Middleware(_ => Task.CompletedTask, logger).InvokeAsync(context);
+
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_graphql_multipart_request_is_refused_with_415_without_a_log_entry_or_a_body_read()
+    {
+        var logger = new ListLogger<JsonBodyLimitMiddleware>();
+        var called = false;
+        var context = GraphQlContext("POST", new FailingStream(new InvalidOperationException("must not be read")));
+        context.Request.ContentType = "multipart/form-data; boundary=x";
+
+        await Middleware(_ => { called = true; return Task.CompletedTask; }, logger).InvokeAsync(context);
+
+        called.Should().BeFalse();
+        context.Response.StatusCode.Should().Be(StatusCodes.Status415UnsupportedMediaType);
+        ErrorOf(context).GetProperty("extensions").GetProperty("code").GetString().Should().Be("BAD_USER_INPUT");
+        logger.Entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_rest_multipart_request_is_passed_on()
+    {
+        var called = false;
+        var context = GraphQlContext("POST", new MemoryStream());
+        context.Request.Path = "/api/files";
+        context.Request.ContentType = "multipart/form-data; boundary=x";
+
+        await Middleware(_ => { called = true; return Task.CompletedTask; }).InvokeAsync(context);
+
+        called.Should().BeTrue();
     }
 }

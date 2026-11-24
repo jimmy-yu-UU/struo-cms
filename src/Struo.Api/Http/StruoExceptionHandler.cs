@@ -31,9 +31,16 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
     {
         var (code, message) = DomainErrorMap.Map(exception, authenticated);
         // A fork's own error is a client error by construction; its code may equal one the branches below
-        // key on, so the type decides before the code does.
+        // key on in Log, so the type decides before the code does.
         if (exception is StruoDomainException)
             return (DomainErrorMap.StatusFor(exception, code), new ErrorBody(code, message));
+        Log(exception, code, logger);
+        return (DomainErrorMap.StatusFor(exception, code),
+            new ErrorBody(code, message, DomainErrorMap.DetailsFor(exception)));
+    }
+
+    private static void Log(Exception exception, string code, ILogger? logger)
+    {
         if (code == ErrorCodes.Internal)
             logger?.LogError(exception, "Unhandled API exception");
         else if (code == ErrorCodes.SearchUnavailable)
@@ -42,7 +49,7 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
             logger?.LogWarning(exception, "Unique constraint violation");
         else if (DomainErrorMap.IsDeadlockVictim(exception))
             logger?.LogWarning(exception, "The request lost a database deadlock");
-        return (DomainErrorMap.StatusFor(exception, code),
-            new ErrorBody(code, message, DomainErrorMap.DetailsFor(exception)));
+        else if (exception is BadHttpRequestException rejected)
+            RequestBodyReadLog.Rejected(logger, rejected);
     }
 }
