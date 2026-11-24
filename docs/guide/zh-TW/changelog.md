@@ -21,8 +21,8 @@
     擁有者一起移除；鍵是 `Guid` 時，每次寫入連結都丟出例外。給 junction 一個專門放順序的屬性。
   - `SortField` 指到沒有 setter 的屬性，或型別不是 `short`、`ushort`、`int`、`uint`、`long`、
     `ulong`、`float`、`double`、`decimal`、`string` 的屬性：`DateTime`、`Guid`、列舉、`char` 與沒有
-    setter 的屬性在第一次寫入連結時失敗；`bool` 會遺失順序；`byte` 與 `sbyte` 在超過 255 與 127 個
-    連結時溢位。
+    setter 的屬性在第一次寫入連結時失敗；`bool` 會遺失順序；`byte` 與 `sbyte` 在超過 256 與 128 個
+    連結時溢位。給這個屬性一個 setter，型別改成上面列的其中一種。
   - 一對多或多對多的關聯上寫 `OnDelete = Cascade` 或 `SetNull`：沒有作用。拿掉它。
   - 關聯的屬性型別是一個只和某個集合同名的類別，而鍵的型別不是那個集合主鍵的型別，或者（一對多）
     那個集合的類別沒有宣告子端鍵：展開、排序、寫入連結與 purge 丟出例外，或篩選沒有符合的列。鍵的

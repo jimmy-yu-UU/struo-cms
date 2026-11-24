@@ -29,7 +29,8 @@
   - `SortField` naming a property with no setter, or of a type other than `short`, `ushort`, `int`,
     `uint`, `long`, `ulong`, `float`, `double`, `decimal` or `string`: a `DateTime`, `Guid`, enum
     or `char` property, and one with no setter, failed on the first link write; a `bool` lost the
-    order; a `byte` or `sbyte` overflowed past 255 or 127 links.
+    order; a `byte` or `sbyte` overflowed past 256 or 128 links. Give the property a setter and one
+    of those types.
   - `OnDelete = Cascade` or `SetNull` on a one-to-many or many-to-many relation: it had no effect.
     Remove it.
   - A relation whose property is typed with a class that only has the name of a collection, when

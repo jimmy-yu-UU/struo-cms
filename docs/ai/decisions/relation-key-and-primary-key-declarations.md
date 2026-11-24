@@ -114,10 +114,11 @@ name is that collection's:
 - Measured on SQLite only, below the HTTP layer.
 - A property hidden with `new` under another type, and a key declared on an interface, were not
   measured.
-- `short` and `ushort` sort properties overflow past 32,767 and 65,535 links; a relation write is
+- `short` and `ushort` sort properties overflow past 32,768 and 65,536 links; a relation write is
   bounded by `Query:MaxRelationLinks`.
 - The field scan reads `IsIgnore` with inheritance: a property that overrides an ignored one without
-  the attribute has a column and is not exposed as a field.
+  the attribute has a column, and the field scan marks its field as having none, so the field cannot
+  be filtered or sorted.
 - `[CmsRelation]` on a class that is not a collection is never scanned, and an override that does
   not repeat `[CmsRelation]` is not a relation.
 
