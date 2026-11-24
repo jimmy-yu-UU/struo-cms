@@ -14,25 +14,32 @@ internal static class KeyLookup
 
     private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
 
-    /// <summary>The public instance property called <paramref name="name"/>, or null.</summary>
-    public static PropertyInfo? Find(Type type, string name, bool caseSensitive = true) =>
-        type.GetProperties(PublicInstance).FirstOrDefault(p => string.Equals(
-            p.Name, name, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase));
+    /// <summary>The public instance property called <paramref name="name"/>, spelled exactly, or null.</summary>
+    public static PropertyInfo? Find(Type type, string name) =>
+        type.GetProperties(PublicInstance).FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.Ordinal));
 
     /// <summary>The property <see cref="Find"/> returns, or a <see cref="MetadataException"/> when none.</summary>
-    public static PropertyInfo Require(Type type, string name, bool caseSensitive) =>
-        Find(type, name, caseSensitive) ?? throw new MetadataException(Absence(type, name));
+    public static PropertyInfo Require(Type type, string name) =>
+        Find(type, name) ?? throw new MetadataException(Absence(type, name));
 
     /// <summary>
-    /// Why <paramref name="holder"/> has no property called <paramref name="key"/>; names the property
-    /// that differs only in case when there is one.
+    /// Why <paramref name="holder"/> has no property called <paramref name="name"/>; names the property
+    /// that differs only in case when there is one. <paramref name="kind"/> says what the name stands for.
     /// </summary>
-    public static string Absence(Type holder, string key) =>
-        Find(holder, key, caseSensitive: false) is { } nearMiss
-            ? $"{holder.Name} has no property '{key}'; it has '{nearMiss.Name}' — key names are case-sensitive. " +
-              $"Write the key as '{nearMiss.Name}'."
+    public static string Absence(Type holder, string name, string kind = "key") =>
+        NearMiss(holder, name) is { } nearMiss
+            ? $"{holder.Name} has no property '{name}'; it has '{nearMiss.Name}' — " +
+              $"{kind} names are case-sensitive. Write the {kind} as '{nearMiss.Name}'."
             : $"{holder.Name} has no property with that name. " +
-              $"Name a property of {holder.Name} that holds the key, or add '{key}' to {holder.Name}.";
+              $"Name a property of {holder.Name} that holds the {kind}, or add '{name}' to {holder.Name}.";
+
+    private static PropertyInfo? NearMiss(Type type, string name) =>
+        type.GetProperties(PublicInstance)
+            .FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>True when the property is marked <c>[SugarColumn(IsIgnore = true)]</c>: it has no column.</summary>
+    public static bool HasNoColumn(PropertyInfo property) =>
+        property.GetCustomAttribute<SugarColumn>() is { IsIgnore: true };
 
     /// <summary>
     /// The properties of <paramref name="type"/> that carry <c>[SugarColumn(IsPrimaryKey = true)]</c> on

@@ -298,18 +298,160 @@ public class RelationKeyTypeCheckTests
     }
 
     [Fact]
-    public void One_to_many_child_key_in_another_letter_case_of_the_primary_key_type_passes() =>
-        MetadataScanner.ScanTypes([typeof(OneToManyOkParentNamingTheKeyInOtherCase), typeof(ChildLongKey)]).Should().HaveCount(2);
+    public void One_to_many_child_key_in_another_letter_case_is_refused_whatever_its_type()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OneToManyOkParentNamingTheKeyInOtherCase), typeof(ChildLongKey)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("OneToManyOkParentNamingTheKeyInOtherCase.Children").And.Contain("foreign key 'parentid'")
+            .And.Contain("ChildLongKey has no property 'parentid'; it has 'ParentId'").And.Contain("key names are case-sensitive");
+    }
 
     [Fact]
-    public void One_to_many_child_key_in_another_letter_case_of_another_type_is_refused_as_a_type_mismatch()
+    public void One_to_many_child_key_in_another_letter_case_is_refused_as_a_name_before_its_type_is_compared()
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(OneToManyBadParentNamingTheKeyInOtherCase), typeof(ChildIntKey)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain("uses the key 'ChildIntKey.ParentId'").And.Contain("an int? property")
-            .And.Contain("a long property").And.NotContain("no property");
+        message.Should().Contain("ChildIntKey has no property 'parentid'; it has 'ParentId'").And.NotContain("primary key");
     }
+
+    // ── relations typed with a plain class named like a collection ───────────
+
+    private static class PlainScope
+    {
+        public sealed class RkcNamedTarget
+        {
+            public long Id { get; set; }
+        }
+
+        public sealed class RkcKidLongKey
+        {
+            public Guid? ParentId { get; set; }
+        }
+
+        public sealed class RkcKidGuidKey
+        {
+            public long? ParentId { get; set; }
+        }
+    }
+
+    [SugarTable("rkc_named_target")]
+    [CmsCollection("Named target")]
+    private sealed class RkcNamedTarget
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    [SugarTable("rkc_jct_long_target")]
+    private sealed class JunctionLongTarget
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid ParentId { get; set; }
+        public long TargetId { get; set; }
+    }
+
+    [SugarTable("rkc_jct_guid_target")]
+    private sealed class JunctionGuidTarget
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid ParentId { get; set; }
+        public Guid TargetId { get; set; }
+    }
+
+    [SugarTable("rkc_plain_mm_bad")]
+    [CmsCollection("Plain MM bad", Name = "rkcPlainMmBad")]
+    private sealed class ManyToManyOverPlainClassBadTargetKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(JunctionLongTarget), nameof(JunctionLongTarget.ParentId), nameof(JunctionLongTarget.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcNamedTarget> Tags { get; set; } = [];
+    }
+
+    [SugarTable("rkc_plain_mm_ok")]
+    [CmsCollection("Plain MM ok", Name = "rkcPlainMmOk")]
+    private sealed class ManyToManyOverPlainClassWithTheCollectionKeyType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(JunctionGuidTarget), nameof(JunctionGuidTarget.ParentId), nameof(JunctionGuidTarget.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcNamedTarget> Tags { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_junction_target_key_is_compared_with_the_primary_key_of_the_collection_a_plain_element_class_is_named_after()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(ManyToManyOverPlainClassBadTargetKey), typeof(RkcNamedTarget)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith("Relation 'ManyToManyOverPlainClassBadTargetKey.Tags'")
+            .And.Contain("'JunctionLongTarget.TargetId', a long property")
+            .And.Contain("the primary key 'RkcNamedTarget.Id', a Guid property");
+    }
+
+    [Fact]
+    public void A_junction_target_key_of_the_collection_key_type_passes_whatever_the_plain_element_class_declares() =>
+        MetadataScanner.ScanTypes([typeof(ManyToManyOverPlainClassWithTheCollectionKeyType), typeof(RkcNamedTarget)])
+            .Should().HaveCount(2);
+
+    [SugarTable("rkc_kid_long_key")]
+    [CmsCollection("Kid long key")]
+    private sealed class RkcKidLongKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public long? ParentId { get; set; }
+    }
+
+    [SugarTable("rkc_kid_guid_key")]
+    [CmsCollection("Kid guid key")]
+    private sealed class RkcKidGuidKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public Guid? ParentId { get; set; }
+    }
+
+    [SugarTable("rkc_plain_kid_bad")]
+    [CmsCollection("Plain kid bad", Name = "rkcPlainKidBad")]
+    private sealed class OneToManyOverPlainClassWhoseCollectionDeclaresAnotherKeyType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "ParentId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcKidLongKey> Kids { get; set; } = [];
+    }
+
+    [SugarTable("rkc_plain_kid_ok")]
+    [CmsCollection("Plain kid ok", Name = "rkcPlainKidOk")]
+    private sealed class OneToManyOverPlainClassWhoseCollectionDeclaresTheRightKeyType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "ParentId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcKidGuidKey> Kids { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_child_key_is_compared_as_the_collection_class_declares_it_not_as_the_plain_element_class_does()
+    {
+        var scan = () => MetadataScanner.ScanTypes(
+            [typeof(OneToManyOverPlainClassWhoseCollectionDeclaresAnotherKeyType), typeof(RkcKidLongKey)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith("Relation 'OneToManyOverPlainClassWhoseCollectionDeclaresAnotherKeyType.Kids'")
+            .And.Contain("'RkcKidLongKey.ParentId', a long? property")
+            .And.Contain("the primary key 'OneToManyOverPlainClassWhoseCollectionDeclaresAnotherKeyType.Id', a Guid property")
+            .And.Contain("Declare 'RkcKidLongKey.ParentId' as Guid?");
+    }
+
+    [Fact]
+    public void A_child_key_of_the_type_the_collection_class_declares_passes_whatever_the_plain_element_class_declares() =>
+        MetadataScanner.ScanTypes([typeof(OneToManyOverPlainClassWhoseCollectionDeclaresTheRightKeyType), typeof(RkcKidGuidKey)])
+            .Should().HaveCount(2);
 
     // ── many-to-many ─────────────────────────────────────────────────────────
 

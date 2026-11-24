@@ -9,8 +9,8 @@ using Xunit;
 namespace Struo.Tests.Metadata;
 
 // The foreign-key name in a [CmsRelation] property's [Navigate] must be a property: of the declaring
-// entity for many-to-one and one-to-one, of the list's element type for one-to-many. Only a one-to-many
-// child key may differ in letter case; a many-to-many relation is not checked here.
+// entity for many-to-one and one-to-one, of the list's element type for one-to-many, spelled exactly; a
+// many-to-many relation is not checked here.
 // Why: docs/ai/decisions/relation-key-and-primary-key-declarations.md
 public sealed class NavigateForeignKeyTests
 {
@@ -134,32 +134,24 @@ public sealed class NavigateForeignKeyTests
             .And.Contain(where).And.Contain("Name a property of");
     }
 
-    public static TheoryData<Type, string, string, string> DifferingInCase() => new()
+    public static TheoryData<Type, string, string, string, string> DifferingInCase() => new()
     {
-        { typeof(ManyToOneDifferingInCase), "ManyToOneDifferingInCase.Target", "targetid", "TargetId" },
-        { typeof(OneToOneDifferingInCase), "OneToOneDifferingInCase.Target", "TARGETID", "TargetId" },
+        { typeof(ManyToOneDifferingInCase), "ManyToOneDifferingInCase.Target", "targetid", "ManyToOneDifferingInCase", "TargetId" },
+        { typeof(OneToOneDifferingInCase), "OneToOneDifferingInCase.Target", "TARGETID", "OneToOneDifferingInCase", "TargetId" },
+        { typeof(OneToManyDifferingInCase), "OneToManyDifferingInCase.Children", "PARENTID", "Child", "ParentId" },
     };
 
     [Theory]
     [MemberData(nameof(DifferingInCase))]
-    public void A_many_to_one_or_one_to_one_key_that_differs_only_in_case_is_refused_and_names_the_property_it_misses(
-        Type owner, string relation, string key, string property)
+    public void A_key_that_differs_only_in_case_is_refused_and_names_the_property_it_misses(
+        Type owner, string relation, string key, string holder, string property)
     {
         var act = () => MetadataScanner.ScanRelations(owner);
 
         var message = act.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain($"Relation '{relation}'").And.Contain($"foreign key '{key}'")
-            .And.Contain($"{owner.Name} has no property '{key}'; it has '{property}'")
+            .And.Contain($"{holder} has no property '{key}'; it has '{property}'")
             .And.Contain("key names are case-sensitive");
-    }
-
-    // A one-to-many child key in another letter case is accepted (see the decision file above).
-    [Fact]
-    public void A_one_to_many_key_that_differs_only_in_case_is_accepted()
-    {
-        var relations = MetadataScanner.ScanRelations(typeof(OneToManyDifferingInCase));
-
-        relations.Select(r => r.Name).Should().BeEquivalentTo("children");
     }
 
     [Fact]

@@ -80,7 +80,9 @@ public static class MetadataScanner
         ValidateJunctionCollections(collections, typeList);
         ValidateJunctionPrimaryKeys(collections, typeList);
         ValidateCollectionPrimaryKeys(typeList);
-        ValidateRelationKeyTypes(typeList);
+        var collectionByName = CollectionTypeMap(typeList);
+        RelationDeclarationCheck.Require(collectionByName);
+        ValidateRelationKeyTypes(collectionByName);
         return ResolveJunctionPayloadFields(collections, typeList);
     }
 
@@ -210,14 +212,9 @@ public static class MetadataScanner
         RequireJunctionKeyProperty(prop, nav.JunctionType!, "target", nav.TargetKey);
     }
 
-    private static void RequireJunctionKeyProperty(PropertyInfo relation, Type junction, string side, string key)
-    {
-        if (KeyLookup.Find(junction, key) is not null) return;
-
-        throw new MetadataException(
-            $"Relation '{RelationName(relation)}' declares the junction {side} key '{key}' " +
-            $"in [Navigate], but {KeyLookup.Absence(junction, key)}");
-    }
+    private static void RequireJunctionKeyProperty(PropertyInfo relation, Type junction, string side, string key) =>
+        RelationDeclarationCheck.RequireProperty(
+            relation, junction, $"the junction {side} key '{key}' in [Navigate]", key);
 
     /// <summary>
     /// Fail-fast: every <c>[CmsCollection]</c> type has exactly one property marked
@@ -270,54 +267,52 @@ public static class MetadataScanner
     /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
     /// junction keys. Every path that reads or writes the key handles it as the type of that primary key,
     /// so a key of another type makes an expansion read back empty or an empty list, or throws when the
-    /// relation is expanded, a link is written or a target is deleted. A key is compared when the
-    /// collection name of the class it points at is a scanned collection; the primary key is read off
-    /// that class, and a class of that name that declares no primary key is not compared. Runs for both
-    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// relation is expanded, a link is written or a target is deleted. The run time resolves a target by
+    /// collection name, so a key is compared with the primary key of the scanned collection class the
+    /// target's collection name resolves to, and a one-to-many child key is read off that class; a target
+    /// whose name is no scanned collection is not compared. Runs for both <see cref="ScanTypes"/> and the
+    /// assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
-    private static void ValidateRelationKeyTypes(IEnumerable<Type> types)
+    private static void ValidateRelationKeyTypes(Dictionary<string, Type> collections)
     {
-        var collectionTypes = types.Where(t => CollectionAttributeOf(t) is not null).ToList();
-        var names = collectionTypes.Select(CollectionNameOf).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var type in collectionTypes)
+        foreach (var type in collections.Values)
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                ValidateOneRelationKeyTypes(type, prop, names);
+                ValidateOneRelationKeyTypes(type, prop, collections);
     }
 
     // Per-property body of ValidateRelationKeyTypes.
-    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, HashSet<string> collectionNames)
+    private static void ValidateOneRelationKeyTypes(Type type, PropertyInfo prop, Dictionary<string, Type> collections)
     {
         if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) return;
-        var compared = RelationKeyPairs(type, prop, nav).Where(p => collectionNames.Contains(CollectionNameOf(p.Target)));
-        foreach (var pair in compared)
-            RequireKeyType(prop, pair);
+        foreach (var pair in RelationKeyPairs(type, prop, nav, collections))
+            if (pair.Target is { } target) RequireKeyType(prop, pair, target);
     }
 
-    // Named by the type that declares the relation: that is the declaration to change.
-    private static string RelationName(PropertyInfo relation) => $"{relation.DeclaringType!.Name}.{relation.Name}";
+    // Target is the scanned collection class whose primary key the key holds, or null when there is none.
+    private readonly record struct RelationKeyPair(Type KeyOwner, string Key, Type? Target);
 
-    // CaseSensitive: a one-to-many child key is looked up without regard to case (NavigateShape);
-    // every other key exactly.
-    private readonly record struct RelationKeyPair(Type KeyOwner, string Key, Type Target, bool CaseSensitive = true);
-
-    // The key holder, the key name and the entity whose primary key it holds, for each key a relation declares.
-    private static IEnumerable<RelationKeyPair> RelationKeyPairs(Type owner, PropertyInfo prop, NavigateShape nav)
+    // The key holder, the key name and the collection class whose primary key it holds, for each key a
+    // relation declares.
+    private static IEnumerable<RelationKeyPair> RelationKeyPairs(
+        Type owner, PropertyInfo prop, NavigateShape nav, Dictionary<string, Type> collections)
     {
         if (!NavigateShape.IsListProperty(prop))
         {
-            yield return new RelationKeyPair(owner, nav.ForeignKey, SingleRelationTarget(prop));
+            var target = RelationDeclarationCheck.CollectionClassOf(SingleRelationTarget(prop), collections);
+            yield return new RelationKeyPair(owner, nav.ForeignKey, target);
             yield break;
         }
 
         var element = prop.PropertyType.GetGenericArguments()[0];
+        var elementClass = RelationDeclarationCheck.CollectionClassOf(element, collections);
         if (nav.IsJunction)
         {
             yield return new RelationKeyPair(nav.JunctionType!, nav.ParentKey, owner);
-            yield return new RelationKeyPair(nav.JunctionType!, nav.TargetKey, element);
+            yield return new RelationKeyPair(nav.JunctionType!, nav.TargetKey, elementClass);
         }
         else
         {
-            yield return new RelationKeyPair(element, nav.ForeignKey, owner, CaseSensitive: false);
+            yield return new RelationKeyPair(elementClass ?? element, nav.ForeignKey, owner);
         }
     }
 
@@ -329,13 +324,12 @@ public static class MetadataScanner
         return Nullable.GetUnderlyingType(target) ?? target;
     }
 
-    // The key names were checked before this runs. A scanned collection has its one primary key; a class
-    // that only has a collection's name may declare none, and is then not compared.
-    private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair)
+    // The key names were checked before this runs, and a scanned collection class has its one primary key.
+    private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair, Type target)
     {
-        var relationName = RelationName(relation);
-        var key = KeyLookup.Require(pair.KeyOwner, pair.Key, pair.CaseSensitive);
-        if (KeyLookup.Find(pair.Target, PrimaryKeyName(pair.Target), caseSensitive: false) is not { } primaryKey) return;
+        var relationName = RelationDeclarationCheck.RelationName(relation);
+        var key = KeyLookup.Require(pair.KeyOwner, pair.Key);
+        var primaryKey = KeyLookup.PrimaryKeyProperties(target)[0];
 
         var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
@@ -822,17 +816,18 @@ public static class MetadataScanner
     /// <remarks>
     /// SqlSugar's <c>Navigate</c> attribute exposes no public properties, so its data is read from
     /// the constructor arguments (<see cref="NavigateShape"/>). A <c>[CmsRelation]</c> property with an
-    /// unsupported <c>[Navigate]</c> throws <see cref="MetadataException"/>; a <c>[Navigate]</c> without
-    /// <c>[CmsRelation]</c> is not a relation and is skipped.
+    /// unsupported <c>[Navigate]</c> or with none throws <see cref="MetadataException"/>; a
+    /// <c>[Navigate]</c> without <c>[CmsRelation]</c> is not a relation and is skipped.
     /// </remarks>
     public static IReadOnlyList<RelationMetadata> ScanRelations(Type type)
     {
         var list = new List<RelationMetadata>();
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            // Both [Navigate] and [CmsRelation] required; only a [CmsRelation] property is read.
+            // Only a [CmsRelation] property is read, and it needs a [Navigate].
             var rel = prop.GetCustomAttribute<CmsRelationAttribute>();
-            if (rel is null || NavigateShape.Of(prop) is not { } nav) continue;
+            if (rel is null) continue;
+            var nav = NavigateShape.Of(prop) ?? throw NavigateShape.Missing(prop);
 
             var isCollection = NavigateShape.IsListProperty(prop);
 

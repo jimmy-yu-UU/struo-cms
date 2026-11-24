@@ -604,24 +604,25 @@ public class KeyDeclarationCheckTests
             .And.Contain("mark 'Id' on 'UnmarkedKeyBase' with [SugarColumn(IsPrimaryKey = true)]");
     }
 
-    // A relation typed with a plain class that has the name of a collection: the key is compared with
-    // the key that class declares, and not compared when it declares none.
+    // A relation typed with a plain class that has the name of a collection: the key is compared with the
+    // primary key of that collection's class, whatever the plain class declares.
     [Theory]
     [InlineData(typeof(PointsAtPlainClassWithTheCollectionKeyType))]
-    [InlineData(typeof(PointsAtPlainClassWithAnotherKeyType))]
+    [InlineData(typeof(PointsAtPlainClassWhoseOwnIdHasAnotherType))]
     [InlineData(typeof(PointsAtPlainClassWithoutId))]
-    public void A_key_that_matches_the_Id_of_a_plain_class_named_like_a_collection_passes_and_so_does_one_without_Id(Type owner) =>
+    public void A_key_of_the_type_of_the_collection_primary_key_passes_whatever_the_plain_class_named_like_it_declares(Type owner) =>
         MetadataScanner.ScanTypes([owner, typeof(Shared)]).Should().HaveCount(2);
 
     [Fact]
-    public void A_key_of_another_type_than_the_Id_of_a_plain_class_named_like_a_collection_is_refused()
+    public void A_key_of_the_type_of_the_Id_of_a_plain_class_named_like_a_collection_is_refused_against_the_collection_key()
     {
-        var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtPlainClassWhoseOwnIdHasAnotherType), typeof(Shared)]);
+        var scan = () => MetadataScanner.ScanTypes([typeof(PointsAtPlainClassWithAnotherKeyType), typeof(Shared)]);
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().StartWith("Relation 'PointsAtPlainClassWhoseOwnIdHasAnotherType.Target' uses the key")
-            .And.Contain("'PointsAtPlainClassWhoseOwnIdHasAnotherType.TargetId', a Guid property")
-            .And.Contain("the primary key 'Shared.Id', a long property");
+        message.Should().StartWith("Relation 'PointsAtPlainClassWithAnotherKeyType.Target' uses the key")
+            .And.Contain("'PointsAtPlainClassWithAnotherKeyType.TargetId', a long property")
+            .And.Contain("the primary key 'Shared.Id', a Guid property")
+            .And.Contain("Declare 'PointsAtPlainClassWithAnotherKeyType.TargetId' as Guid");
     }
 
     [Fact]
