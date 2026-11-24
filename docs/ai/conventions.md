@@ -445,8 +445,8 @@ key against the declaring entity's, the junction's parent key against the declar
 its target key against the target's. The entity holding the primary key is the scanned collection
 its collection name resolves to, which is how `RelationshipGraph` resolves a relation; a target
 whose name is no scanned collection is not compared, and `RelationshipGraph` refuses it when the
-host starts. Each refusal throws a `MetadataException` that names the relation or the class and what to
-declare. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
+host starts. Each refusal throws a `MetadataException` that names the relation or the class and
+what to declare. `InterfacePropertyTypeMatrixTests`, `InterfacePropertyTypeMessageTests`,
 `NavigateForeignKeyTests`, `KeyDeclarationCheckTests` and `RelationKeyTypeCheckTests` pin these;
 `docs/ai/decisions/relation-key-and-primary-key-declarations.md` holds the measurements.
 
