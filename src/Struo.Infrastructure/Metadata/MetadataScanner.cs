@@ -331,12 +331,12 @@ public static class MetadataScanner
         return Nullable.GetUnderlyingType(target) ?? target;
     }
 
-    // The key names and the primary keys were checked before this runs; Require and Last fail loudly on a miss.
+    // The key names and the primary keys were checked before this runs; Require and the index fail loudly on a miss.
     private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair)
     {
         var relationName = RelationName(relation);
         var key = KeyLookup.Require(pair.KeyOwner, pair.Key, pair.CaseSensitive);
-        var primaryKey = KeyLookup.PrimaryKeyProperties(pair.Target).Last();
+        var primaryKey = KeyLookup.PrimaryKeyProperties(pair.Target)[^1];
 
         var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
