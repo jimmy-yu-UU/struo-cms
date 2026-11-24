@@ -34,6 +34,7 @@ namespace Struo.Tests.Metadata
         [CmsCollection("BareOptions")]
         private sealed class BareOptions
         {
+            [SqlSugar.SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
             [CmsField(Interface = FieldInterface.Select)]
             [CmsOptions("draft", "published:Published", "archived:")] // bare "draft" => label defaults to "draft"; "archived:" => blank label after colon also defaults to value
             public string Status { get; set; } = "";

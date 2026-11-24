@@ -78,6 +78,8 @@ public static class MetadataScanner
         ValidateReservedNames(collections);
         ValidateJunctionCollections(collections, typeList);
         ValidateJunctionPrimaryKeys(collections, typeList);
+        ValidateJunctionKeyProperties(collections, typeList);
+        ValidateCollectionPrimaryKeys(typeList);
         ValidateRelationKeyTypes(collections, typeList);
         return ResolveJunctionPayloadFields(collections, typeList);
     }
@@ -190,14 +192,73 @@ public static class MetadataScanner
     }
 
     /// <summary>
+    /// Fail-fast: both keys a many-to-many <c>[Navigate]</c> names must be properties of the junction type.
+    /// A key that matches no property is silently ignored by some paths and throws in others, so a
+    /// link is never written or read. Runs for both <see cref="ScanTypes"/> and the assembly-based
+    /// <see cref="Scan"/> (which delegates to it).
+    /// </summary>
+    private static void ValidateJunctionKeyProperties(List<CollectionMetadata> collections, IEnumerable<Type> types)
+    {
+        var names = collections.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var type in types.Where(t => names.Contains(CollectionNameOf(t))))
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                ValidateOneJunctionKeyProperties(type, prop);
+    }
+
+    // Per-property body of ValidateJunctionKeyProperties.
+    private static void ValidateOneJunctionKeyProperties(Type owner, PropertyInfo prop)
+    {
+        if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { IsJunction: true } nav) return;
+        RequireJunctionKeyProperty(owner, prop, nav.JunctionType!, "parent", nav.ParentKey);
+        RequireJunctionKeyProperty(owner, prop, nav.JunctionType!, "target", nav.TargetKey);
+    }
+
+    private static void RequireJunctionKeyProperty(Type owner, PropertyInfo relation, Type junction, string side, string key)
+    {
+        if (PropertyNamed(junction, key) is not null) return;
+
+        throw new MetadataException(
+            $"Relation '{owner.Name}.{relation.Name}' declares the junction {side} key '{key}' " +
+            $"in [Navigate], but {junction.Name} has no property with that name. " +
+            $"Name a property of {junction.Name} that holds the key, or add '{key}' to {junction.Name}.");
+    }
+
+    /// <summary>
+    /// Fail-fast: every <c>[CmsCollection]</c> type has exactly one primary key property: one property
+    /// carrying <c>[SugarColumn(IsPrimaryKey = true)]</c>, or, when none does, a property named
+    /// <c>Id</c>. Every read, update and delete by id depends on it. Runs for both
+    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// </summary>
+    private static void ValidateCollectionPrimaryKeys(IEnumerable<Type> types)
+    {
+        foreach (var type in types.Where(t => CollectionAttributeOf(t) is not null))
+            RequireOnePrimaryKey(type);
+    }
+
+    private static void RequireOnePrimaryKey(Type type)
+    {
+        var marked = PrimaryKeyProperties(type);
+        if (marked.Count > 1)
+            throw new MetadataException(
+                $"Collection class '{type.Name}' marks {marked.Count} properties with [SugarColumn(IsPrimaryKey = true)]: " +
+                $"{string.Join(", ", marked.Select(p => p.Name))}. A collection has one primary key property; " +
+                "keep the attribute on one of them.");
+        if (marked.Count > 0 || type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Any(p => p.Name == DefaultPrimaryKeyName))
+            return;
+
+        throw new MetadataException(
+            $"Collection class '{type.Name}' ({CollectionNameOf(type)}) has no primary key property. " +
+            $"Mark one property with [SugarColumn(IsPrimaryKey = true)], or add a property named {DefaultPrimaryKeyName}.");
+    }
+
+    /// <summary>
     /// Fail-fast: the key a <c>[CmsRelation]</c> names must have the type of the primary key it points at
     /// (each without <c>Nullable&lt;&gt;</c>): the many-to-one key, the one-to-many child key and both
     /// junction keys. Every path that reads or writes the key handles it as the type of that primary key,
     /// so a key of another type makes an expansion read back empty or an empty list, or throws when the
-    /// relation is expanded, a link is written or a target is deleted. Nothing is compared when the key
-    /// property or the primary key property does not exist, or when the entity holding the primary key is
-    /// not a collection. Runs for both <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/>
-    /// (which delegates to it).
+    /// relation is expanded, a link is written or a target is deleted. Nothing is compared when the
+    /// entity holding the primary key is not a collection. Runs for both <see cref="ScanTypes"/> and the
+    /// assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
     private static void ValidateRelationKeyTypes(List<CollectionMetadata> collections, IEnumerable<Type> types)
     {
@@ -254,9 +315,9 @@ public static class MetadataScanner
 
     private static void RequireKeyType(Type owner, PropertyInfo relation, RelationKeyPair pair)
     {
-        var key = PropertyNamed(pair.KeyOwner, pair.Key);
-        var primaryKey = PropertyNamed(pair.Target, PrimaryKeyName(pair.Target));
-        if (key is null || primaryKey is null) return;
+        // Both exist: the scan has refused every key name and every collection without a primary key before this runs.
+        var key = PropertyNamed(pair.KeyOwner, pair.Key)!;
+        var primaryKey = PropertyNamed(pair.Target, PrimaryKeyName(pair.Target))!;
 
         var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
@@ -286,8 +347,14 @@ public static class MetadataScanner
 
     // The property carrying [SugarColumn(IsPrimaryKey = true)] (the last when several do), else "Id".
     private static string PrimaryKeyName(Type type) =>
+        PrimaryKeyProperties(type).LastOrDefault()?.Name ?? DefaultPrimaryKeyName;
+
+    private const string DefaultPrimaryKeyName = "Id";
+
+    private static List<PropertyInfo> PrimaryKeyProperties(Type type) =>
         type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .LastOrDefault(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })?.Name ?? "Id";
+            .Where(p => p.GetCustomAttribute<SugarColumn>() is { IsPrimaryKey: true })
+            .ToList();
 
     /// <summary>
     /// Single source of every M2M relation's junction payload field list (spec U2b §3.1): once all

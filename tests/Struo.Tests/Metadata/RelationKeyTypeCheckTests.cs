@@ -358,54 +358,9 @@ public class RelationKeyTypeCheckTests
 
     // ── what is not compared ─────────────────────────────────────────────────
 
-    [SugarTable("rkc_jct_unnamed")]
-    private sealed class JunctionWithoutParentKeyProperty
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        public long TargetId { get; set; }
-    }
-
-    [SugarTable("rkc_mm_unnamed")]
-    [CmsCollection("MM unnamed", Name = "rkcMmUnnamed")]
-    private sealed class ManyToManyKeyWithoutProperty
-    {
-        [SugarColumn(IsPrimaryKey = true, IsIdentity = true)] public long Id { get; set; }
-
-        [Navigate(typeof(JunctionWithoutParentKeyProperty), "NoSuchKey", nameof(JunctionWithoutParentKeyProperty.TargetId))]
-        [CmsRelation(Interface = RelationInterface.TagSelect)]
-        [SugarColumn(IsIgnore = true)] public List<LongTarget> Tags { get; set; } = [];
-    }
-
-    [SugarTable("rkc_no_key_target")]
-    [CmsCollection("No key target", Name = "rkcNoKeyTarget")]
-    private sealed class TargetWithoutPrimaryKey
-    {
-        public string Name { get; set; } = "";
-    }
-
-    [SugarTable("rkc_m2o_no_key")]
-    [CmsCollection("M2O no key", Name = "rkcM2oNoKey")]
-    private sealed class M2oToTargetWithoutPrimaryKey
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        public int TargetId { get; set; }
-
-        [Navigate(NavigateType.ManyToOne, nameof(TargetId))]
-        [CmsRelation(Interface = RelationInterface.Dropdown)]
-        [SugarColumn(IsIgnore = true)] public TargetWithoutPrimaryKey? Target { get; set; }
-    }
-
     [Fact]
     public void A_target_that_is_not_in_the_scan_is_not_compared() =>
         MetadataScanner.ScanTypes([typeof(M2oIntToLong)]).Should().ContainSingle();
-
-    [Fact]
-    public void A_key_name_that_matches_no_property_is_not_compared() =>
-        MetadataScanner.ScanTypes([typeof(ManyToManyKeyWithoutProperty), typeof(LongTarget)]).Should().HaveCount(2);
-
-    [Fact]
-    public void A_target_without_a_primary_key_property_is_not_compared() =>
-        MetadataScanner.ScanTypes([typeof(M2oToTargetWithoutPrimaryKey), typeof(TargetWithoutPrimaryKey)]).Should().HaveCount(2);
 
     // ── the scan of whole assemblies ─────────────────────────────────────────
 
