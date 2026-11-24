@@ -244,8 +244,21 @@ public class RelationDeclarationCheckTests
         [SugarColumn(IsIgnore = true)] public List<Kid> Kids { get; set; } = [];
     }
 
+    [SugarTable("rdc_sort_o2o")]
+    [CmsCollection("Sort o2o", Name = "rdcSortO2o")]
+    private sealed class SortFieldOnOneToOne
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public Guid? TargetId { get; set; }
+
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, SortField = "Sort")]
+        [SugarColumn(IsIgnore = true)] public Target? Target { get; set; }
+    }
+
     [Theory]
     [InlineData(typeof(SortFieldOnManyToOne), "SortFieldOnManyToOne.Target", "Sort")]
+    [InlineData(typeof(SortFieldOnOneToOne), "SortFieldOnOneToOne.Target", "Sort")]
     [InlineData(typeof(SortFieldOnOneToMany), "SortFieldOnOneToMany.Kids", "Sort")]
     public void A_sort_field_on_a_relation_that_is_not_a_many_to_many_is_refused(
         Type owner, string relation, string field)
@@ -374,13 +387,140 @@ public class RelationDeclarationCheckTests
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().StartWith(
                 "Relation 'OneToManyOverAPlainClassNamedLikeAKid.Kids' declares the foreign key 'ParentId' in [Navigate]")
-            .And.Contain("KidWithoutTheChildKey has no property with that name")
-            .And.Contain("add 'ParentId' to KidWithoutTheChildKey");
+            .And.Contain("but KidWithoutTheChildKey (the collection the element type OtherScope.Kid resolves to by name 'kid') " +
+                         "has no property with that name")
+            .And.Contain("Name a property of KidWithoutTheChildKey").And.Contain("add 'ParentId' to KidWithoutTheChildKey");
     }
 
     [Fact]
     public void A_plain_element_class_that_names_no_collection_keeps_its_own_child_key() =>
         MetadataScanner.ScanTypes([typeof(OneToManyOverAPlainClassNamedLikeAKid)]).Should().ContainSingle();
+
+    private static class ScopeWithoutTheKey
+    {
+        public sealed class ResolvedKid
+        {
+            public Guid Id { get; set; }
+        }
+    }
+
+    // The collection ScopeWithoutTheKey.ResolvedKid is named after declares the child key.
+    [SugarTable("rdc_resolved_kid")]
+    [CmsCollection("Resolved kid", Name = "resolvedKid")]
+    private sealed class KidResolvedByName
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public Guid? ParentId { get; set; }
+    }
+
+    [SugarTable("rdc_plain_no_key_parent")]
+    [CmsCollection("Plain no key parent", Name = "rdcPlainNoKeyParent")]
+    private sealed class OneToManyOverAPlainClassWithoutTheKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "ParentId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<ScopeWithoutTheKey.ResolvedKid> Kids { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_child_key_the_collection_class_declares_passes_although_the_plain_element_class_does_not() =>
+        MetadataScanner.ScanTypes([typeof(OneToManyOverAPlainClassWithoutTheKey), typeof(KidResolvedByName)])
+            .Should().HaveCount(2);
+
+    [Fact]
+    public void A_plain_element_class_without_the_key_is_refused_when_it_names_no_collection()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OneToManyOverAPlainClassWithoutTheKey)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("but ResolvedKid has no property with that name").And.NotContain("resolves to");
+    }
+
+    [SugarTable("rdc_unknown_key_parent")]
+    [CmsCollection("Unknown key parent", Name = "rdcUnknownKeyParent")]
+    private sealed class OneToManyNamingAKeyKidDoesNotDeclare
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "NoSuchKey")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<Kid> Kids { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_child_key_named_on_the_element_class_that_is_the_collection_class_adds_no_resolution_clause()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(OneToManyNamingAKeyKidDoesNotDeclare), typeof(Kid)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("but Kid has no property with that name").And.NotContain("resolves to");
+    }
+
+    // A virtual key that the base class ignores and the override does not repeat has a column (SqlSugar reads
+    // [SugarColumn] off the overriding property), so the relation is served; an override that ignores it has none.
+    private abstract class KidBaseIgnoringTheKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsIgnore = true)] public virtual Guid? ParentId { get; set; }
+    }
+
+    [SugarTable("rdc_override_kid")]
+    [CmsCollection("Override kid", Name = "rdcOverrideKid")]
+    private sealed class KidOverridingTheKeyWithoutTheAttribute : KidBaseIgnoringTheKey
+    {
+        public override Guid? ParentId { get; set; }
+    }
+
+    private abstract class KidBaseDeclaringTheKey
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public virtual Guid? ParentId { get; set; }
+    }
+
+    [SugarTable("rdc_override_ignored_kid")]
+    [CmsCollection("Override ignored kid", Name = "rdcOverrideIgnoredKid")]
+    private sealed class KidOverridingTheKeyAndIgnoringIt : KidBaseDeclaringTheKey
+    {
+        [SugarColumn(IsIgnore = true)] public override Guid? ParentId { get; set; }
+    }
+
+    [SugarTable("rdc_override_parent")]
+    [CmsCollection("Override parent", Name = "rdcOverrideParent")]
+    private sealed class ParentOfAnOverridingKid
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "ParentId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<KidOverridingTheKeyWithoutTheAttribute> Kids { get; set; } = [];
+    }
+
+    [SugarTable("rdc_override_ignored_parent")]
+    [CmsCollection("Override ignored parent", Name = "rdcOverrideIgnoredParent")]
+    private sealed class ParentOfAnIgnoringKid
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "ParentId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<KidOverridingTheKeyAndIgnoringIt> Kids { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_key_the_override_does_not_repeat_IsIgnore_on_has_a_column() =>
+        MetadataScanner.ScanTypes([typeof(ParentOfAnOverridingKid), typeof(KidOverridingTheKeyWithoutTheAttribute)])
+            .Should().HaveCount(2);
+
+    [Fact]
+    public void A_key_the_override_marks_IsIgnore_has_no_column()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(ParentOfAnIgnoringKid), typeof(KidOverridingTheKeyAndIgnoringIt)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("KidOverridingTheKeyAndIgnoringIt.ParentId is [SugarColumn(IsIgnore = true)]");
+    }
 
     // ── order when a declaration breaks two rules ────────────────────────────
 
@@ -405,13 +545,26 @@ public class RelationDeclarationCheckTests
             .Should().Contain("is [SugarColumn(IsIgnore = true)]").And.NotContain("primary key");
     }
 
-    [Fact]
-    public void A_missing_navigate_is_reported_before_any_other_check()
+    [SugarTable("rdc_nav_and_sort")]
+    [CmsCollection("Nav and sort", Name = "rdcNavAndSort")]
+    private sealed class MissingNavigateAndAnUnknownSortField
     {
-        var scan = () => MetadataScanner.ScanTypes(
-            [typeof(SortFieldNamesNoProperty), typeof(ListWithoutNavigate), typeof(Target)]);
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(typeof(Junction), nameof(Junction.OwnerId), nameof(Junction.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect, SortField = "NoSuchSort")]
+        [SugarColumn(IsIgnore = true)] public List<Target> Sorted { get; set; } = [];
+
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)] public List<Target> Unnavigated { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_missing_navigate_is_reported_before_the_other_relation_checks_of_the_same_type()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(MissingNavigateAndAnUnknownSortField), typeof(Target)]);
 
         scan.Should().Throw<MetadataException>().Which.Message
-            .Should().StartWith("Relation 'ListWithoutNavigate.Tags'");
+            .Should().StartWith("Relation 'MissingNavigateAndAnUnknownSortField.Unnavigated'");
     }
 }

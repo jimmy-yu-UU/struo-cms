@@ -151,17 +151,15 @@ internal sealed class NavigateShape
         if (string.IsNullOrWhiteSpace(ForeignKey))
             throw Unsupported(property, "the foreign key is null, empty or blank");
 
-        RequireForeignKeyProperty(property, isList);
+        if (!isList) RequireForeignKeyProperty(property);
     }
 
-    // The key is a property of the declaring entity (many-to-one, one-to-one) or of the list's element type
-    // (one-to-many), spelled exactly. Why: docs/ai/decisions/relation-key-and-primary-key-declarations.md
-    private void RequireForeignKeyProperty(PropertyInfo property, bool isList)
-    {
-        var owner = isList ? property.PropertyType.GetGenericArguments()[0] : property.DeclaringType!;
+    // A single-entity key is a property of the declaring entity, spelled exactly; a one-to-many child key is
+    // read off the collection class and checked by RelationDeclarationCheck.
+    // Why: docs/ai/decisions/relation-key-and-primary-key-declarations.md
+    private void RequireForeignKeyProperty(PropertyInfo property) =>
         RelationDeclarationCheck.RequireProperty(
-            property, owner, $"the foreign key '{ForeignKey}' in [Navigate]", ForeignKey);
-    }
+            property, property.DeclaringType!, $"the foreign key '{ForeignKey}' in [Navigate]", ForeignKey);
 
     /// <summary>The refusal of a <c>[CmsRelation]</c> property that has no <c>[Navigate]</c>.</summary>
     public static MetadataException Missing(PropertyInfo property) =>

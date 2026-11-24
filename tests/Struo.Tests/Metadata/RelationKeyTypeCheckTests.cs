@@ -325,12 +325,12 @@ public class RelationKeyTypeCheckTests
             public long Id { get; set; }
         }
 
-        public sealed class RkcKidLongKey
+        public sealed class RkcKidPlainGuidKey
         {
             public Guid? ParentId { get; set; }
         }
 
-        public sealed class RkcKidGuidKey
+        public sealed class RkcKidPlainLongKey
         {
             public long? ParentId { get; set; }
         }
@@ -397,16 +397,18 @@ public class RelationKeyTypeCheckTests
         MetadataScanner.ScanTypes([typeof(ManyToManyOverPlainClassWithTheCollectionKeyType), typeof(RkcNamedTarget)])
             .Should().HaveCount(2);
 
+    // The collection is named after the plain class PlainScope.RkcKidPlainGuidKey, which declares the other key type.
     [SugarTable("rkc_kid_long_key")]
-    [CmsCollection("Kid long key")]
+    [CmsCollection("Kid long key", Name = "rkcKidPlainGuidKey")]
     private sealed class RkcKidLongKey
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [SugarColumn(IsNullable = true)] public long? ParentId { get; set; }
     }
 
+    // The collection is named after the plain class PlainScope.RkcKidPlainLongKey, which declares the other key type.
     [SugarTable("rkc_kid_guid_key")]
-    [CmsCollection("Kid guid key")]
+    [CmsCollection("Kid guid key", Name = "rkcKidPlainLongKey")]
     private sealed class RkcKidGuidKey
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
@@ -421,7 +423,7 @@ public class RelationKeyTypeCheckTests
 
         [Navigate(NavigateType.OneToMany, "ParentId")]
         [CmsRelation(Interface = RelationInterface.RelatedList)]
-        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcKidLongKey> Kids { get; set; } = [];
+        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcKidPlainGuidKey> Kids { get; set; } = [];
     }
 
     [SugarTable("rkc_plain_kid_ok")]
@@ -432,7 +434,7 @@ public class RelationKeyTypeCheckTests
 
         [Navigate(NavigateType.OneToMany, "ParentId")]
         [CmsRelation(Interface = RelationInterface.RelatedList)]
-        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcKidGuidKey> Kids { get; set; } = [];
+        [SugarColumn(IsIgnore = true)] public List<PlainScope.RkcKidPlainLongKey> Kids { get; set; } = [];
     }
 
     [Fact]
@@ -445,6 +447,8 @@ public class RelationKeyTypeCheckTests
         message.Should().StartWith("Relation 'OneToManyOverPlainClassWhoseCollectionDeclaresAnotherKeyType.Kids'")
             .And.Contain("'RkcKidLongKey.ParentId', a long? property")
             .And.Contain("the primary key 'OneToManyOverPlainClassWhoseCollectionDeclaresAnotherKeyType.Id', a Guid property")
+            .And.Contain("RkcKidLongKey is the collection the element type PlainScope.RkcKidPlainGuidKey resolves to " +
+                         "by name 'rkcKidPlainGuidKey'")
             .And.Contain("Declare 'RkcKidLongKey.ParentId' as Guid?");
     }
 

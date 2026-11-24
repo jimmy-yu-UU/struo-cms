@@ -24,22 +24,32 @@ internal static class KeyLookup
 
     /// <summary>
     /// Why <paramref name="holder"/> has no property called <paramref name="name"/>; names the property
-    /// that differs only in case when there is one. <paramref name="kind"/> says what the name stands for.
+    /// that differs only in case when there is one. <paramref name="kind"/> says what the name stands for;
+    /// <paramref name="resolution"/>, when given, says how the declaration led to <paramref name="holder"/>.
     /// </summary>
-    public static string Absence(Type holder, string name, string kind = "key") =>
-        NearMiss(holder, name) is { } nearMiss
-            ? $"{holder.Name} has no property '{name}'; it has '{nearMiss.Name}' — " +
+    public static string Absence(Type holder, string name, string kind = "key", string? resolution = null)
+    {
+        var label = resolution is null ? holder.Name : $"{holder.Name} ({resolution})";
+        return NearMiss(holder, name) is { } nearMiss
+            ? $"{label} has no property '{name}'; it has '{nearMiss.Name}' — " +
               $"{kind} names are case-sensitive. Write the {kind} as '{nearMiss.Name}'."
-            : $"{holder.Name} has no property with that name. " +
+            : $"{label} has no property with that name. " +
               $"Name a property of {holder.Name} that holds the {kind}, or add '{name}' to {holder.Name}.";
+    }
 
     private static PropertyInfo? NearMiss(Type type, string name) =>
         type.GetProperties(PublicInstance)
             .FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>True when the property is marked <c>[SugarColumn(IsIgnore = true)]</c>: it has no column.</summary>
-    public static bool HasNoColumn(PropertyInfo property) =>
-        property.GetCustomAttribute<SugarColumn>() is { IsIgnore: true };
+    /// <summary>
+    /// True when the property is marked <c>[SugarColumn(IsIgnore = true)]</c> on its own declaration: it has
+    /// no column.
+    /// </summary>
+    public static bool HasNoColumn(PropertyInfo property) => SugarColumnsOf(property).Any(a => a.IsIgnore);
+
+    // [SugarColumn] on the property itself, without inheritance, as SqlSugar reads it.
+    private static IEnumerable<SugarColumn> SugarColumnsOf(PropertyInfo property) =>
+        property.GetCustomAttributes(typeof(SugarColumn), inherit: false).OfType<SugarColumn>();
 
     /// <summary>
     /// The properties of <paramref name="type"/> that carry <c>[SugarColumn(IsPrimaryKey = true)]</c> on
@@ -48,6 +58,6 @@ internal static class KeyLookup
     /// </summary>
     public static List<PropertyInfo> PrimaryKeyProperties(Type type) =>
         type.GetProperties(PublicInstance)
-            .Where(p => p.GetCustomAttributes(typeof(SugarColumn), inherit: false).OfType<SugarColumn>().Any(a => a.IsPrimaryKey))
+            .Where(p => SugarColumnsOf(p).Any(a => a.IsPrimaryKey))
             .ToList();
 }

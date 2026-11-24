@@ -8,9 +8,10 @@ using Xunit;
 
 namespace Struo.Tests.Metadata;
 
-// The foreign-key name in a [CmsRelation] property's [Navigate] must be a property: of the declaring
-// entity for many-to-one and one-to-one, of the list's element type for one-to-many, spelled exactly; a
-// many-to-many relation is not checked here.
+// The foreign-key name in the [Navigate] of a single-entity [CmsRelation] property (many-to-one,
+// one-to-one) must be a property of the declaring entity, spelled exactly. A one-to-many child key is
+// checked by the scan against the collection class (RelationDeclarationCheck); a many-to-many relation is
+// not checked here.
 // Why: docs/ai/decisions/relation-key-and-primary-key-declarations.md
 public sealed class NavigateForeignKeyTests
 {
@@ -52,28 +53,6 @@ public sealed class NavigateForeignKeyTests
         public Target? Target { get; set; }
     }
 
-    public sealed class OneToManyUnknown
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-
-        [Navigate(NavigateType.OneToMany, "OwnerId")]
-        [CmsRelation(Interface = RelationInterface.RelatedList)]
-        [SugarColumn(IsIgnore = true)]
-        public List<Child> Children { get; set; } = [];
-    }
-
-    // The key exists on the declaring entity but not on the element type, which is where a one-to-many looks.
-    public sealed class OneToManyKeyOnTheWrongType
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        public Guid? OwnerId { get; set; }
-
-        [Navigate(NavigateType.OneToMany, "OwnerId")]
-        [CmsRelation(Interface = RelationInterface.RelatedList)]
-        [SugarColumn(IsIgnore = true)]
-        public List<Child> Children { get; set; } = [];
-    }
-
     public sealed class ManyToOneDifferingInCase
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
@@ -94,16 +73,6 @@ public sealed class NavigateForeignKeyTests
         public Target? Target { get; set; }
     }
 
-    public sealed class OneToManyDifferingInCase
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-
-        [Navigate(NavigateType.OneToMany, "PARENTID")]
-        [CmsRelation(Interface = RelationInterface.RelatedList)]
-        [SugarColumn(IsIgnore = true)]
-        public List<Child> Children { get; set; } = [];
-    }
-
     public sealed class ManyToManyUnknownKeys
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
@@ -118,8 +87,6 @@ public sealed class NavigateForeignKeyTests
     {
         { typeof(ManyToOneUnknown), "ManyToOneUnknown.Target", "ManyToOneUnknown has no property with that name" },
         { typeof(OneToOneUnknown), "OneToOneUnknown.Target", "OneToOneUnknown has no property with that name" },
-        { typeof(OneToManyUnknown), "OneToManyUnknown.Children", "Child has no property with that name" },
-        { typeof(OneToManyKeyOnTheWrongType), "OneToManyKeyOnTheWrongType.Children", "Child has no property with that name" },
     };
 
     [Theory]
@@ -138,7 +105,6 @@ public sealed class NavigateForeignKeyTests
     {
         { typeof(ManyToOneDifferingInCase), "ManyToOneDifferingInCase.Target", "targetid", "ManyToOneDifferingInCase", "TargetId" },
         { typeof(OneToOneDifferingInCase), "OneToOneDifferingInCase.Target", "TARGETID", "OneToOneDifferingInCase", "TargetId" },
-        { typeof(OneToManyDifferingInCase), "OneToManyDifferingInCase.Children", "PARENTID", "Child", "ParentId" },
     };
 
     [Theory]
@@ -151,6 +117,70 @@ public sealed class NavigateForeignKeyTests
         var message = act.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain($"Relation '{relation}'").And.Contain($"foreign key '{key}'")
             .And.Contain($"{holder} has no property '{key}'; it has '{property}'")
+            .And.Contain("key names are case-sensitive");
+    }
+
+    // ── one-to-many: the element type is a plain class that names no scanned collection ──
+
+    [SugarTable("nfk_o2m_unknown")]
+    [CmsCollection("O2M unknown", Name = "nfkO2mUnknown")]
+    public sealed class OneToManyUnknown
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "OwnerId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)]
+        public List<Child> Children { get; set; } = [];
+    }
+
+    // The key exists on the declaring entity but not on the element type, which is where a one-to-many looks.
+    [SugarTable("nfk_o2m_wrong_type")]
+    [CmsCollection("O2M wrong type", Name = "nfkO2mWrongType")]
+    public sealed class OneToManyKeyOnTheWrongType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid? OwnerId { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "OwnerId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)]
+        public List<Child> Children { get; set; } = [];
+    }
+
+    [SugarTable("nfk_o2m_case")]
+    [CmsCollection("O2M case", Name = "nfkO2mCase")]
+    public sealed class OneToManyDifferingInCase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "PARENTID")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)]
+        public List<Child> Children { get; set; } = [];
+    }
+
+    [Theory]
+    [InlineData(typeof(OneToManyUnknown), "OneToManyUnknown.Children")]
+    [InlineData(typeof(OneToManyKeyOnTheWrongType), "OneToManyKeyOnTheWrongType.Children")]
+    public void A_child_key_that_is_not_a_property_of_the_element_type_is_refused_at_the_scan(Type owner, string relation)
+    {
+        var act = () => MetadataScanner.ScanTypes([owner]);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith($"Relation '{relation}' declares the foreign key 'OwnerId' in [Navigate]")
+            .And.Contain("Child has no property with that name").And.Contain("Name a property of Child")
+            .And.NotContain("resolves to");
+    }
+
+    [Fact]
+    public void A_child_key_that_differs_only_in_case_is_refused_at_the_scan_and_names_the_property_it_misses()
+    {
+        var act = () => MetadataScanner.ScanTypes([typeof(OneToManyDifferingInCase)]);
+
+        var message = act.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("Relation 'OneToManyDifferingInCase.Children'").And.Contain("foreign key 'PARENTID'")
+            .And.Contain("Child has no property 'PARENTID'; it has 'ParentId'")
             .And.Contain("key names are case-sensitive");
     }
 

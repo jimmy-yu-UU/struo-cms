@@ -285,21 +285,22 @@ public static class MetadataScanner
     {
         if (prop.GetCustomAttribute<CmsRelationAttribute>() is null || NavigateShape.Of(prop) is not { } nav) return;
         foreach (var pair in RelationKeyPairs(type, prop, nav, collections))
-            if (pair.Target is { } target) RequireKeyType(prop, pair, target);
+            RequireKeyType(prop, pair);
     }
 
-    // Target is the scanned collection class whose primary key the key holds, or null when there is none.
-    private readonly record struct RelationKeyPair(Type KeyOwner, string Key, Type? Target);
+    // Target is the scanned collection class whose primary key the key holds. Resolution says how a one-to-many
+    // element type led to KeyOwner, or is null.
+    private readonly record struct RelationKeyPair(Type KeyOwner, string Key, Type Target, string? Resolution = null);
 
     // The key holder, the key name and the collection class whose primary key it holds, for each key a
-    // relation declares.
+    // relation declares and whose target is a scanned collection.
     private static IEnumerable<RelationKeyPair> RelationKeyPairs(
         Type owner, PropertyInfo prop, NavigateShape nav, Dictionary<string, Type> collections)
     {
         if (!NavigateShape.IsListProperty(prop))
         {
             var target = RelationDeclarationCheck.CollectionClassOf(SingleRelationTarget(prop), collections);
-            yield return new RelationKeyPair(owner, nav.ForeignKey, target);
+            if (target is not null) yield return new RelationKeyPair(owner, nav.ForeignKey, target);
             yield break;
         }
 
@@ -308,11 +309,13 @@ public static class MetadataScanner
         if (nav.IsJunction)
         {
             yield return new RelationKeyPair(nav.JunctionType!, nav.ParentKey, owner);
-            yield return new RelationKeyPair(nav.JunctionType!, nav.TargetKey, elementClass);
+            if (elementClass is not null)
+                yield return new RelationKeyPair(nav.JunctionType!, nav.TargetKey, elementClass);
         }
         else
         {
-            yield return new RelationKeyPair(elementClass ?? element, nav.ForeignKey, owner);
+            var resolution = RelationDeclarationCheck.ResolutionNote(element, elementClass);
+            yield return new RelationKeyPair(elementClass ?? element, nav.ForeignKey, owner, resolution);
         }
     }
 
@@ -325,11 +328,11 @@ public static class MetadataScanner
     }
 
     // The key names were checked before this runs, and a scanned collection class has its one primary key.
-    private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair, Type target)
+    private static void RequireKeyType(PropertyInfo relation, RelationKeyPair pair)
     {
         var relationName = RelationDeclarationCheck.RelationName(relation);
         var key = KeyLookup.Require(pair.KeyOwner, pair.Key);
-        var primaryKey = KeyLookup.PrimaryKeyProperties(target)[0];
+        var primaryKey = KeyLookup.PrimaryKeyProperties(pair.Target)[0];
 
         var keyType = Nullable.GetUnderlyingType(key.PropertyType) ?? key.PropertyType;
         var primaryKeyType = Nullable.GetUnderlyingType(primaryKey.PropertyType) ?? primaryKey.PropertyType;
@@ -342,6 +345,7 @@ public static class MetadataScanner
             $"{ColumnDeclarationCheck.WithArticle(ColumnDeclarationCheck.TypeName(key.PropertyType))} property, " +
             $"but it points at the primary key '{primaryKey.DeclaringType!.Name}.{primaryKey.Name}', " +
             $"{ColumnDeclarationCheck.WithArticle(ColumnDeclarationCheck.TypeName(primaryKey.PropertyType))} property. " +
+            (pair.Resolution is null ? "" : $"{pair.KeyOwner.Name} is {pair.Resolution}. ") +
             $"Declare '{keyName}' as {ColumnDeclarationCheck.TypeName(SuggestedKeyType(key.PropertyType, primaryKeyType))}: " +
             "a relation key is read and written as the type of the primary key it points at. " +
             "A column that already exists with another type needs a migration.");
@@ -809,8 +813,7 @@ public static class MetadataScanner
     // ── Relation scanning ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Scans all properties on <paramref name="type"/> that carry both
-    /// <c>[Navigate]</c> and <c>[CmsRelation]</c> and returns a
+    /// Scans the properties of <paramref name="type"/> that carry <c>[CmsRelation]</c> and returns a
     /// <see cref="RelationMetadata"/> for each.
     /// </summary>
     /// <remarks>

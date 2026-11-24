@@ -50,6 +50,37 @@ public sealed class KeyLookupTests
         KeyLookup.HasNoColumn(typeof(WithIgnored).GetProperty(nameof(WithIgnored.Stored))!).Should().BeFalse();
     }
 
+    // SqlSugar reads [SugarColumn] off the property it maps, without inheritance: an override that does not
+    // repeat IsIgnore has a column, and an override that sets it has none.
+    [Fact]
+    public void HasNoColumn_reads_the_attribute_off_the_overriding_property_only()
+    {
+        KeyLookup.HasNoColumn(typeof(OverrideWithoutTheAttribute).GetProperty(nameof(OverrideWithoutTheAttribute.Key))!)
+            .Should().BeFalse();
+        KeyLookup.HasNoColumn(typeof(OverrideThatIgnores).GetProperty(nameof(OverrideThatIgnores.Key))!)
+            .Should().BeTrue();
+    }
+
+    private abstract class IgnoredOnTheBase
+    {
+        [SqlSugar.SugarColumn(IsIgnore = true)] public virtual int Key { get; set; }
+    }
+
+    private sealed class OverrideWithoutTheAttribute : IgnoredOnTheBase
+    {
+        public override int Key { get; set; }
+    }
+
+    private abstract class PlainOnTheBase
+    {
+        public virtual int Key { get; set; }
+    }
+
+    private sealed class OverrideThatIgnores : PlainOnTheBase
+    {
+        [SqlSugar.SugarColumn(IsIgnore = true)] public override int Key { get; set; }
+    }
+
     private sealed class WithIgnored
     {
         [SqlSugar.SugarColumn(IsIgnore = true)] public int Ignored { get; set; }

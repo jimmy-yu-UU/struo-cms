@@ -25,14 +25,30 @@ internal static class RelationDeclarationCheck
         collections.GetValueOrDefault(MetadataScanner.CollectionNameOf(type));
 
     /// <summary>
+    /// How a one-to-many element type led to the collection class <paramref name="resolved"/>, or null when
+    /// the class is the element type itself or no scanned collection is named after it.
+    /// </summary>
+    public static string? ResolutionNote(Type element, Type? resolved) =>
+        resolved is null || resolved == element
+            ? null
+            : "the collection the element type " + Describe(element) +
+              $" resolves to by name '{MetadataScanner.CollectionNameOf(element)}'";
+
+    // A nested type with the class it is declared in, as it is written in the declaration.
+    private static string Describe(Type type) =>
+        type.DeclaringType is { } outer ? $"{outer.Name}.{type.Name}" : type.Name;
+
+    /// <summary>
     /// The property <paramref name="name"/> of <paramref name="holder"/>, or a <see cref="MetadataException"/>
     /// that names the relation, says what it declared and why the holder has no such property.
     /// </summary>
     public static PropertyInfo RequireProperty(
-        PropertyInfo relation, Type holder, string declaration, string name, string kind = "key") =>
+        PropertyInfo relation, Type holder, string declaration, string name, string kind = "key",
+        string? resolution = null) =>
         KeyLookup.Find(holder, name)
         ?? throw new MetadataException(
-            $"Relation '{RelationName(relation)}' declares {declaration}, but {KeyLookup.Absence(holder, name, kind)}");
+            $"Relation '{RelationName(relation)}' declares {declaration}, but " +
+            KeyLookup.Absence(holder, name, kind, resolution));
 
     /// <summary>
     /// Every relation of every scanned collection: the keys it names and its <c>SortField</c> are properties
@@ -41,40 +57,46 @@ internal static class RelationDeclarationCheck
     /// </summary>
     public static void Require(IReadOnlyDictionary<string, Type> collections)
     {
-        foreach (var type in collections.Values)
-            foreach (var prop in type.GetProperties(PublicInstance))
-                if (prop.GetCustomAttribute<CmsRelationAttribute>() is { } rel && NavigateShape.Of(prop) is { } nav)
-                    RequireRelation(prop, rel, nav, collections);
+        var relations = collections.Values
+            .SelectMany(type => type.GetProperties(PublicInstance))
+            .Where(prop => prop.IsDefined(typeof(CmsRelationAttribute), inherit: true));
+        foreach (var prop in relations)
+            RequireRelation(prop, collections);
     }
 
-    private static void RequireRelation(
-        PropertyInfo prop, CmsRelationAttribute rel, NavigateShape nav, IReadOnlyDictionary<string, Type> collections)
+    private static void RequireRelation(PropertyInfo prop, IReadOnlyDictionary<string, Type> collections)
     {
-        foreach (var (description, holder, key) in KeyHolders(prop, nav, collections))
+        if (NavigateShape.Of(prop) is not { } nav) return;
+
+        foreach (var (description, holder, key, resolution) in KeyHolders(prop, nav, collections))
         {
             var declaration = $"the {description} '{key}' in [Navigate]";
-            RequireColumn(prop, holder, declaration, key, "key", "the relation cannot read or store the key");
+            RequireColumn(
+                prop, holder, declaration, key, "key", "the relation cannot read or store the key", resolution);
         }
-        if (rel.SortField is { } sortField) RequireSortField(prop, nav, sortField);
+        if (prop.GetCustomAttribute<CmsRelationAttribute>()?.SortField is { } sortField)
+            RequireSortField(prop, nav, sortField);
     }
 
-    // The description, the class that holds the property and the property name, for each key a relation declares.
-    private static IEnumerable<(string Description, Type Holder, string Key)> KeyHolders(
+    // The description, the class that holds the property, the property name and how the holder was resolved
+    // (null when it was not), for each key a relation declares.
+    private static IEnumerable<(string Description, Type Holder, string Key, string? Resolution)> KeyHolders(
         PropertyInfo prop, NavigateShape nav, IReadOnlyDictionary<string, Type> collections)
     {
         if (!NavigateShape.IsListProperty(prop))
         {
-            yield return ("foreign key", prop.DeclaringType!, nav.ForeignKey);
+            yield return ("foreign key", prop.DeclaringType!, nav.ForeignKey, null);
         }
         else if (nav.IsJunction)
         {
-            yield return ("junction parent key", nav.JunctionType!, nav.ParentKey);
-            yield return ("junction target key", nav.JunctionType!, nav.TargetKey);
+            yield return ("junction parent key", nav.JunctionType!, nav.ParentKey, null);
+            yield return ("junction target key", nav.JunctionType!, nav.TargetKey, null);
         }
         else
         {
             var element = prop.PropertyType.GetGenericArguments()[0];
-            yield return ("foreign key", CollectionClassOf(element, collections) ?? element, nav.ForeignKey);
+            var resolved = CollectionClassOf(element, collections);
+            yield return ("foreign key", resolved ?? element, nav.ForeignKey, ResolutionNote(element, resolved));
         }
     }
 
@@ -91,9 +113,10 @@ internal static class RelationDeclarationCheck
     }
 
     private static void RequireColumn(
-        PropertyInfo relation, Type holder, string declaration, string name, string kind, string consequence)
+        PropertyInfo relation, Type holder, string declaration, string name, string kind, string consequence,
+        string? resolution = null)
     {
-        var property = RequireProperty(relation, holder, declaration, name, kind);
+        var property = RequireProperty(relation, holder, declaration, name, kind, resolution);
         if (!KeyLookup.HasNoColumn(property)) return;
 
         throw new MetadataException(
