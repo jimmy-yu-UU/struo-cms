@@ -36,6 +36,24 @@
   這種屬性沒有欄位；主機原本能啟動，依它篩選或排序的請求回 `500`。把屬性上的 `Searchable` 或
   `Sortable` 拿掉，或拿掉 `IsIgnore` 讓它存進欄位；加欄位時，已存在的表需要 migration
   （見 [第 5 章](05-collections.md)）。
+- 當 `[CmsRelation]` 的鍵，型別和它指向的主鍵不同（兩邊各自去掉 `?` 再比，所以 `int` 對 `long`
+  也被擋），掃描器就讓主機在啟動時失敗，丟出 `MetadataException`，訊息以「類別.屬性」點名關聯，
+  點名鍵與主鍵（各含所在類別與型別），以及該宣告的型別（[第 8 章](08-relations.md)）。要比的鍵是
+  多對一的外鍵、一對多的子端鍵，以及多對多 junction 的父端鍵與目標端鍵。把鍵宣告成主鍵的型別
+  （主鍵是 `long` 就用 `long` 或 `long?`）；欄位型別有變時，已存在的表需要 migration。下列配對
+  原本都能啟動主機，之後才出問題；每一項都是在 SQLite 上、HTTP 層之下量到的，沒有觀察 HTTP 的
+  回應：
+  - 多對一，`int?` 鍵對 `long` 主鍵：關聯的 `deep` 展開回傳 `null`。寫入鍵、用鍵或目標欄位篩選，
+    以及在 Restrict、SetNull、Cascade 下 purge 目標，都照宣告的方式處理。
+  - 多對一，`string` 鍵對 `Guid` 主鍵：`deep` 展開與每一次目標的 purge 都丟出
+    `InvalidOperationException`；寫入鍵與篩選正常。
+  - 多對一，`Guid` 鍵對 `long` 主鍵：`deep` 展開與每一次目標的 purge 都丟出
+    `InvalidOperationException`，用目標欄位篩選則沒有符合的列。
+  - 一對多，`int?` 子端鍵對 `long` 主鍵：有子列的父列，`deep` 展開回傳空清單。
+  - 多對多，junction 的鍵是 `int`、主鍵是 `long`，不論在父端或目標端：連結有存進去，`deep` 展開
+    回傳空清單。
+  - 多對多，junction 的父端鍵是 `string`、主鍵是 `Guid`：寫入連結時丟出
+    `InvalidOperationException`。
 :::
 
 ### 新增

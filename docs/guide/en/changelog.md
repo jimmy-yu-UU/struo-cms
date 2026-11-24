@@ -42,6 +42,29 @@
   request that filtered or sorted by it answered `500`. Remove `Searchable` or `Sortable` from the
   property, or remove `IsIgnore` so it is stored in a column; a table that exists needs a migration
   when a column is added ([Chapter 5](05-collections.md)).
+- The scanner stops the host at start, with a `MetadataException`, when the key of a `[CmsRelation]`
+  has a type other than the primary key it points at, each compared without `?`, so `int` against
+  `long` is refused too; the message names the relation as "Class.Property", the key and the
+  primary key each with its class and type, and the type to declare
+  ([Chapter 8](08-relations.md)). The keys are the many-to-one foreign key, the one-to-many child
+  key, and the parent key and the target key of a many-to-many junction. Declare the key with the
+  type of the primary key (`long` or `long?` for a `long` primary key); a table that exists needs a
+  migration when the column type changes. These pairings started the host and went wrong later;
+  each was measured on SQLite below the HTTP layer, so the HTTP answers were not observed:
+  - Many-to-one, `int?` key against a `long` primary key: the `deep` expansion of the relation
+    returned `null`. Writing the key, filtering on it or on a field of the target, and purging the
+    target under Restrict, SetNull and Cascade behaved as declared.
+  - Many-to-one, `string` key against a `Guid` primary key: the `deep` expansion and every purge of
+    the target threw `InvalidOperationException`; writing the key and filtering worked.
+  - Many-to-one, `Guid` key against a `long` primary key: the `deep` expansion and every purge of
+    the target threw `InvalidOperationException`, and a filter on a field of the target matched no
+    row.
+  - One-to-many, `int?` child key against a `long` primary key: the `deep` expansion returned an
+    empty list for a parent that had a child.
+  - Many-to-many, junction key of type `int` against a `long` primary key, on the parent side or
+    the target side: the link was stored, and the `deep` expansion returned an empty list.
+  - Many-to-many, junction parent key of type `string` against a `Guid` primary key: the write of a
+    link threw `InvalidOperationException`.
 :::
 
 ### Added
