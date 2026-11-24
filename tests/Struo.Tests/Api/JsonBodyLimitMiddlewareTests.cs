@@ -73,6 +73,22 @@ public class JsonBodyLimitMiddlewareTests
         error.GetProperty("message").GetString().Should().NotContain("read failed");
     }
 
+    [Theory]
+    [InlineData(StatusCodes.Status500InternalServerError)]
+    [InlineData(StatusCodes.Status503ServiceUnavailable)]
+    public async Task A_graphql_body_read_that_fails_without_a_client_error_status_propagates(int status)
+    {
+        var called = false;
+        var failure = new BadHttpRequestException("read failed", status);
+        var context = GraphQlContext("POST", new FailingStream(failure));
+
+        var thrown = await Assert.ThrowsAsync<BadHttpRequestException>(() =>
+            Middleware(_ => { called = true; return Task.CompletedTask; }).InvokeAsync(context));
+
+        thrown.Should().BeSameAs(failure);
+        called.Should().BeFalse();
+    }
+
     [Fact]
     public async Task A_graphql_body_over_the_cap_from_kestrel_is_still_413_PAYLOAD_TOO_LARGE()
     {

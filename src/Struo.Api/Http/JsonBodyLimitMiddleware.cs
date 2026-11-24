@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Buffers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
@@ -10,11 +10,14 @@ namespace Struo.Api.Http;
 /// <summary>
 /// Caps the body of JSON requests (and anything posted to <c>/graphql</c>) at
 /// <see cref="ApiOptions.MaxJsonBodyBytes"/>. A declared length over the cap is rejected before the body
-/// is read. An undeclared (chunked) REST body is cut off by a counting stream once it passes the cap and
-/// surfaces as <see cref="PayloadTooLargeException"/>, which the exception handler answers with the 413
-/// error envelope; a GraphQL body is read up to the cap before GraphQL sees it, so an
-/// over-cap one is refused here, and so is one whose read fails (a 4xx from the server, such as a timeout).
-/// A GET to <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> is JSON of a kind GraphQL does not accept is refused here too. Every path answers 413 <c>PAYLOAD_TOO_LARGE</c> with
+/// is read: a REST request throws <see cref="PayloadTooLargeException"/>, which the exception handler
+/// answers with the 413 error envelope, and a GraphQL request is answered here with a 413
+/// <c>PAYLOAD_TOO_LARGE</c> GraphQL error. An undeclared (chunked) REST body is cut off by a counting stream
+/// once it passes the cap and surfaces as the same exception. A GraphQL body is read up to the cap before
+/// GraphQL sees it: one that passes the cap is answered 413 <c>PAYLOAD_TOO_LARGE</c>, and one whose read
+/// fails with a 4xx from the server (such as a timeout) is answered with that status and
+/// <c>BAD_USER_INPUT</c>. A GET to <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string
+/// value fails <see cref="GraphQlQueryStringCheck"/> is answered 400 <c>BAD_USER_INPUT</c>. Every 413 carries
 /// <see cref="TooLargeMessage"/>, which names no limit. Multipart uploads are not JSON and keep
 /// <c>Struo:Files:MaxUploadBytes</c>.
 /// </summary>
@@ -39,7 +42,7 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         }
 
         var isGraphQl = IsGraphQl(context.Request);
-        if (isGraphQl && QueryStringProblem(context.Request) is { } problem)
+        if (isGraphQl && GraphQlQueryStringCheck.Problem(context.Request) is { } problem)
         {
             await WriteGraphQlErrorAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
             return;
@@ -62,9 +65,9 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         await next(context);
     }
 
-    // GraphQL turns a failed body read into its own transport error, so the body is read here, up to
-    // the cap, before GraphQL sees it. A declared length over the cap was refused before this point and
-    // Kestrel enforces the cap on the rest, so the buffer holds at most the cap, which is small.
+    // The body is read here, up to the cap, before GraphQL sees it, so a failed read is answered by this
+    // middleware. A declared length over the cap was refused before this point and the read loop in
+    // ReadWithinLimitAsync stops at the cap, so the buffer never holds more than the cap.
     private async Task<bool> BufferGraphQlBodyAsync(HttpContext context)
     {
         if (!CanHaveBody(context)) return true;
@@ -88,8 +91,9 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
     // A failure the server did not call a client error is not caught here.
     private async Task<(MemoryStream? Body, int FailureStatus)> ReadWithinLimitAsync(HttpContext context)
     {
-        var buffer = new MemoryStream();
-        var chunk = new byte[BufferChunkBytes];
+        var declared = context.Request.ContentLength ?? 0;
+        var buffer = new MemoryStream((int)Math.Min(declared, Math.Min(_limit, int.MaxValue)));
+        var chunk = ArrayPool<byte>.Shared.Rent(BufferChunkBytes);
         try
         {
             int read;
@@ -99,9 +103,13 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
                 await buffer.WriteAsync(chunk.AsMemory(0, read), context.RequestAborted);
             }
         }
-        catch (BadHttpRequestException e) when (e.StatusCode is >= StatusCodes.Status400BadRequest and < StatusCodes.Status500InternalServerError)
+        catch (BadHttpRequestException e) when (HttpStatusClass.IsClientError(e.StatusCode))
         {
             return (null, e.StatusCode);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(chunk);
         }
         buffer.Position = 0;
         return (buffer, 0);
@@ -131,53 +139,6 @@ public sealed class JsonBodyLimitMiddleware(RequestDelegate next, IOptions<ApiOp
         return context.Response.WriteAsJsonAsync(
             new Dictionary<string, object?> { ["errors"] = new[] { error } }, context.RequestAborted);
     }
-
-    // GraphQL reads the query-string `variables` and `extensions` of a GET as JSON and answers a value
-    // that is not JSON, or is JSON of a kind it does not accept, as an internal error.
-    private static string? QueryStringProblem(HttpRequest request) =>
-        HttpMethods.IsGet(request.Method)
-            ? QueryStringRules
-                .Select(rule => KindProblem(rule, request.Query[rule.Name].ToString()))
-                .FirstOrDefault(problem => problem is not null)
-            : null;
-
-    private static string? KindProblem(QueryStringRule rule, string value)
-    {
-        if (value.Length == 0) return null;
-        var found = KindOf(value);
-        return found is { } kind && rule.Allowed.Contains(kind)
-            ? null
-            : $"Invalid '{rule.Name}' value. Expected {rule.Expected}, but got {KindName(found)}.";
-    }
-
-    private static JsonValueKind? KindOf(string value)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(value);
-            return document.RootElement.ValueKind;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static string KindName(JsonValueKind? kind) => kind switch
-    {
-        null => "invalid JSON",
-        JsonValueKind.True or JsonValueKind.False => "Boolean",
-        _ => kind.ToString()!,
-    };
-
-    private sealed record QueryStringRule(string Name, string Expected, JsonValueKind[] Allowed);
-
-    private static readonly QueryStringRule[] QueryStringRules =
-    [
-        new("variables", "object, array, or null",
-            [JsonValueKind.Object, JsonValueKind.Array, JsonValueKind.Null]),
-        new("extensions", "object", [JsonValueKind.Object]),
-    ];
 
     internal static bool IsCapped(HttpRequest request) => IsGraphQl(request) || IsJson(request.ContentType);
 

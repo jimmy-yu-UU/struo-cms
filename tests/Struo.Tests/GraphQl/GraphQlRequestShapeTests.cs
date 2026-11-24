@@ -27,7 +27,8 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     private const string Query = "{ __typename }";
     private const string OperationsJson = "{\"query\":\"{ __typename }\"}";
 
-    private static readonly string?[] AcceptValues = [null, "*/*", "application/json"];
+    private static readonly string?[] AcceptValues =
+        [null, "*/*", "application/json", "application/graphql-response+json"];
 
     private readonly CapturingLogSink _sink = new();
 
@@ -95,6 +96,11 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         foreach (var (status, body) in results) AssertClientError(status, body, HttpStatusCode.BadRequest);
     }
 
+    private static string DeepObject(int depth) =>
+        string.Concat(Enumerable.Repeat("{\"a\":", depth)) + "1" + new string('}', depth);
+
+    private static string DeepArray(int depth) => new string('[', depth) + "1" + new string(']', depth);
+
     public static TheoryData<string, string> QueryStringValues()
     {
         var data = new TheoryData<string, string>();
@@ -107,12 +113,24 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         }
         data.Add("extensions", "[1,2]");
         data.Add("extensions", "null");
+        data.Add("extensions", " ");
+        data.Add("variables", " ");
+        data.Add("variables", "	");
+        data.Add("variables", "[1]");
+        data.Add("variables", "[\"x\"]");
+        data.Add("variables", "[[1]]");
+        data.Add("variables", "[{},1]");
+        data.Add("variables", "[null,true]");
+        data.Add("variables", DeepObject(65));
+        data.Add("extensions", DeepObject(65));
+        data.Add("variables", DeepArray(65));
         return data;
     }
 
     [Theory]
     [MemberData(nameof(QueryStringValues))]
-    public async Task A_query_string_value_that_is_not_a_JSON_object_is_a_400_under_every_Accept(string name, string value)
+    public async Task Unacceptable_variables_and_extensions_are_a_400_but_variables_may_be_an_array_or_null(
+        string name, string value)
     {
         var results = new List<(HttpStatusCode, string)>();
         foreach (var accept in AcceptValues)
@@ -133,16 +151,79 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
     [InlineData("variables", "null")]
     [InlineData("variables", "{}")]
     [InlineData("variables", "[{}]")]
+    [InlineData("variables", "[null]")]
+    [InlineData("variables", "[{},null]")]
+    [InlineData("variables", " {} ")]
     [InlineData("extensions", "{}")]
+    [InlineData("extensions", " {} ")]
     public async Task A_query_string_value_of_a_kind_GraphQL_accepts_is_executed(string name, string value)
     {
+        foreach (var accept in AcceptValues)
+        {
+            using var host = Host();
+            var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{name}={Uri.EscapeDataString(value)}";
+            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            Accept(request, accept);
+
+            var (status, body) = await SendAsync(host, request, $"S1 pin {name}={value} accept={accept ?? "none"}");
+
+            status.Should().Be(HttpStatusCode.OK, body);
+            body.Should().Contain("\"__typename\"");
+        }
+    }
+
+    private static string Escaped(string value) => Uri.EscapeDataString(value);
+
+    public static TheoryData<string, bool> RawQueryStrings() => new()
+    {
+        { "variables=%7B%7D&variables=%7B%7D", false },
+        { "extensions=%7B%7D&extensions=%7B%7D", false },
+        { "variables=null&variables=null", false },
+        { "variables=%20&variables=%7B%7D", false },
+        { "variables=&variables=%7B%7D", true },
+        { "variables=&variables=", true },
+        { "extensions=", true },
+        { "variables=%5B%7B%7D&variables=%7B%7D%5D", true },
+        { "variables=" + Escaped(DeepObject(64)), true },
+        { "variables=" + Escaped(DeepObject(65)), false },
+    };
+
+    [Theory]
+    [MemberData(nameof(RawQueryStrings))]
+    public async Task A_repeated_or_blank_or_deep_query_string_value_is_refused_exactly_when_GraphQL_cannot_run_it(
+        string rawQuery, bool executes)
+    {
+        var results = new List<(HttpStatusCode, string)>();
+        foreach (var accept in AcceptValues)
+        {
+            using var host = Host();
+            var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{rawQuery}";
+            var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            Accept(request, accept);
+
+            results.Add(await SendAsync(host, request, $"S1 raw {rawQuery} accept={accept ?? "none"}"));
+        }
+        if (executes)
+            foreach (var (status, body) in results) status.Should().Be(HttpStatusCode.OK, body);
+        else
+            AssertAllClientErrors(results);
+    }
+
+    [Theory]
+    [InlineData("[1]", "Number")]
+    [InlineData("[\"x\"]", "String")]
+    [InlineData("[{},[1]]", "Array")]
+    [InlineData("[{},true]", "Boolean")]
+    public async Task A_variables_array_with_an_element_that_is_not_an_object_or_null_names_the_kind(
+        string value, string kind)
+    {
         using var host = Host();
-        var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&{name}={Uri.EscapeDataString(value)}";
+        var uri = $"/graphql?query={Uri.EscapeDataString(Query)}&variables={Uri.EscapeDataString(value)}";
 
-        var (status, body) = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, uri), $"S1 pin {name}={value}");
+        var (status, body) = await SendAsync(host, new HttpRequestMessage(HttpMethod.Get, uri), $"S1 elements {value}");
 
-        status.Should().Be(HttpStatusCode.OK, body);
-        body.Should().Contain("\"__typename\"");
+        AssertClientError(status, body, HttpStatusCode.BadRequest,
+            $"Invalid 'variables' value. Expected array elements to be object or null, but got {kind}.");
     }
 
     private static MultipartFormDataContent Form(params (string Name, string Value)[] parts)
@@ -236,5 +317,22 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         var (status, body) = await SendAsync(host, request, $"S3 declared-length body read fails with {serverStatus}");
 
         AssertClientError(status, body, expected, Unreadable);
+    }
+
+    [Fact]
+    public async Task A_body_read_failure_that_is_not_a_client_error_is_an_internal_error_with_an_error_log()
+    {
+        using var host = Host(new BadHttpRequestException("server detail", StatusCodes.Status500InternalServerError));
+        var request = new HttpRequestMessage(HttpMethod.Post, "/graphql")
+        {
+            Content = new StringContent(OperationsJson, Encoding.UTF8, "application/json"),
+        };
+
+        var (status, body) = await SendAsync(host, request, "S3 declared-length body read fails with 500");
+
+        status.Should().Be(HttpStatusCode.InternalServerError, body);
+        JsonDocument.Parse(body).RootElement.GetProperty("error").GetProperty("code").GetString()
+            .Should().Be("INTERNAL_SERVER_ERROR", body);
+        _sink.Events.Should().Contain(e => e.Level >= LogEventLevel.Error);
     }
 }
