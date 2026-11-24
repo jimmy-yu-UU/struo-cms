@@ -35,7 +35,9 @@ internal sealed class NavigateShape
     /// <summary>True when the declaration used the junction constructor, whatever its arguments.</summary>
     public bool IsJunction { get; private init; }
 
-    /// <summary>The <see cref="NavigateType"/> of the foreign-key form; meaningless for the junction form.</summary>
+    /// <summary>
+    /// The <see cref="NavigateType"/> of the foreign-key form; meaningless for the junction form.
+    /// </summary>
     public NavigateType RelationType { get; private init; }
 
     public Type? JunctionType { get; private init; }
@@ -49,7 +51,9 @@ internal sealed class NavigateShape
     /// <summary>The junction's target-side key property.</summary>
     public string TargetKey { get; private init; } = string.Empty;
 
-    /// <summary>A list property (<c>List&lt;T&gt;</c> and the like) holds many entities; any other holds one.</summary>
+    /// <summary>
+    /// A list property (<c>List&lt;T&gt;</c> and the like) holds many entities; any other holds one.
+    /// </summary>
     public static bool IsListProperty(PropertyInfo property) =>
         property.PropertyType.IsGenericType && typeof(IEnumerable).IsAssignableFrom(property.PropertyType);
 
@@ -150,19 +154,17 @@ internal sealed class NavigateShape
         RequireForeignKeyProperty(property, isList);
     }
 
-    // A many-to-one or one-to-one relation keeps its key on the declaring entity; a one-to-many relation
-    // keeps it on the list's element type. Names match without regard to case.
+    // The key is a property of the declaring entity (many-to-one, one-to-one) or of the list's element type
+    // (one-to-many); only a one-to-many child key may differ in letter case. Why:
+    // docs/ai/decisions/relation-key-and-primary-key-declarations.md
     private void RequireForeignKeyProperty(PropertyInfo property, bool isList)
     {
         var owner = isList ? property.PropertyType.GetGenericArguments()[0] : property.DeclaringType!;
-        var exists = owner.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Any(p => string.Equals(p.Name, ForeignKey, StringComparison.OrdinalIgnoreCase));
-        if (exists) return;
+        if (KeyLookup.Find(owner, ForeignKey, caseSensitive: !isList) is not null) return;
 
         throw new MetadataException(
             $"Relation '{property.DeclaringType?.Name}.{property.Name}' declares the foreign key '{ForeignKey}' " +
-            $"in [Navigate], but {owner.Name} has no property with that name. " +
-            $"Name a property of {owner.Name} that holds the key, or add '{ForeignKey}' to {owner.Name}.");
+            $"in [Navigate], but {KeyLookup.Absence(owner, ForeignKey)}");
     }
 
     private static MetadataException Unsupported(PropertyInfo property, string found) =>

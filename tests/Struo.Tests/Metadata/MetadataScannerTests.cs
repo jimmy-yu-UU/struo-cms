@@ -105,6 +105,7 @@ public class MetadataScannerTests
     [Struo.Domain.Metadata.Attributes.CmsCollection("NoAudit")]
     private sealed class NoAuditEntity
     {
+        [SqlSugar.SugarColumn(IsPrimaryKey = true)] public System.Guid Id { get; set; }
         [Struo.Domain.Metadata.Attributes.CmsField(Interface = Struo.Domain.Metadata.Enums.FieldInterface.Text)]
         public string Name { get; set; } = "";
         public System.DateTime CreatedAt { get; set; }   // NOT IAuditable -> must be ignored
@@ -266,6 +267,7 @@ public class MetadataScannerTests
     [CmsCollection("RepeaterHost")]
     public sealed class RepeaterHost
     {
+        [SqlSugar.SugarColumn(IsPrimaryKey = true)] public System.Guid Id { get; set; }
         [CmsField(Interface = FieldInterface.Text)] public string Name { get; set; } = "";
 
         [CmsField(Label = "FAQs", Interface = FieldInterface.Repeater)]

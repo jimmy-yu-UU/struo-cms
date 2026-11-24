@@ -32,10 +32,12 @@ empty or blank key or junction type, and a subclass of `Navigate` (the CMS reads
 itself). The message names the entity class, the property, the declaration it found and the two
 forms.
 
-The foreign key's name must match a property, without regard to case: for many-to-one and
-one-to-one, a property of the entity that declares the relation; for one-to-many, a property of the
-list's element type. When none matches, startup fails with a message naming the relation, the
-foreign key and the type to look in. The keys of a many-to-many are not part of this check.
+Every key name in `[Navigate]` must name a property. For many-to-one and one-to-one it is a
+property of the entity that declares the relation, and for many-to-many both keys are properties of
+the junction type; these names are case-sensitive. For one-to-many it is a property of the list's
+element type, matched without regard to case. When none matches, startup fails with a message
+naming the relation, the key and the type to look in, and the property that differs only in case
+when there is one.
 
 A key must have the type of the primary key it points at, each without `?`: `long?` matches `long`,
 and `int` against `long` does not. Four keys are compared:
@@ -49,8 +51,7 @@ and `int` against `long` does not. Four keys are compared:
 
 Any other pairing stops startup. The message names the relation, the key and its type, the primary
 key and its type, and the type to declare. A column that already exists with another type needs a
-migration. The comparison needs both properties: a junction key that names no property is not
-compared.
+migration.
 
 The checks above apply to properties that carry `[CmsRelation]`. A `[Navigate]` without it is not a
 relation and is ignored; a many-to-many one is read only for its junction type, to check that a
