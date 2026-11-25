@@ -2,6 +2,33 @@
 
 ## 0.34.0
 
+::: danger 破壞性變更
+- 下列關聯宣告原本都能啟動主機，之後才失敗、被忽略，或寫壞資料；掃描器改成讓主機在啟動時失敗，丟出
+  `MetadataException`，訊息點名關聯與該怎麼宣告。每一項都是在 SQLite 上、HTTP 層之下量到的，沒有觀察
+  HTTP 的回應（[第 8 章](08-relations.md)）：
+  - `[CmsRelation]` 掛在沒有 `[Navigate]` 的屬性上，或掛在 static、非 public 的屬性上：這個關聯沒有
+    被提供，用它的名稱展開或篩選會回「Unknown relation」。補上 `[Navigate]`、改成 public 的 instance
+    屬性，或拿掉 `[CmsRelation]`。
+  - `[Navigate]` 裡的鍵對到帶 `[SugarColumn(IsIgnore = true)]` 的屬性：展開讀回 `null` 或空的，
+    篩選、寫入連結與 purge 以「no such column」失敗。改指到有自己欄位的屬性。
+  - 一對多的子端鍵和屬性只有大小寫不同。這種寫法原本能用；鍵名在每個位置都分大小寫。照屬性的拼法
+    寫鍵名，用 `nameof`。
+  - 多對多的父端鍵與目標端鍵是 junction 上的同一個屬性：連結存進去的 id 是錯的，展開是空的，purge
+    擁有者之後 junction 列還留著。junction 每一端各用一個鍵屬性。
+  - `SortField` 寫在不是多對多的關聯上（沒有作用），或對不到 junction 型別上的屬性、只有大小寫不同、
+    指到帶 `IsIgnore` 的屬性（連結的順序被忽略）。拿掉它，或改指到 junction 上有欄位的屬性。
+  - `SortField` 指到 junction 的鍵或主鍵：鍵是整數時，順序編號覆寫了鍵，連結指到別的列，也不會隨
+    擁有者一起移除；鍵是 `Guid` 時，每次寫入連結都丟出例外。給 junction 一個專門放順序的屬性。
+  - `SortField` 指到沒有 setter 的屬性，或型別不是 `short`、`ushort`、`int`、`uint`、`long`、
+    `ulong`、`float`、`double`、`decimal`、`string` 的屬性：`DateTime`、`Guid`、列舉、`char` 與沒有
+    setter 的屬性在第一次寫入連結時失敗；`bool` 會遺失順序；`byte` 與 `sbyte` 在超過 256 與 128 個
+    連結時溢位。給這個屬性一個 setter，型別改成上面列的其中一種。
+  - 一對多或多對多的關聯上寫 `OnDelete = Cascade` 或 `SetNull`：沒有作用。拿掉它。
+  - 關聯的屬性型別是一個只和某個集合同名的類別，而鍵的型別不是那個集合主鍵的型別，或者（一對多）
+    那個集合的類別沒有宣告子端鍵：展開、排序、寫入連結與 purge 丟出例外，或篩選沒有符合的列。鍵的
+    型別和集合主鍵相同時，不論同名的那個類別宣告了什麼，宣告都通過。
+:::
+
 ### 變更
 
 - `/graphql` 的請求 body 讀取失敗，而伺服器給的不是用戶端錯誤的狀態、也不是取消時，回 `500`，形狀是

@@ -151,21 +151,20 @@ internal sealed class NavigateShape
         if (string.IsNullOrWhiteSpace(ForeignKey))
             throw Unsupported(property, "the foreign key is null, empty or blank");
 
-        RequireForeignKeyProperty(property, isList);
+        if (!isList) RequireForeignKeyProperty(property);
     }
 
-    // The key is a property of the declaring entity (many-to-one, one-to-one) or of the list's element type
-    // (one-to-many); only a one-to-many child key may differ in letter case. Why:
-    // docs/ai/decisions/relation-key-and-primary-key-declarations.md
-    private void RequireForeignKeyProperty(PropertyInfo property, bool isList)
-    {
-        var owner = isList ? property.PropertyType.GetGenericArguments()[0] : property.DeclaringType!;
-        if (KeyLookup.Find(owner, ForeignKey, caseSensitive: !isList) is not null) return;
+    // A single-entity key is a property of the declaring entity, spelled exactly; a one-to-many child key is
+    // read off the collection class and checked by RelationDeclarationCheck.
+    // Why: docs/ai/decisions/relation-key-and-primary-key-declarations.md
+    private void RequireForeignKeyProperty(PropertyInfo property) =>
+        RelationDeclarationCheck.RequireProperty(
+            property, property.DeclaringType!, $"the foreign key '{ForeignKey}' in [Navigate]", ForeignKey);
 
-        throw new MetadataException(
-            $"Relation '{property.DeclaringType?.Name}.{property.Name}' declares the foreign key '{ForeignKey}' " +
-            $"in [Navigate], but {KeyLookup.Absence(owner, ForeignKey)}");
-    }
+    /// <summary>The refusal of a <c>[CmsRelation]</c> property that has no <c>[Navigate]</c>.</summary>
+    public static MetadataException Missing(PropertyInfo property) =>
+        new($"Relation '{RelationDeclarationCheck.RelationName(property)}' has [CmsRelation] but no [Navigate], " +
+            $"so the relation is not served. Add a [Navigate] to it. Supported: {SupportedForms}.");
 
     private static MetadataException Unsupported(PropertyInfo property, string found) =>
         new($"Relation '{property.DeclaringType?.Name}.{property.Name}' has an unsupported [Navigate]: {found}. " +
