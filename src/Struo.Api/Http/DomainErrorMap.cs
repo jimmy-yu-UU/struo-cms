@@ -16,6 +16,9 @@ namespace Struo.Api.Http;
 /// </summary>
 public static class DomainErrorMap
 {
+    /// <summary>The masked message of <see cref="ErrorCodes.Internal"/>; it names no detail of the failure.</summary>
+    internal const string InternalErrorMessage = "An internal error occurred.";
+
     /// <summary>
     /// Maps <paramref name="exception"/> to an <c>(code, message)</c> pair using
     /// <see cref="ErrorCodes"/> constants. An unauthenticated <see cref="PermissionDeniedException"/>
@@ -57,7 +60,7 @@ public static class DomainErrorMap
             SearchUnavailableException => (ErrorCodes.SearchUnavailable, SearchUnavailableMessage),
             _ when IsUniqueViolation(exception) => (ErrorCodes.Conflict, UniqueViolationMessage),
             _ when IsDeadlockVictim(exception) => (ErrorCodes.Conflict, DeadlockMessage),
-            _ => (ErrorCodes.Internal, "An internal error occurred."),
+            _ => (ErrorCodes.Internal, InternalErrorMessage),
         };
 
     /// <summary>

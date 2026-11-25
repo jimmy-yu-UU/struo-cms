@@ -40,6 +40,13 @@
     passes, whatever the class of that name declares.
 :::
 
+### Changed
+
+- A `/graphql` request whose body read fails without a client-error status from the server, a
+  cancellation aside, answers `500` in the GraphQL `errors` shape, with `INTERNAL_SERVER_ERROR` and
+  the masked message. It answered `500` in the REST envelope
+  ([Chapter 14](14-graphql.md#error-shapes)).
+
 ## 0.33.0 — 2026-11-24
 
 ::: danger Breaking
