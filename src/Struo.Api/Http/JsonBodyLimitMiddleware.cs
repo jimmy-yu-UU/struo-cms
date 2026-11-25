@@ -18,7 +18,9 @@ namespace Struo.Api.Http;
 /// GraphQL sees it: one that passes the cap is answered 413 <c>PAYLOAD_TOO_LARGE</c>, and one whose read
 /// fails with a 4xx from the server (such as a timeout) is answered with that status and
 /// <c>BAD_USER_INPUT</c> and logged once as a Warning by <see cref="RequestBodyReadLog"/>; a read that fails
-/// after the client left ends as a cancellation, with no answer and no log entry. Any request to
+/// after the client left ends as a cancellation, with no answer and no log entry; a read that fails in any
+/// other way is answered 500 <c>INTERNAL_SERVER_ERROR</c> in the same shape and logged once as an Error
+/// with the exception. Any request to
 /// <c>/graphql</c> whose media type is <c>multipart/form-data</c> is answered 415 <c>BAD_USER_INPUT</c>
 /// (<see cref="MultipartMessage"/>) before its size is checked and before its body is read. A GET to
 /// <c>/graphql</c> whose <c>variables</c> or <c>extensions</c> query-string value fails
@@ -108,8 +110,8 @@ public sealed class JsonBodyLimitMiddleware(
             ?? !(HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method));
 
     // The whole body, or the HTTP status of why it could not be read: 413 once it passes the cap
-    // (including Kestrel's own 413 for the same cap), or the 4xx status the server put on a failed read.
-    // A failure the server did not call a client error is not caught here.
+    // (including Kestrel's own 413 for the same cap), the 4xx status the server put on a failed read, or 500
+    // for any other failure except a cancellation, which is not caught.
     private async Task<(MemoryStream? Body, int FailureStatus)> ReadWithinLimitAsync(HttpContext context)
     {
         var buffer = new MemoryStream();
@@ -130,6 +132,12 @@ public sealed class JsonBodyLimitMiddleware(
             RequestBodyReadLog.Rejected(logger, e);
             return (null, e.StatusCode);
         }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            context.RequestAborted.ThrowIfCancellationRequested();
+            RequestBodyReadLog.GraphQlFailed(logger, e);
+            return (null, StatusCodes.Status500InternalServerError);
+        }
         finally
         {
             ArrayPool<byte>.Shared.Return(chunk, clearArray: true);
@@ -139,13 +147,15 @@ public sealed class JsonBodyLimitMiddleware(
     }
 
     // /graphql reports transport errors as { errors: [...] }, not as the REST envelope.
-    private static Task WriteGraphQlErrorAsync(HttpContext context, int status = StatusCodes.Status413PayloadTooLarge)
-    {
-        var tooLarge = status == StatusCodes.Status413PayloadTooLarge;
-        return WriteGraphQlErrorAsync(context, status,
-            tooLarge ? ErrorCodes.PayloadTooLarge : ErrorCodes.BadUserInput,
-            tooLarge ? TooLargeMessage : UnreadableBodyMessage);
-    }
+    private static Task WriteGraphQlErrorAsync(HttpContext context, int status = StatusCodes.Status413PayloadTooLarge) =>
+        status switch
+        {
+            StatusCodes.Status413PayloadTooLarge =>
+                WriteGraphQlErrorAsync(context, status, ErrorCodes.PayloadTooLarge, TooLargeMessage),
+            StatusCodes.Status500InternalServerError =>
+                WriteGraphQlErrorAsync(context, status, ErrorCodes.Internal, DomainErrorMap.InternalErrorMessage),
+            _ => WriteGraphQlErrorAsync(context, status, ErrorCodes.BadUserInput, UnreadableBodyMessage),
+        };
 
     private static Task WriteGraphQlErrorAsync(HttpContext context, int status, string code, string message)
     {
