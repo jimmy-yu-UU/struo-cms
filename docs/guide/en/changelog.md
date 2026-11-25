@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.34.0
+## 0.34.0 — 2026-11-25
 
 ::: danger Breaking
 - The scanner stops the host at start, with a `MetadataException` that names the relation and what
