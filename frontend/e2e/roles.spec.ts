@@ -3,10 +3,12 @@ import { type Page } from '@playwright/test'
 import { e2ePassword } from './credentials'
 
 // Live gate: what the role and user forms tell the administrator when an action is not available or a
-// save loses to another administrator's.
+// save loses to another administrator's, and what a user form saves for an administrator who cannot
+// read roles.
 //
-// The role used by the conflict test is stamped, created through the API and purged in `finally`. The
-// other tests only read: the seeded super-admin role and the bootstrap admin's own account.
+// The roles and users the conflict test and the roles test create are stamped, created through the API
+// and purged in `finally`. The other tests only read: the seeded super-admin role and the bootstrap
+// admin's own account.
 
 const EMAIL = process.env.E2E_EMAIL ?? 'admin@admin.com'
 const PASSWORD = e2ePassword()
@@ -17,11 +19,15 @@ const CSRF = { 'X-Struo-CSRF': '1' }
 
 const SAVE_PERMISSIONS = 'Save permissions'
 
-async function login(page: Page): Promise<void> {
+const EDITOR_EMAIL = `e2e-user-editor-${STAMP}@struo.test`
+const TARGET_EMAIL = `e2e-role-holder-${STAMP}@struo.test`
+const ACCOUNT_PASSWORD = `Roles-${STAMP}-pw`
+
+async function login(page: Page, email: string = EMAIL, password: string = PASSWORD): Promise<void> {
   await page.goto('/')
   await expect(page).toHaveURL(/\/login$/)
-  await page.fill('input[type="email"]', EMAIL)
-  await page.fill('input[type="password"]', PASSWORD)
+  await page.fill('input[type="email"]', email)
+  await page.fill('input[type="password"]', password)
   await page.click('button[type="submit"]')
   await expect(page).toHaveURL(/\/$/)
 }
@@ -111,4 +117,76 @@ test('the user form names the token section as the password section does', async
   await page.goto(`/collections/user/${userId}`)
 
   await expect(page.getByRole('heading', { name: 'API access token', exact: true })).toBeVisible()
+})
+
+test('a user form saved by an administrator who cannot read roles leaves the roles of the user as they are', async ({ page, browser }) => {
+  const created: string[] = []
+  const editorContext = await browser.newContext()
+  try {
+    await login(page)
+
+    const makeRole = async (name: string): Promise<string> => {
+      const res = await page.request.post(`${API}/api/items/role`, { data: { name }, headers: CSRF })
+      expect(res.status()).toBe(201)
+      const id = String((await res.json()).data.id)
+      created.push(`/api/items/role/${id}?purge=true`)
+      return id
+    }
+    const makeUser = async (email: string, roleId: string): Promise<string> => {
+      const res = await page.request.post(`${API}/api/users`, {
+        data: { email, password: ACCOUNT_PASSWORD }, headers: CSRF,
+      })
+      expect(res.status()).toBe(201)
+      const id = String((await res.json()).data.id)
+      created.push(`/api/items/user/${id}?purge=true`)
+      const assign = await page.request.put(`${API}/api/items/user/${id}`, {
+        data: { roles: [roleId] }, headers: CSRF,
+      })
+      expect(assign.ok(), `PUT roles -> ${assign.status()}`).toBe(true)
+      return id
+    }
+
+    const editorRole = await makeRole(`e2e-user-editor-${STAMP}`)
+    const keptRole = await makeRole(`e2e-kept-${STAMP}`)
+    await makeUser(EDITOR_EMAIL, editorRole)
+    const targetId = await makeUser(TARGET_EMAIL, keptRole)
+    // Read and write on users, nothing on roles.
+    const grants = await page.request.put(`${API}/api/roles/${editorRole}/permissions`, {
+      data: [{ collection: 'user', canRead: true, canWrite: true, canDelete: false }], headers: CSRF,
+    })
+    expect(grants.ok(), `PUT permissions -> ${grants.status()}`).toBe(true)
+
+    const editor = await editorContext.newPage()
+    await editor.addInitScript(() => {
+      try { localStorage.setItem('struo.uiLocale', 'en') } catch { /* ignore */ }
+    })
+    await login(editor, EDITOR_EMAIL, ACCOUNT_PASSWORD)
+    await editor.goto(`/collections/user/${targetId}`)
+
+    // The Roles field is there, disabled, and says why.
+    const roles = editor.locator('[data-field-key="roles"]')
+    await expect(roles.getByRole('textbox')).toBeDisabled()
+    await expect(roles).toContainText('so this field is not shown and stays as it is.')
+
+    const newName = `Renamed ${STAMP}`
+    await editor.locator('[data-field-key="name"] input').fill(newName)
+    const [saved] = await Promise.all([
+      editor.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes(`/api/items/user/${targetId}`)),
+      editor.getByRole('button', { name: 'Save', exact: true }).click(),
+    ])
+    expect(saved.status()).toBe(200)
+    expect(Object.keys(saved.request().postDataJSON() as Record<string, unknown>)).not.toContain('roles')
+
+    const after = await page.request.get(`${API}/api/items/user/${targetId}?deep=roles`)
+    expect(after.ok(), `GET user -> ${after.status()}`).toBe(true)
+    const stored = (await after.json()).data as { name: string; roles: Array<{ id: string }> }
+    expect(stored.name).toBe(newName)
+    expect(stored.roles.map((r) => String(r.id))).toEqual([keptRole])
+  } finally {
+    // Users first: they reference the roles. A failed delete must not hide the test's own result.
+    for (const path of [...created].reverse()) {
+      await page.request.delete(`${API}${path}`, { headers: CSRF }).catch(() => undefined)
+    }
+    await editorContext.close()
+  }
 })
