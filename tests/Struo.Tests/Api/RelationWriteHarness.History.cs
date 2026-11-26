@@ -70,6 +70,13 @@ internal sealed partial class RelationWriteHarness
             row.Status, en.Title, row.CategoryId, [.. tags], row.HeroImageId, [.. row.Gallery], en.SeoOgImageId);
     });
 
+    /// <summary>The <c>data</c> of an item read over REST.</summary>
+    public async Task<JsonElement> ReadItemAsync(HttpClient client, string collection, Guid id)
+    {
+        var root = await client.GetFromJsonAsync<JsonElement>($"/api/items/{collection}/{id}");
+        return root.GetProperty("data");
+    }
+
     /// <summary>Reverts the article to <paramref name="revision"/>.</summary>
     public async Task<WriteOutcome> RevertAsync(HttpClient client, string channel, Guid article, string revision)
     {

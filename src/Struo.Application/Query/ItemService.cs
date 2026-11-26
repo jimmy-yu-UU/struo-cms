@@ -230,7 +230,7 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
-        relationTargets.Require(meta, body);
+        relationTargets.RequireLinks(meta, body);
         // A revert replays a snapshot the system stored itself, so the link limit does not apply to it.
         if (operation != RevertOperation)
             writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
@@ -239,6 +239,9 @@ public sealed class ItemService(
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
         if (loaded is null) return null;
         var (existing, preMerge) = loaded.Value;
+        // After the 404, and before the merge overwrites the stored values the file fields are compared with.
+        await relationTargets.RequireFilesAsync(
+            meta, body, () => StoredFileLinks.LoadAsync(repository, meta, d, existing, ct));
 
         var bodyKeys = MergeBody(collection, meta, d, body, existing);
 

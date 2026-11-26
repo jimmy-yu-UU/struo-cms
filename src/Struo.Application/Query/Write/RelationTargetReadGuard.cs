@@ -20,6 +20,10 @@ internal readonly record struct SentLink(string Target, string Key, bool InTrans
 /// and the two keys of a junction collection, which link the collection each one points at. A key the body
 /// omits needs nothing. The check runs before any id is parsed or looked up, so the answer is the same for an
 /// existing, a missing and a malformed id.
+/// <para>
+/// An update whose file field carries the value the item already stores needs no read on <c>file</c>: the item
+/// read returns that id to every reader of the collection (<see cref="RequireFilesAsync"/>).
+/// </para>
 /// </summary>
 public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPermissionService permissions)
 {
@@ -40,13 +44,28 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
             throw ReadDenied(FileCollection.Name);
     }
 
-    private void RequireLinks(CollectionMetadata meta, JsonElement body)
+    /// <summary>The many-to-many, many-to-one and junction keys of <see cref="Require"/>, without the file fields.</summary>
+    public void RequireLinks(CollectionMetadata meta, JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object) return;
         foreach (var link in SentLinks(meta, body))
         {
             if (!permissions.CanRead(link.Target)) throw ReadDenied(link.Target);
         }
+    }
+
+    /// <summary>
+    /// The file fields of an update. A caller who cannot read <c>file</c> may send a field back only with the
+    /// value <paramref name="loadStored"/> reports for it (the same id, or the same ids in the same order);
+    /// any other value is refused like on a create. <paramref name="loadStored"/> runs only when a refusal is possible.
+    /// </summary>
+    internal async Task RequireFilesAsync(CollectionMetadata meta, JsonElement body, Func<Task<StoredFileLinks>> loadStored)
+    {
+        if (body.ValueKind != JsonValueKind.Object || permissions.CanRead(FileCollection.Name)) return;
+        var sent = SentFiles(meta, body).ToList();
+        if (sent.Count == 0) return;
+        var stored = await loadStored();
+        if (sent.Any(file => !stored.Holds(file))) throw ReadDenied(FileCollection.Name);
     }
 
     /// <summary>

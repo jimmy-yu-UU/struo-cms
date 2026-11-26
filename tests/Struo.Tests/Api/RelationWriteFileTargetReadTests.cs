@@ -113,10 +113,12 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     [Theory]
     [InlineData(Rest)]
     [InlineData(Gql)]
-    public async Task Clearing_a_file_field_without_file_read_is_refused(string channel)
+    public async Task Clearing_a_stored_file_field_without_file_read_is_refused(string channel)
     {
         var client = await h.CallerAsync([Article], [Article]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var article = await h.SeedArticleAsync(admin);
+        AssertWritten(await h.SendAsync(admin, Rest, Article, article, new() { [Hero] = (await h.SeedFileAsync()).ToString() }));
 
         var outcome = await h.SendAsync(client, channel, Article, article, new() { [Hero] = null });
 
@@ -214,10 +216,13 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     [Theory]
     [InlineData(Rest)]
     [InlineData(Gql)]
-    public async Task Clearing_a_translated_image_without_file_read_is_refused(string channel)
+    public async Task Clearing_a_stored_translated_image_without_file_read_is_refused(string channel)
     {
         var client = await h.CallerAsync([Article], [Article]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var article = await h.SeedArticleAsync(admin);
+        AssertWritten(await h.SendAsync(
+            admin, Rest, Article, article, new(), translation: new() { [OgImage] = (await h.SeedFileAsync()).ToString() }));
 
         var outcome = await h.SendAsync(client, channel, Article, article, new(), translation: new() { [OgImage] = null });
 
