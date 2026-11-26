@@ -168,6 +168,10 @@ with a bad size. That holds for every REST endpoint that reads a body, and the s
 warning-level log entry for the failure; `/graphql` answers in its own shape, described in
 [Chapter 14](14-graphql.md#error-shapes).
 
+A body that arrives whole and is not valid JSON is a different `400`: the code is `VALIDATION`,
+the message in `details` comes from the JSON parser and is not a fixed string. See "Validation
+error `details`" below.
+
 ### Your own error codes
 
 A fork adds its own client-facing error by deriving from `StruoDomainException` (in `Struo.Domain`) with a code,

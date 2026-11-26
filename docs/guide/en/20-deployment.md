@@ -441,7 +441,10 @@ builder (`DOCKER_BUILDKIT=0`).
 
 The image listens on `8080` and runs as the non-root user `app`. It applies no migrations when it
 starts: the entry point is `dotnet Struo.Api.dll`, so `docker run --rm … struo-api:local migrate`
-runs `migrate` against the database. Otherwise, set `Database__MigrateOnStartup=true`.
+runs `migrate` against the database. Otherwise, set `Database__MigrateOnStartup=true`. The entry
+point is a relative path: it finds the assembly and the configuration files through the image's
+working directory, `/app`. With another working directory (`--workdir`), run
+`dotnet /app/Struo.Api.dll` by its absolute path and add `--contentRoot /app`.
 
 `app` owns three directories: `/app/App_Data` (uploaded content and the image-transform cache for
 the local files backend), `/app/logs` (Serilog's File sink) and
