@@ -206,6 +206,7 @@ export default {
     itemNotFound: 'Item not found',
     itemLoadRejected: 'This item could not be loaded. The address may contain an id that is not valid.',
     noCreatePermission: "You don't have permission to create items here",
+    targetUnreadable: 'You do not have permission to read {target}, so this field is not shown and stays as it is.',
     new: 'New {label}',
     edit: 'Edit {label}',
     delete: 'Delete',

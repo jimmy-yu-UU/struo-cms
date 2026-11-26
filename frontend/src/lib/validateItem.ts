@@ -4,6 +4,7 @@ import { isEmpty } from './fieldTypes/types'
 import { splitFields } from './splitFields'
 import { localeIsSent, translationErrorKey } from './translationErrors'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
+import { isFileFieldUnreadable, isRelationTargetUnreadable, type CanReadCollection } from './unreadableTargets'
 import en from '../locales/en'
 
 // Message translator injected by the caller (the UI passes vue-i18n's `t`), so this module stays a
@@ -81,10 +82,13 @@ function validateLinks(
   canWriteJunction: ((rel: RelationMeta) => boolean) | undefined,
   errors: Record<string, string>,
   t: Translate,
+  canReadCollection?: CanReadCollection,
 ): void {
   for (const rel of meta.relations ?? []) {
     const v = model.relations[rel.name]
     if (!isRelationLinks(v)) continue
+    // Links to a target the caller cannot read are not sent, so their rows are not validated.
+    if (isRelationTargetUnreadable(rel, canReadCollection)) continue
     // A relation whose junction the caller cannot write sends bare ids regardless of what the
     // (possibly disabled/hidden) payload inputs currently hold — validating that unsent payload
     // would block a save the user has no way to fix. Without `canWriteJunction`, behaviour is
@@ -102,11 +106,13 @@ export function validateItem(
   resolveCollection?: ResolveCollection,
   canWriteJunction?: (rel: RelationMeta) => boolean,
   t: Translate = englishTranslate,
+  canReadCollection?: CanReadCollection,
 ): Record<string, string> {
   const { shared, translatable } = splitFields(meta)
   const errors: Record<string, string> = {}
-  validateFields(shared, model.shared, errors, t)
+  // A file field the caller cannot read is not sent, so it cannot be required.
+  validateFields(shared.filter((f) => !isFileFieldUnreadable(f, canReadCollection)), model.shared, errors, t)
   validateTranslations(translatable, model, defaultCode, errors, t)
-  if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors, t)
+  if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors, t, canReadCollection)
   return errors
 }

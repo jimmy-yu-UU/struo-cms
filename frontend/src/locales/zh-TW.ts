@@ -206,6 +206,7 @@ export default {
     itemNotFound: '找不到項目',
     itemLoadRejected: '無法載入此項目，網址中的識別碼可能不正確。',
     noCreatePermission: '您沒有在此集合建立項目的權限',
+    targetUnreadable: '你沒有讀取「{target}」的權限，所以這個欄位不顯示，也不會被變更。',
     new: '新增 {label}',
     edit: '編輯 {label}',
     delete: '刪除',
