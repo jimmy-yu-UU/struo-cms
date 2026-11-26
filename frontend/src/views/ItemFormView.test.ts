@@ -2668,11 +2668,13 @@ describe('ItemFormView', () => {
         return ctx
       }
 
-      it('a revert reload', async () => {
+      it('a revert reload, which re-reads the grants the banner offered to reload', async () => {
         const { w } = await openBanner()
+        vi.mocked(rbacApi.getRolePermissions).mockClear()
         await (w.vm as any).onReverted()
         await flushPromises()
         expect(matrixBanner(w).exists()).toBe(false)
+        expect(rbacApi.getRolePermissions).toHaveBeenCalledWith('r1')
       })
 
       it('a later item conflict, so the two banners never show together', async () => {

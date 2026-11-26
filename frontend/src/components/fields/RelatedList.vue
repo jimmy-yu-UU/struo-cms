@@ -115,6 +115,7 @@ watch([() => props.parentId, () => props.relation.targetCollection, () => props.
   loadGuard.next()
   rows.value = []
   total.value = 0
+  error.value = ''
   loading.value = false
   totalKnown.value = false
   page.value = 0

@@ -216,7 +216,8 @@ const revertConflict = ref(false)
 const showHistory = ref(false)
 // Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
 let latestFromServer: FormModel | null = null
-// One token for every conflict recovery fetch and every init: a result for a superseded request or item is dropped.
+// One token for every conflict recovery fetch and every write of a committed state (load, save, reload,
+// revert): a recovery result that arrives after one of those is dropped.
 const recoveryGuard = createLatestWins()
 // Last committed snapshot of the user-editable model; the leave/unload guards compare against it.
 // Seeded with the empty model so navigating away before load never falsely prompts.
@@ -248,8 +249,7 @@ async function init(): Promise<void> {
   notFound.value = false
   loadRejected.value = null
   errors.value = {}
-  // Clear stale 409-recovery state so a re-entrant init (route param change) never carries item A's
-  // cached server copy or conflict banner into item B.
+  // A re-run init starts from no 409-recovery state: no cached server copy and no conflict banner.
   conflict.value = false
   matrixConflict.value = false
   revertConflict.value = false
@@ -316,6 +316,7 @@ async function onSubmit(): Promise<void> {
     // freshly-minted id (created.id) below.
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
     const updated = !isCreate.value ? await itemsApi.update(name.value, id.value!, payload) : undefined
+    recoveryGuard.next()
     conflict.value = false
     matrixConflict.value = false
     latestFromServer = null
@@ -415,14 +416,15 @@ async function fetchLatestForm(m: CollectionMeta, itemId: string): Promise<FormM
 }
 
 // Keeps the user's edits and refreshes only the token, so a re-save overwrites the server copy; the item
-// banner offers the server copy instead.
-function keepEditsWithLatest(latest: FormModel): void {
+// banner offers the server copy instead. `focus` is false when the user is typing in a field: the banner is
+// announced as an alert and the field keeps focus.
+function keepEditsWithLatest(latest: FormModel, focus = true): void {
   latestFromServer = latest
   model.version = latest.version
   conflict.value = true
   matrixConflict.value = false
   revertConflict.value = false // the save-conflict banner covers this state
-  void focusBannerEl(conflictBanner)
+  if (focus) void focusBannerEl(conflictBanner)
 }
 
 async function recoverFromConflict(): Promise<void> {
@@ -474,7 +476,7 @@ async function onMatrixConflict(): Promise<void> {
     const latest = await fetchLatestForm(m, forId)
     if (!recoveryGuard.isCurrent(token)) return
     // The form stays editable during the fetch: an edit typed meanwhile is kept, as with unsaved edits at the start.
-    if (hasUnsavedEdits()) keepEditsWithLatest(latest)
+    if (hasUnsavedEdits()) keepEditsWithLatest(latest, false)
     else applyLatestToCleanForm(latest)
   } catch (e) {
     if (recoveryGuard.isCurrent(token)) onLatestFetchFailed(e)
@@ -500,6 +502,7 @@ function reloadMatrix(): void {
 
 function reloadLatest(): void {
   if (!latestFromServer) return
+  recoveryGuard.next()
   setModel(latestFromServer) // full overwrite: discard the user's edits for the server copy
   // setModel aliases (does not clone) the objects, so drop the cached copy: subsequent user edits
   // would otherwise silently mutate this "server copy" if it were reused.
@@ -525,9 +528,12 @@ async function onReverted(): Promise<void> {
     const item = await itemsApi.get(name.value, id.value, {
       deep: editableRelations.value,
     })
+    recoveryGuard.next()
     setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
     // The fetched copy is the server's committed state (after a revert, or the revert-conflict reload):
-    // any pending conflict banner and its cached server copy are void.
+    // any pending conflict banner and its cached server copy are void. An open permission banner offered
+    // the grants reload, so the grants are re-read with the item.
+    if (matrixConflict.value) matrix.value?.reload()
     conflict.value = false
     matrixConflict.value = false
     revertConflict.value = false

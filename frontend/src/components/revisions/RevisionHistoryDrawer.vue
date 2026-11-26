@@ -89,6 +89,10 @@ async function select(rev: RevisionInfo): Promise<void> {
   }
 }
 
+// The sheet returns focus to its trigger when it closes. After a revert conflict the page moves focus to its
+// conflict notice, so that return is cancelled for that one close.
+let closedByConflict = false
+
 async function onRevert(n: number): Promise<void> {
   if (reverting.value) return
   const accepted = await confirm.require({
@@ -115,9 +119,6 @@ async function onRevert(n: number): Promise<void> {
   }
 }
 
-// The sheet returns focus to its trigger when it closes. After a revert conflict the page moves focus to its
-// conflict notice, so that return is cancelled for that one close.
-let closedByConflict = false
 function onCloseAutoFocus(e: Event): void {
   if (!closedByConflict) return
   closedByConflict = false
