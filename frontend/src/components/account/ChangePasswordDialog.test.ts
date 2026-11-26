@@ -61,7 +61,7 @@ describe('ChangePasswordDialog', () => {
     })
   })
 
-  it('tells the user that a password change revokes the API token, in both modes', async () => {
+  it('tells the user that a password change revokes the access token, in both modes', async () => {
     const self = mountDialog('self-id')
     await flushPromises()
     expect(self.text()).toContain(en.password.tokenRevokeNoteSelf)
@@ -339,13 +339,13 @@ describe('ChangePasswordDialog under zh-TW', () => {
     useAuthStore().user = { id: 'self-id', isSuperAdmin: false, permissions: {} }
   })
 
-  it('names the API access token in Chinese in the dialog notes and never mentions sessions', async () => {
+  it('names the access token in Chinese in the dialog notes and never mentions sessions', async () => {
     const other = mountZh('other-id')
     await flushPromises()
-    expect(other.text()).toContain('變更密碼會撤銷此使用者的 API 存取權杖。')
+    expect(other.text()).toContain('變更密碼會撤銷此使用者的存取權杖。')
     const self = mountZh('self-id')
     await flushPromises()
-    expect(self.text()).toContain('變更密碼會撤銷你的 API 存取權杖。')
+    expect(self.text()).toContain('變更密碼會撤銷你的存取權杖。')
     for (const text of [zhTW.password.changed, zhTW.password.changedSelf, en.password.changed, en.password.changedSelf]) {
       expect(text.toLowerCase()).not.toContain('session')
       expect(text).not.toContain('工作階段')

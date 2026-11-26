@@ -10,6 +10,13 @@ function keyPaths(obj: Record<string, unknown>, prefix = ''): string[] {
   )
 }
 
+function stringLeaves(obj: Record<string, unknown>, prefix = ''): Array<[string, string]> {
+  return Object.entries(obj).flatMap(([k, v]): Array<[string, string]> => {
+    if (typeof v === 'string') return [[`${prefix}${k}`, v]]
+    return v !== null && typeof v === 'object' ? stringLeaves(v as Record<string, unknown>, `${prefix}${k}.`) : []
+  })
+}
+
 describe('locale packs', () => {
   it('every bundled catalog exposes the same key set', () => {
     const [first, ...rest] = CATALOG_LOCALES
@@ -30,15 +37,32 @@ describe('locale packs', () => {
     expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
   })
 
-  it('names the API access token in the password section description in both locales', () => {
-    expect(zhTW.password.sectionDescription).toBe('為此帳號設定新密碼；它的工作階段與 API 存取權杖會被撤銷。')
-    expect(catalogs.en.password.sectionDescription).toBe('Set a new password for this account. Its sessions and API access token are revoked.')
+  it('names the access token in the password section description in both locales', () => {
+    expect(zhTW.password.sectionDescription).toBe('為此帳號設定新密碼；它的工作階段與存取權杖會被撤銷。')
+    expect(catalogs.en.password.sectionDescription).toBe('Set a new password for this account. Its sessions and access token are revoked.')
   })
 
-  // The zh-TW password-change toasts name the API access token; the wording is a maintainer ruling.
   it('pins the zh-TW password-change toast wording to the ruled sentences', () => {
-    expect(zhTW.password.changed).toBe('密碼已更新，API 存取權杖已撤銷。')
-    expect(zhTW.password.changedSelf).toBe('密碼已更新，你的 API 存取權杖已撤銷。')
+    expect(zhTW.password.changed).toBe('密碼已更新，存取權杖已撤銷。')
+    expect(zhTW.password.changedSelf).toBe('密碼已更新，你的存取權杖已撤銷。')
+  })
+
+  it('calls the token the same thing in the password section as in the access-token panel', () => {
+    for (const locale of CATALOG_LOCALES) {
+      const { password } = catalogs[locale] as { password: Record<string, string> }
+      for (const key of ['sectionDescription', 'tokenRevokeNote', 'tokenRevokeNoteSelf', 'changed', 'changedSelf']) {
+        expect(password[key], `${locale} password.${key}`).not.toMatch(/\bAPI\b/)
+      }
+    }
+  })
+
+  // A half-width , ; : ? ! right after a Chinese character belongs to the full-width forms.
+  // No string is exempt.
+  it('writes zh-TW punctuation after a Chinese character in full width', () => {
+    const offenders = stringLeaves(zhTW as unknown as Record<string, unknown>)
+      .filter(([, value]) => /[㐀-鿿][,;:?!]/.test(value))
+      .map(([path, value]) => `${path}: ${value}`)
+    expect(offenders).toEqual([])
   })
 
   // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local mirror: narrative-guard:allow: cites the specific ruling this test pins against, not a changelog date

@@ -117,6 +117,14 @@ const deleteBlockedHint = computed(() => {
   if (isSavedRole.value && savedRoleIsPublic.value) return t('superAdmin.publicRoleUndeletable')
   return lockedHint.value
 })
+// The delete reason gets its own note only when it says something the lock note does not.
+const LOCKED_NOTE_ID = 'item-locked-note'
+const DELETE_NOTE_ID = 'item-delete-note'
+const showDeleteNote = computed(() => deleteBlockedHint.value !== undefined && deleteBlockedHint.value !== lockedHint.value)
+const deleteDescribedBy = computed(() => {
+  if (deleteBlockedHint.value === undefined) return undefined
+  return showDeleteNote.value ? DELETE_NOTE_ID : LOCKED_NOTE_ID
+})
 // The Roles field offers a super-admin role only to a super-admin.
 function relationOptionHint(relation: string, raw: Record<string, unknown>): string | null {
   const isRolesOfUser = name.value === USER_COLLECTION && relation === 'roles'
@@ -174,6 +182,15 @@ async function focusSaveBanner(): Promise<void> {
   await nextTick()
   await itemForm.value?.focusBanner()
 }
+// The conflict banners are alerts a save can raise; focus moves to the one that appears, since the Save
+// button that held it is disabled while the request runs.
+const conflictBanner = ref<HTMLElement | null>(null)
+const matrixConflictBanner = ref<HTMLElement | null>(null)
+const revertConflictBanner = ref<HTMLElement | null>(null)
+async function focusBannerEl(banner: { value: HTMLElement | null }): Promise<void> {
+  await nextTick()
+  banner.value?.focus()
+}
 const loading = ref(true)
 const submitting = ref(false)
 // The item was saved but no page could be opened: the form stays closed, so it cannot be sent again.
@@ -187,6 +204,9 @@ const deleting = ref(false)
 const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
 const notFound = ref(false)
 const conflict = ref(false)
+// The permission matrix's save met a role that has moved on while the form held no unsaved edits: the form
+// already shows the latest fields, and the banner offers to reload the grants.
+const matrixConflict = ref(false)
 // A revert hit 409: the form and model.version stay as loaded; the only offered action is a reload.
 const revertConflict = ref(false)
 const showHistory = ref(false)
@@ -224,6 +244,7 @@ async function init(): Promise<void> {
   // Clear stale 409-recovery state so a re-entrant init (route param change) never carries item A's
   // cached server copy or conflict banner into item B.
   conflict.value = false
+  matrixConflict.value = false
   revertConflict.value = false
   latestFromServer = null
   await Promise.all([schema.load(), langStore.load()])
@@ -385,14 +406,19 @@ async function recoverFromConflict(): Promise<void> {
     model.version = latestFromServer.version
     conflict.value = true
     revertConflict.value = false // the save-conflict banner covers this state
+    void focusBannerEl(conflictBanner)
   } catch (e) {
-    // The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
-    conflict.value = false
-    if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
-    else {
-      serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
-      void focusSaveBanner()
-    }
+    onLatestFetchFailed(e)
+  }
+}
+
+// The item may have been deleted in the interim: fall back to the existing NOT_FOUND / error UI.
+function onLatestFetchFailed(e: unknown): void {
+  conflict.value = false
+  if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
+  else {
+    serverError.value = e instanceof Error ? e.message : t('common.reloadFailed')
+    void focusSaveBanner()
   }
 }
 
@@ -400,15 +426,38 @@ async function recoverFromConflict(): Promise<void> {
 // The version is not part of the form's dirty state, so nothing becomes unsaved.
 function onMatrixSaved(version: number): void {
   model.version = version
+  matrixConflict.value = false
   // A grants save changes no role field, so an open conflict stays open: the form still holds the fields from
   // before the other administrator's save, and only a form save (the warned overwrite) or Reload latest ends it.
   // The cached server copy takes the new version, so applying it does not step the version back.
   if (latestFromServer) latestFromServer = { ...latestFromServer, version }
 }
 
-// The matrix's save met a role that has moved on: the form's own conflict handling takes over.
-function onMatrixConflict(): void {
-  void recoverFromConflict()
+// The matrix's save met a role that has moved on. With unsaved edits in the form its item conflict handling
+// takes over (the stale fields stay until the warned overwrite or Reload latest). Without any, nothing of the
+// user's is at stake: the form takes the latest item and a permission-specific banner offers the grants reload.
+async function onMatrixConflict(): Promise<void> {
+  if (!meta.value || hasUnsavedEdits()) {
+    await recoverFromConflict()
+    return
+  }
+  try {
+    const latest = await itemsApi.get(name.value, id.value!, { deep: editableRelations.value })
+    setModel(parseItemToForm(meta.value, latest, langStore.languages, resolveCollection))
+    captureSavedRole()
+    latestFromServer = null
+    conflict.value = false
+    revertConflict.value = false
+    matrixConflict.value = true
+    void focusBannerEl(matrixConflictBanner)
+  } catch (e) {
+    onLatestFetchFailed(e)
+  }
+}
+
+function reloadMatrix(): void {
+  matrixConflict.value = false
+  matrix.value?.reload()
 }
 
 function reloadLatest(): void {
@@ -418,6 +467,7 @@ function reloadLatest(): void {
   // would otherwise silently mutate this "server copy" if it were reused.
   latestFromServer = null
   conflict.value = false
+  matrixConflict.value = false
   revertConflict.value = false
   errors.value = {}
   serverError.value = ''
@@ -454,6 +504,7 @@ async function onReverted(): Promise<void> {
 
 function onRevertConflict(): void {
   revertConflict.value = true
+  void focusBannerEl(revertConflictBanner)
 }
 
 async function onDelete(): Promise<void> {
@@ -547,16 +598,19 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
             <History class="size-4" />{{ t('revisions.open') }}
           </Button>
           <Button v-if="!isCreate && canDelete" type="button" variant="destructive"
-                  :disabled="deleteBlockedHint !== undefined || deleting" :title="deleteBlockedHint" @click="onDelete">
+                  :disabled="deleteBlockedHint !== undefined || deleting" :title="deleteBlockedHint"
+                  :aria-describedby="deleteDescribedBy" @click="onDelete">
             {{ t('itemForm.delete') }}
           </Button>
           <Button v-if="canWrite" type="button" :disabled="formBusy || matrixSaving || lockedBySuperAdmin" :title="lockedHint"
-                  @click="onSubmit">{{ saveLabel }}</Button>
+                  :aria-describedby="lockedBySuperAdmin ? LOCKED_NOTE_ID : undefined" @click="onSubmit">{{ saveLabel }}</Button>
         </template>
       </PageHeader>
 
       <div
         v-if="conflict"
+        ref="conflictBanner"
+        tabindex="-1"
         class="conflict-banner mb-4 flex items-center gap-4 rounded-md border border-warning bg-warning/10 px-4 py-3 text-foreground"
         role="alert"
       >
@@ -565,7 +619,20 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
       </div>
 
       <div
+        v-if="matrixConflict"
+        ref="matrixConflictBanner"
+        tabindex="-1"
+        class="matrix-conflict-banner mb-4 flex items-center gap-4 rounded-md border border-warning bg-warning/10 px-4 py-3 text-foreground"
+        role="alert"
+      >
+        <span class="flex-1">{{ t('rbac.matrixConflictText') }}</span>
+        <Button type="button" variant="outline" size="sm" @click="reloadMatrix">{{ t('itemForm.reloadLatest') }}</Button>
+      </div>
+
+      <div
         v-if="revertConflict"
+        ref="revertConflictBanner"
+        tabindex="-1"
         class="revert-conflict-banner mb-4 flex items-center gap-4 rounded-md border border-warning bg-warning/10 px-4 py-3 text-foreground"
         role="alert"
       >
@@ -573,8 +640,11 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         <Button type="button" variant="outline" size="sm" @click="onReverted">{{ t('itemForm.reloadLatest') }}</Button>
       </div>
 
-      <p v-if="lockedHint" class="mb-4 rounded-md border px-4 py-3 text-sm text-muted-foreground" role="note">
+      <p v-if="lockedHint" :id="LOCKED_NOTE_ID" class="mb-4 rounded-md border px-4 py-3 text-sm text-muted-foreground" role="note">
         {{ lockedHint }}
+      </p>
+      <p v-if="showDeleteNote" :id="DELETE_NOTE_ID" class="mb-4 rounded-md border px-4 py-3 text-sm text-muted-foreground" role="note">
+        {{ deleteBlockedHint }}
       </p>
 
       <ItemForm
@@ -607,9 +677,11 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         />
         <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
         <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"
+                       :described-by="LOCKED_NOTE_ID"
                        @reset="resetPasswordOpen = true" />
         <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr"
-                          :manageable="canManageCredentials" :disabled-hint="lockedHint" />
+                          :manageable="canManageCredentials" :disabled-hint="lockedHint"
+                          :described-by="LOCKED_NOTE_ID" />
       </div>
       <ChangePasswordDialog
         v-if="showResetPassword"
