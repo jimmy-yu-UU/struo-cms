@@ -297,11 +297,13 @@ tests run on `tests/Struo.Tests.Fixtures` instead.
 The **five standing gates** — the same ones CI runs on every push/PR — are `dotnet build`,
 `dotnet test`, `pnpm test` and `pnpm build` (the latter two from `frontend/`), and `pnpm build` from
 `docs/`, which resolves every cross-chapter link in the manual, fails on a dead one, checks that every
-chapter actually rendered — `vitepress build` alone exits 0 on a page whose body came out empty — and
-fails any table wider than the site's content column (`docs/scripts/check-table-width.mjs`). CI's docs
-job also runs `pnpm test` from `docs/` first — the guard scripts' own unit tests — as a CI step, not a
-sixth gate. Run whichever apply to your change; run all five before anything touching more than one of
-the three.
+chapter actually rendered — `vitepress build` alone exits 0 on a page whose body came out empty —
+fails any table wider than the site's content column (`docs/scripts/check-table-width.mjs`), and
+checks the manual's captured example blocks without touching the network
+(`docs/scripts/capture/capture.mjs --check`: markers intact, both languages byte-identical). CI's
+docs job also runs `pnpm test` from `docs/` first — the guard scripts' own unit tests — as a CI
+step, not a sixth gate. Run whichever apply to your change; run all five before anything touching
+more than one of the three.
 
 `dotnet test` includes `CoreSchemaSnapshotTests`, which fails when a core collection/field change has
 not been mirrored into `schema/core-collections.json`, an enum change into `schema/interfaces.json`,

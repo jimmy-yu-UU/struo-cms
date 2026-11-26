@@ -154,7 +154,7 @@ the `403` above. The `public` role is found by its name, the way the permission 
 At least one active account must stay in a super-admin role. Removing the last one from the role,
 deactivating it, or deleting it answers `409` `LAST_SUPER_ADMIN`, `At least one active account must
 remain in a super-admin role.`, and nothing is written. GraphQL carries the same code in
-`extensions.code`.
+`extensions.code`, with HTTP status `200` (see [Chapter 14](14-graphql.md#error-shapes)).
 
 Both rules sit in the application layer that every write path shares, so the item endpoints, the
 `users` and `roles` controllers and GraphQL all apply them, and each path is covered by a test.
