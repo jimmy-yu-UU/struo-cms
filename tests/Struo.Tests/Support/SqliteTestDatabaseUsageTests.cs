@@ -24,6 +24,7 @@ public sealed partial class SqliteTestDatabaseUsageTests
     // Files that call TestBackend.CreateSqliteDatabase() on purpose, with the reason.
     private static readonly Dictionary<string, string> SqliteCreators = new()
     {
+        ["Struo.Tests/Api/StartupValidationOrderTests.cs"] = "[SqliteOnly] cases; a fresh file shows whether the migration ran",
         ["Struo.Tests/DependencyInjection/OptionsValidationTests.cs"] = "[SqliteOnly] cases; the file only satisfies the required connection string",
         ["Struo.Tests/Migrations/CrossProviderStartupGateLiveTests.cs"] = "the SQLite side of the cross-provider gate is SQLite by definition",
         ["Struo.Tests/Migrations/Schema/IndexCatalogTests.cs"] = "[SqliteOnly] Sqlite_* catalog tests",

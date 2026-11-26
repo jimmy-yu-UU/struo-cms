@@ -132,6 +132,9 @@ public sealed partial class OutOfOrderMigrationTests : IDisposable
         var applied = await Host("Upgrade").ApplyAsync(default);
 
         applied.Select(m => m.Version).Should().Equal(2);
+        using var db = new SqlSugarClient(_database.RawConfig());
+        db.DbMaintenance.GetTableInfoList(false)
+            .Select(t => t.Name.ToLowerInvariant()).Should().Contain("probe_beta");
         Warnings().Should().ContainSingle().Which.Should()
             .StartWith("Migration(s) 2 are out of order: older than the highest applied migration 3.");
     }

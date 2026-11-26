@@ -198,7 +198,9 @@ public class RevisionEndpointTests(ApiFactory factory)
     [InlineData("1&version=2")]
     public async Task Revert_with_an_unparseable_version_is_400_INVALID_VERSION_and_leaves_the_item_untouched(string raw)
     {
-        var client = await _factory.CreateAuthenticatedClientAsync();
+        var sink = new CapturingLogSink();
+        using var host = _factory.WithSink(sink);
+        var client = await host.AdminClientAsync(_factory);
         var id = await CreateArticleAsync(client, "RevertBadVersion", status: "draft");
         var put = await client.PutAsJsonAsync($"/api/items/fxArticle/{id}",
             new { status = "published", translations = new { en = new { title = "RevertBadVersion" } } });
@@ -212,6 +214,7 @@ public class RevisionEndpointTests(ApiFactory factory)
         revert.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
         Root(body).GetProperty("error").GetProperty("code").GetString().Should().Be("INVALID_VERSION");
         (await CurrentVersionAsync(client, id)).Should().Be(before);
+        sink.ShouldHaveLoggedNoErrors();
         var get = await client.GetAsync($"/api/items/fxArticle/{id}");
         Root(await get.Content.ReadAsStringAsync()).GetProperty("data").GetProperty("status").GetString()
             .Should().Be("published");

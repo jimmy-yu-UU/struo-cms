@@ -2,6 +2,18 @@
 
 ## 0.35.0
 
+::: danger Breaking
+- A `[CmsField]` on a property that is not public (private, protected, internal, or an explicit
+  interface implementation) or on a static property stops the host at start with a
+  `MetadataException` that names the property. Collection classes, translation classes, Repeater
+  child types and their base classes are all checked. A non-public property was not read, so its
+  field silently did not exist; a static property made creating an item throw. Both were measured
+  on SQLite below the HTTP layer. Make it a public instance property, or remove `[CmsField]`
+  ([Chapter 5](05-collections.md)).
+- A fork's own options validation registered with `ValidateOnStart()` runs before the startup
+  migration. A validator that reads the database must not depend on migrated tables.
+:::
+
 ### Changed
 
 - A request to `/graphql` that fails on the server before it reaches the GraphQL server (for
@@ -12,6 +24,11 @@
 
 ### Fixed
 
+- With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
+  `ValidateOnStart`, the host fails to start before it connects to the database and applies no
+  migration. It applied the migrations first and then failed on that value; measured for
+  `RateLimiting:Login:PermitLimit`, `RateLimiting:LoginConcurrency:PermitLimit`, `Query:MaxLimit`
+  and `Api:MaxJsonBodyBytes` ([Chapter 4](04-configuration.md)).
 - A cookie-authenticated `POST /graphql` without the `X-Struo-CSRF` header is answered in the
   GraphQL `errors` shape:
   `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`.

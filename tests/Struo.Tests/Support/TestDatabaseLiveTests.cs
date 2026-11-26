@@ -121,14 +121,12 @@ public sealed class TestDatabaseLiveTests
     }
 
     /// <summary>
-    /// Drops every leftover database from earlier crashed runs on the selected backend. Does nothing
-    /// unless <c>STRUO_TEST_DROP_LEFTOVERS=1</c> and <c>STRUO_TEST_BACKEND</c> names a live backend.
+    /// Drops every leftover database from earlier crashed runs on the selected backend.
+    /// Skipped unless <c>STRUO_TEST_DROP_LEFTOVERS=1</c> and <c>STRUO_TEST_BACKEND</c> names a live backend.
     /// </summary>
-    [Fact]
+    [LiveBackendSwitchFact(DropLeftoversSwitch)]
     public void Drop_leftover_databases_on_request()
     {
-        if (Environment.GetEnvironmentVariable(DropLeftoversSwitch) != "1" || !TestBackend.IsLive) return;
-
         var kind = TestBackend.Current;
         TestBackend.DropLeftovers(kind);
 
