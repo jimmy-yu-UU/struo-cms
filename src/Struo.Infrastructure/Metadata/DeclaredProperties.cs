@@ -15,13 +15,17 @@ internal static class DeclaredProperties
     /// </summary>
     public static PropertyInfo? FirstMisplaced(Type type, Type attribute) =>
         Hierarchy(type)
-            .SelectMany(t => t.GetTypeInfo().DeclaredProperties)
+            .SelectMany(DeclaredOn)
             .FirstOrDefault(prop => prop.IsDefined(attribute, inherit: false) && !IsPublicInstance(prop));
 
     /// <summary>Why the scan skips <paramref name="prop"/>: <c>static</c> or <c>not public</c>.</summary>
     public static string WhyNotRead(PropertyInfo prop) => AccessorsOf(prop)[0].IsStatic ? "static" : "not public";
 
-    private static IEnumerable<Type> Hierarchy(Type type)
+    /// <summary>The properties <paramref name="type"/> itself declares, whatever their accessibility.</summary>
+    public static IEnumerable<PropertyInfo> DeclaredOn(Type type) => type.GetTypeInfo().DeclaredProperties;
+
+    /// <summary><paramref name="type"/> and each of its base classes, nearest first.</summary>
+    public static IEnumerable<Type> Hierarchy(Type type)
     {
         for (var current = type; current is not null; current = current.BaseType)
             yield return current;
@@ -34,6 +38,6 @@ internal static class DeclaredProperties
     }
 
     // The getter and the setter a property declares, whatever their accessibility; it has at least one.
-    private static MethodInfo[] AccessorsOf(PropertyInfo prop) =>
+    public static MethodInfo[] AccessorsOf(PropertyInfo prop) =>
         new[] { prop.GetMethod, prop.SetMethod }.OfType<MethodInfo>().ToArray();
 }
