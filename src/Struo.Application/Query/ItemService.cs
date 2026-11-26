@@ -58,6 +58,7 @@ public sealed class ItemService(
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly RelationTargetReadGuard relationTargets = new(m2mSource, permissions);
+    private readonly LinkExistenceCheck linkExistence = new(repository, registry, m2mSource);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
@@ -190,6 +191,7 @@ public sealed class ItemService(
             ItemWriteOperation.Create, meta, entity, id: null, ItemDeserializer.PresentNames(body), body);
         await hooks.BeforeWriteAsync(ct);
         ItemDeserializer.EnforceRequiredFields(meta, d, entity);
+        var links = linkExistence.RootLinks(meta, d, ItemDeserializer.PresentNames(body), stored: null, entity);
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
         // otherwise a failure after the parent insert leaves a row that violates invariants the API
@@ -199,6 +201,7 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
+            await linkExistence.EnsureAsync(meta, body, links, parentId: null, includeDeleted: false, ct);
             created = await repository.CreateAsync(collection, entity, ct);
             createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
@@ -243,7 +246,7 @@ public sealed class ItemService(
         await relationTargets.RequireFilesAsync(
             meta, body, () => StoredFileLinks.LoadAsync(repository, meta, d, existing, ct));
 
-        var bodyKeys = MergeBody(collection, meta, d, body, existing);
+        var (bodyKeys, links) = MergeBody(collection, meta, d, body, existing);
 
         var hooks = writeInterceptors.Begin(
             operation == RevertOperation ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
@@ -252,7 +255,8 @@ public sealed class ItemService(
         ValidateMerged(meta, d, body, existing);
 
         var persisted = await PersistUpdateAsync(
-            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings), meta, d, body, existing, hooks, ct);
+            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links),
+            meta, d, body, existing, hooks, ct);
         if (persisted is null) return null;
         var (updated, updatedId) = persisted.Value;
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
@@ -276,8 +280,9 @@ public sealed class ItemService(
     // non-system) and the M2O foreign keys onto `existing`, and returns the body keys. This preserves
     // server-managed columns the client never sends — e.g. a File's StorageKey/FileName/Size — so a
     // partial PUT (status + translations only) cannot wipe NOT NULL metadata. Relations and
-    // translations are synced separately by persist.
-    private HashSet<string> MergeBody(
+    // translations are synced separately by persist. Also returns the ids the body newly assigns to link keys,
+    // read against the stored row before the overlay replaces its values.
+    private (HashSet<string> BodyKeys, IReadOnlyList<PendingLink> Links) MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         // No Required check here — an update only overlays fields the client actually sent (see
@@ -288,9 +293,10 @@ public sealed class ItemService(
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
         var bodyKeys = ItemDeserializer.PresentNames(body);
+        var links = linkExistence.RootLinks(meta, d, bodyKeys, existing, incoming);
         OverlayFields(meta, d, bodyKeys, existing, incoming);
         OverlayManyToOneKeys(meta, d, bodyKeys, existing, incoming);
-        return bodyKeys;
+        return (bodyKeys, links);
     }
 
     private static void OverlayFields(
@@ -353,19 +359,23 @@ public sealed class ItemService(
     }
 
     private readonly record struct UpdateTarget(
-        string Collection, string Id, string Operation, long? SourceRevisionNumber, bool LegacyJsonStrings);
+        string Collection, string Id, string Operation, long? SourceRevisionNumber, bool LegacyJsonStrings,
+        IReadOnlyList<PendingLink> Links);
 
     // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
     private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
         UpdateTarget target, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
         object existing, ItemWriteHooks hooks, CancellationToken ct)
     {
-        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings) = target;
+        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links) = target;
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
+            // A revert validates against rows trashed since the snapshot was captured too.
+            await linkExistence.EnsureAsync(
+                meta, body, links, d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(existing), operation == RevertOperation, ct);
             // Self-referencing tree collections: lock the row and find out whether the update changes the
             // parent key. Each mover holds its own row's lock before it waits on a chain row, so opposite
             // movers form a deadlock the database detects.

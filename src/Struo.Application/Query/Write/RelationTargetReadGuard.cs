@@ -45,7 +45,7 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
     }
 
     /// <summary>The many-to-many, many-to-one and junction keys of <see cref="Require"/>, without the file fields.</summary>
-    public void RequireLinks(CollectionMetadata meta, JsonElement body)
+    internal void RequireLinks(CollectionMetadata meta, JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object) return;
         foreach (var link in SentLinks(meta, body))

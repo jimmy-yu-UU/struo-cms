@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using SqlSugar;
+using Struo.Infrastructure.Files;
 using Struo.Tests.Fixtures;
 
 namespace Struo.Tests.Api;
@@ -58,6 +59,43 @@ internal sealed partial class RelationWriteHarness
         await db.Insertable(new FxCategory { Id = id, Name = "category" }).ExecuteCommandAsync();
         return id;
     });
+
+    /// <summary>An article inserted directly whose category, hero image, gallery and Open Graph image are all <paramref name="dangling"/>.</summary>
+    public async Task<Guid> SeedDanglingArticleAsync(Guid dangling) => await WithDbAsync(async db =>
+    {
+        var id = Guid.CreateVersion7();
+        await db.Insertable(new FxArticle
+        {
+            Id = id, CategoryId = dangling, HeroImageId = dangling, Gallery = [dangling],
+        }).ExecuteCommandAsync();
+        await db.Insertable(new FxArticleTranslation
+        {
+            FxArticleId = id, Locale = "en", Title = "dangling", SeoOgImageId = dangling,
+        }).ExecuteCommandAsync();
+        return id;
+    });
+
+    /// <summary>A category inserted directly, under <paramref name="parent"/> when given (the row need not exist).</summary>
+    public async Task<Guid> SeedCategoryAsync(Guid? parent) => await WithDbAsync(async db =>
+    {
+        var id = Guid.CreateVersion7();
+        await db.Insertable(new FxCategory { Id = id, Name = "category", ParentId = parent }).ExecuteCommandAsync();
+        return id;
+    });
+
+    public Task<FxCategory> CategoryAsync(Guid id) =>
+        WithDbAsync(db => db.Queryable<FxCategory>().Where(c => c.Id == id).FirstAsync());
+
+    public Task<int> CategoryCountAsync() => WithDbAsync(db => db.Queryable<FxCategory>().CountAsync());
+
+    public Task<MediaFolder> FolderAsync(Guid id) =>
+        WithDbAsync(db => db.Queryable<MediaFolder>().Where(f => f.Id == id).FirstAsync());
+
+    public Task<int> FolderCountAsync() => WithDbAsync(db => db.Queryable<MediaFolder>().CountAsync());
+
+    /// <summary>Moves a row of a soft-deletable collection to the trash.</summary>
+    public static async Task TrashAsync(HttpClient admin, string collection, Guid id) =>
+        (await admin.DeleteAsync($"/api/items/{collection}/{id}")).EnsureSuccessStatusCode();
 
     /// <summary>The relations and fields an article stores, read from the database.</summary>
     public Task<ArticleLinks> StoredLinksAsync(Guid article) => WithDbAsync(async db =>
