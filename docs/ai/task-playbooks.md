@@ -8,7 +8,7 @@ each is the linked manual chapter — read it before making the change if anythi
 Gate vocabulary used below: the **five standing gates** are `dotnet build`, `dotnet test`, `pnpm test`
 (from `frontend/`), `pnpm build` (from `frontend/`), and `pnpm build` (from `docs/`) — the same five
 commands `.github/workflows/ci.yml` runs on every push/PR. The `docs/` build is the manual's gate in
-three parts; `AGENTS.md`, "Verification", has what each part checks. The docs build is relevant to a
+four parts; `AGENTS.md`, "Verification", has what each part checks. The docs build is relevant to a
 change only when that change touches `docs/guide/**` or the docs project itself, not automatically to
 every playbook below.
 

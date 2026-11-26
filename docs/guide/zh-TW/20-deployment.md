@@ -360,7 +360,9 @@ API 映像要讀進整個儲存庫，不只是 `src/Struo.Api/`：一個 fork �
 
 監聽 `8080`，以非 root 使用者 `app` 執行。映像啟動時不套用 migration：進入點是
 `dotnet Struo.Api.dll`，所以 `docker run --rm … struo-api:local migrate` 就是對資料庫跑
-`migrate`；不然就設 `Database__MigrateOnStartup=true`。
+`migrate`；不然就設 `Database__MigrateOnStartup=true`。進入點是相對路徑，靠映像的工作目錄
+`/app` 找到組件與設定檔；用 `--workdir` 換了工作目錄，就要用絕對路徑
+`dotnet /app/Struo.Api.dll` 執行，並加上 `--contentRoot /app`。
 
 `app` 擁有三個目錄：`/app/App_Data`（本機檔案後端的上傳內容與圖片轉檔快取）、`/app/logs`
 （Serilog 的 File sink）跟 `/home/app/.aspnet/DataProtection-Keys`（金鑰圈，見下面
