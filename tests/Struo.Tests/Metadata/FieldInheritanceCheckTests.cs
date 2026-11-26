@@ -163,7 +163,55 @@ public sealed class FieldInheritanceCheckTests
         [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildRepeats> Rows { get; set; } = [];
     }
 
+    // ── a deeper hierarchy ──
+
+    private abstract class AbstractRoot
+    {
+        [CmsField(Label = "Y", Interface = FieldInterface.Text)] public abstract string Y { get; set; }
+    }
+
+    private abstract class MiddleRepeatsField : AbstractRoot
+    {
+        [CmsField(Label = "Y", Interface = FieldInterface.Text)] public override string Y { get; set; } = "";
+    }
+
+    private abstract class MiddleWithoutField : AbstractRoot
+    {
+        public override string Y { get; set; } = "";
+    }
+
+    [CmsCollection("Fic leaf drops", Name = "ficLeafDrops")]
+    private sealed class LeafDropsField : MiddleRepeatsField
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override string Y { get; set; } = "";
+    }
+
+    [CmsCollection("Fic leaf repeats", Name = "ficLeafRepeats")]
+    private sealed class LeafRepeatsField : MiddleWithoutField
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Y", Interface = FieldInterface.Text)] public override string Y { get; set; } = "";
+    }
+
     // ── tests ──
+
+    [Fact]
+    public void A_leaf_override_without_CmsField_names_the_leaf_and_the_nearest_declaration_that_carries_it()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(LeafDropsField)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().StartWith("Field 'LeafDropsField.Y' overrides 'MiddleRepeatsField.Y', which carries [CmsField], without repeating it.");
+    }
+
+    [Fact]
+    public void A_leaf_that_repeats_CmsField_over_a_middle_class_without_it_is_accepted()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(LeafRepeatsField)]);
+
+        scan.Should().NotThrow();
+    }
 
     public static TheoryData<Type, string> RefusedOverrides() => new()
     {

@@ -92,6 +92,8 @@ public sealed class FieldDeclarationCheckTests
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [CmsField(Label = "Init", Interface = FieldInterface.Text)] public string Init { get; init; } = "";
         [CmsField(Label = "Private get", Interface = FieldInterface.Text)] public string PrivateGet { private get; set; } = "";
+        [CmsField(Label = "Private set", Interface = FieldInterface.Text, ReadOnly = true)] public string PrivateSet { get; private set; } = "";
+        [CmsField(Label = "Get only", Interface = FieldInterface.Text, ReadOnly = true)] public string GetOnly { get; } = "";
     }
 
     public static TheoryData<Type, string, string> MisplacedFields() => new()
@@ -123,6 +125,6 @@ public sealed class FieldDeclarationCheckTests
     {
         var fields = MetadataScanner.ScanTypes([typeof(PublicWithUnusualAccessors)]).Single().Fields;
 
-        fields.Select(f => f.Name).Should().Contain(["init", "privateGet"]);
+        fields.Select(f => f.Name).Should().Contain(["init", "privateGet", "privateSet", "getOnly"]);
     }
 }

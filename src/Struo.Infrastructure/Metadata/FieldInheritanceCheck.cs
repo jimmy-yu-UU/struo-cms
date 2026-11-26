@@ -23,7 +23,7 @@ internal static class FieldInheritanceCheck
         foreach (var prop in DeclaredProperties.Hierarchy(type).SelectMany(DeclaredProperties.DeclaredOn))
         {
             if (!HasField(prop) || IsServed(prop, served)) continue;
-            if (Replacement(type, prop) is { } replacement) throw Refusal(prop, replacement);
+            throw Refusal(prop, Replacement(type, prop));
         }
     }
 
@@ -34,28 +34,25 @@ internal static class FieldInheritanceCheck
         Array.Exists(served, s => s.DeclaringType == prop.DeclaringType && s.Name == prop.Name)
         || Array.Exists(served, s => s.Name == prop.Name && HasField(s));
 
-    // The nearest declaration in a more derived class that replaces the property: an override or a hiding member.
-    private static PropertyInfo? Replacement(Type type, PropertyInfo prop) =>
+    // The nearest declaration in a more derived class that replaces the property: an override or a hiding
+    // member. A property the scan does not read is replaced by one, or the declaration check refused it.
+    private static PropertyInfo Replacement(Type type, PropertyInfo prop) =>
         DeclaredProperties.Hierarchy(type)
             .TakeWhile(t => t != prop.DeclaringType)
             .SelectMany(DeclaredProperties.DeclaredOn)
-            .FirstOrDefault(p => p.Name == prop.Name);
+            .FirstOrDefault(p => p.Name == prop.Name)
+        ?? throw new InvalidOperationException(
+            $"Field '{prop.DeclaringType!.Name}.{prop.Name}' is not served and no member replaces it.");
 
     private static MetadataException Refusal(PropertyInfo prop, PropertyInfo replacement)
     {
         var declared = $"{prop.DeclaringType!.Name}.{prop.Name}";
         var replacing = $"{replacement.DeclaringType!.Name}.{replacement.Name}";
-        return new MetadataException(Overrides(replacement, prop)
+        return new MetadataException(DeclaredProperties.SameSlot(replacement, prop)
             ? $"Field '{replacing}' overrides '{declared}', which carries [CmsField], without repeating it. " +
               "[CmsField] is not inherited, so the field is not served. " +
               $"Repeat [CmsField(...)] on '{replacing}', or remove it from '{declared}'."
             : $"Field '{declared}' is hidden by '{replacing}', which does not carry [CmsField], so the field is not served. " +
               $"Put [CmsField(...)] on '{replacing}' and declare it public, or remove the hiding member.");
-    }
-
-    private static bool Overrides(PropertyInfo replacement, PropertyInfo prop)
-    {
-        var roots = DeclaredProperties.AccessorsOf(prop).Select(a => a.GetBaseDefinition()).ToList();
-        return DeclaredProperties.AccessorsOf(replacement).Any(a => roots.Contains(a.GetBaseDefinition()));
     }
 }

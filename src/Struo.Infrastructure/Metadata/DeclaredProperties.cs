@@ -31,6 +31,17 @@ internal static class DeclaredProperties
             yield return current;
     }
 
+    /// <summary>
+    /// Whether <paramref name="first"/> and <paramref name="second"/> are one virtual slot: an override
+    /// and the property it overrides, directly or through intermediate overrides. A hiding member is a
+    /// slot of its own.
+    /// </summary>
+    public static bool SameSlot(PropertyInfo first, PropertyInfo second)
+    {
+        var roots = AccessorsOf(first).Select(accessor => accessor.GetBaseDefinition()).ToList();
+        return AccessorsOf(second).Any(accessor => roots.Contains(accessor.GetBaseDefinition()));
+    }
+
     private static bool IsPublicInstance(PropertyInfo prop)
     {
         var accessors = AccessorsOf(prop);

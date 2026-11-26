@@ -529,6 +529,32 @@ public class RelationDeclarationCheckTests
             "Property 'KidOverridingTheKeyWithoutTheAttribute.ParentId' overrides 'KidBaseIgnoringTheKey.ParentId'");
     }
 
+    [SugarTable("rdc_override_repeating_kid")]
+    [CmsCollection("Override repeating kid", Name = "rdcOverrideRepeatingKid")]
+    private sealed class KidRepeatingTheKeyColumn : KidBaseIgnoringTheKey
+    {
+        [SugarColumn(IsNullable = true)] public override Guid? ParentId { get; set; }
+    }
+
+    [SugarTable("rdc_override_repeating_parent")]
+    [CmsCollection("Override repeating parent", Name = "rdcOverrideRepeatingParent")]
+    private sealed class ParentOfARepeatingKid
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [Navigate(NavigateType.OneToMany, "ParentId")]
+        [CmsRelation(Interface = RelationInterface.RelatedList)]
+        [SugarColumn(IsIgnore = true)] public List<KidRepeatingTheKeyColumn> Kids { get; set; } = [];
+    }
+
+    [Fact]
+    public void A_key_override_that_repeats_SugarColumn_without_IsIgnore_has_a_column_and_the_relation_is_served()
+    {
+        var collections = MetadataScanner.ScanTypes([typeof(ParentOfARepeatingKid), typeof(KidRepeatingTheKeyColumn)]);
+
+        collections.Single(c => c.Name == "rdcOverrideRepeatingParent").Relations.Should().ContainSingle(r => r.Name == "kids");
+    }
+
     [Fact]
     public void A_key_the_override_marks_IsIgnore_has_no_column()
     {

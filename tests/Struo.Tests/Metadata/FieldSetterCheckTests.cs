@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using System.Text.Json.Serialization;
 using SqlSugar;
 using Struo.Domain.Metadata;
 using Struo.Domain.Metadata.Attributes;
@@ -10,7 +11,7 @@ namespace Struo.Tests.Metadata;
 
 /// <summary>
 /// A writable <c>[CmsField]</c> needs a public setter, or the value written to it is not stored: the scan
-/// refuses a collection field or repeater sub-field without one unless it is <c>ReadOnly</c>, and a translation
+/// refuses a collection field or repeater sub-field the write cannot bind unless it is <c>ReadOnly</c>, and a translation
 /// field without any setter (a non-public setter on a translation field stores the value).
 /// </summary>
 public sealed class FieldSetterCheckTests
@@ -183,31 +184,169 @@ public sealed class FieldSetterCheckTests
         [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnly> Rows { get; set; } = [];
     }
 
+    // ── repeater child types bound through a constructor ──
+
+    private sealed class ChildCtor
+    {
+        public ChildCtor(string label) => Label = label;
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; }
+    }
+
+    private sealed record ChildRecord([property: CmsField(Label = "Label", Interface = FieldInterface.Text)] string Label);
+
+    private sealed class ChildTwoConstructors
+    {
+        public ChildTwoConstructors() { }
+        public ChildTwoConstructors(string label) => Label = label;
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; } = "";
+    }
+
+    private sealed class ChildOtherParameterName
+    {
+        public ChildOtherParameterName(string text) => Label = text;
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; }
+    }
+
+    private sealed class ChildOtherParameterType
+    {
+        public ChildOtherParameterType(int label) => Label = label.ToString();
+        [CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; }
+    }
+
+    private sealed class ChildJsonInclude
+    {
+        [JsonInclude, CmsField(Label = "Label", Interface = FieldInterface.Text)] public string Label { get; private set; } = "";
+    }
+
+    [CmsCollection("Fsc rep ctor", Name = "fscRepCtor")]
+    private sealed class RepeaterCtor
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildCtor> Rows { get; set; } = [];
+        [CmsField(Label = "Records", Interface = FieldInterface.Repeater)] public List<ChildRecord> Records { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep two ctors", Name = "fscRepTwoCtors")]
+    private sealed class RepeaterTwoConstructors
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildTwoConstructors> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep other name", Name = "fscRepOtherName")]
+    private sealed class RepeaterOtherParameterName
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildOtherParameterName> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep other type", Name = "fscRepOtherType")]
+    private sealed class RepeaterOtherParameterType
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildOtherParameterType> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep json include", Name = "fscRepJsonInclude")]
+    private sealed class RepeaterJsonInclude
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildJsonInclude> Rows { get; set; } = [];
+    }
+
+    // ── collection fields bound through [JsonInclude] ──
+
+    [CmsCollection("Fsc json include", Name = "fscJsonInclude")]
+    private class JsonIncludeShapes
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [JsonInclude, CmsField(Label = "Private", Interface = FieldInterface.Text)] public string Private { get; private set; } = "";
+        [JsonInclude, CmsField(Label = "Protected", Interface = FieldInterface.Text)] public string Protected { get; protected set; } = "";
+        [JsonInclude, CmsField(Label = "Internal", Interface = FieldInterface.Text)] public string Internal { get; internal set; } = "";
+    }
+
+    [CmsCollection("Fsc json include get", Name = "fscJsonIncludeGet")]
+    private sealed class JsonIncludeGetOnly
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [JsonInclude, CmsField(Label = "X", Interface = FieldInterface.Text)] public string X { get; } = "";
+    }
+
+    // ── translation class whose base class hides a setter ──
+
+    private class TrBase
+    {
+        [CmsField(Label = "Title", Interface = FieldInterface.Text)] public string Title { get; private set; } = "";
+    }
+
+    private sealed class TrFromBase : TrBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public Guid TrFromBaseParentId { get; set; }
+        public string Locale { get; set; } = "";
+    }
+
+    [CmsCollection("Fsc tr base", Name = "fscTrBase")]
+    private sealed class TrFromBaseParent
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsTranslations(typeof(TrFromBase))]
+        [SugarColumn(IsIgnore = true)] public List<TrFromBase> Translations { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc derived", Name = "fscDerived")]
+    private sealed class DerivedFromProtectedSetter : ProtectedSetter
+    {
+        public string Extra { get; set; } = "";
+    }
+
     // ── tests ──
 
-    public static TheoryData<Type, string> RefusedWritableFields() => new()
+    private const string NoSetterTail =
+        "has no setter, so a value written to it is not stored. If the server computes the value, " +
+        "declare [CmsField(ReadOnly = true)]; otherwise add a public setter.";
+
+    public static TheoryData<Type, string> RefusedWithoutSetter() => new()
     {
-        { typeof(ProtectedSetter), "ProtectedSetter.X" },
-        { typeof(InternalSetter), "InternalSetter.X" },
-        { typeof(PrivateSetter), "PrivateSetter.X" },
         { typeof(NoSetter), "NoSetter.X" },
         { typeof(ExpressionBodied), "ExpressionBodied.X" },
-        { typeof(IgnoredPrivateSetter), "IgnoredPrivateSetter.X" },
-        { typeof(RepeaterProtected), "ChildProtected.X" },
-        { typeof(RepeaterInternal), "ChildInternal.X" },
-        { typeof(RepeaterPrivate), "ChildPrivate.X" },
+        { typeof(JsonIncludeGetOnly), "JsonIncludeGetOnly.X" },
         { typeof(RepeaterNone), "ChildNone.X" },
+        { typeof(RepeaterTwoConstructors), "ChildTwoConstructors.Label" },
+        { typeof(RepeaterOtherParameterName), "ChildOtherParameterName.Label" },
+        { typeof(RepeaterOtherParameterType), "ChildOtherParameterType.Label" },
     };
 
     [Theory]
-    [MemberData(nameof(RefusedWritableFields))]
-    public void A_writable_field_without_a_public_setter_is_refused(Type owner, string field)
+    [MemberData(nameof(RefusedWithoutSetter))]
+    public void A_writable_field_without_a_setter_is_refused(Type owner, string field)
+    {
+        var scan = () => MetadataScanner.ScanTypes([owner]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Be($"Field '{field}' {NoSetterTail}");
+    }
+
+    public static TheoryData<Type, string, string> RefusedWithNonPublicSetter() => new()
+    {
+        { typeof(ProtectedSetter), "ProtectedSetter.X", "protected" },
+        { typeof(InternalSetter), "InternalSetter.X", "internal" },
+        { typeof(PrivateSetter), "PrivateSetter.X", "private" },
+        { typeof(IgnoredPrivateSetter), "IgnoredPrivateSetter.X", "private" },
+        { typeof(RepeaterProtected), "ChildProtected.X", "protected" },
+        { typeof(RepeaterInternal), "ChildInternal.X", "internal" },
+        { typeof(RepeaterPrivate), "ChildPrivate.X", "private" },
+        { typeof(RepeaterJsonInclude), "ChildJsonInclude.Label", "private" },
+    };
+
+    [Theory]
+    [MemberData(nameof(RefusedWithNonPublicSetter))]
+    public void A_writable_field_with_a_non_public_setter_is_refused_and_names_it(Type owner, string field, string access)
     {
         var scan = () => MetadataScanner.ScanTypes([owner]);
 
         scan.Should().Throw<MetadataException>().Which.Message.Should().Be(
-            $"Field '{field}' is writable but has no public setter, so a value written to it is not stored. " +
-            "Add a public setter, or declare [CmsField(ReadOnly = true)].");
+            $"Field '{field}' has a {access} setter, which a write does not call, so a value written to it is " +
+            "not stored. Make the setter public; or, when server code sets the value, declare [CmsField(ReadOnly = true)].");
     }
 
     public static TheoryData<Type, string> RefusedTranslationFields() => new()
@@ -226,17 +365,29 @@ public sealed class FieldSetterCheckTests
             $"Field '{field}' has no setter, so writing a translation value to it fails. Add a setter.");
     }
 
+    [Fact]
+    public void A_translation_field_whose_setter_is_private_on_a_base_class_is_refused_and_says_so()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(TrFromBaseParent)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Field 'TrBase.Title' has a private setter on the base class TrBase, which TrFromBase cannot reach. " +
+            "Make it protected, init or public, or declare the field on TrFromBase.");
+    }
+
     public static TheoryData<Type> Accepted() => new()
     {
         { typeof(AcceptedShapes) },
         { typeof(ReadOnlyShapes) },
         { typeof(TrPrivateSetterParent) },
         { typeof(RepeaterReadOnly) },
+        { typeof(RepeaterCtor) },
+        { typeof(JsonIncludeShapes) },
     };
 
     [Theory]
     [MemberData(nameof(Accepted))]
-    public void A_public_setter_a_ReadOnly_field_or_a_translation_setter_that_stores_is_accepted(Type owner)
+    public void A_public_setter_a_ReadOnly_field_or_a_binding_that_stores_is_accepted(Type owner)
     {
         var scan = () => MetadataScanner.ScanTypes([owner]);
 
@@ -248,11 +399,6 @@ public sealed class FieldSetterCheckTests
     {
         var scan = () => MetadataScanner.ScanTypes([typeof(DerivedFromProtectedSetter)]);
 
-        scan.Should().Throw<MetadataException>().Which.Message.Should().StartWith("Field 'ProtectedSetter.X' is writable");
-    }
-
-    [CmsCollection("Fsc derived", Name = "fscDerived")]
-    private sealed class DerivedFromProtectedSetter : ProtectedSetter
-    {
+        scan.Should().Throw<MetadataException>().Which.Message.Should().StartWith("Field 'ProtectedSetter.X' has a protected setter");
     }
 }

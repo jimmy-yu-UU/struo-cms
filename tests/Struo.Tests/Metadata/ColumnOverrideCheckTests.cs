@@ -260,10 +260,116 @@ public sealed class ColumnOverrideCheckTests
         [SugarColumn(IsIgnore = true)] public List<JunctionTarget> Tags { get; set; } = [];
     }
 
+    // ── intermediate classes: only the properties the scanned type exposes are checked ──
+
+    private abstract class RootColumn { [SugarColumn(IsNullable = true)] public virtual string X { get; set; } = ""; }
+    private abstract class MiddleWithout : RootColumn { public override string X { get; set; } = ""; }
+    private abstract class MiddleRepeats : RootColumn { [SugarColumn(IsNullable = true)] public override string X { get; set; } = ""; }
+
+    [CmsCollection("Coc leaf repeats", Name = "cocLeafRepeats")]
+    private sealed class LeafRepeatsOverMiddle : MiddleWithout
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public override string X { get; set; } = "";
+    }
+
+    [CmsCollection("Coc leaf hides", Name = "cocLeafHides")]
+    private sealed class LeafHidesMiddle : MiddleWithout
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public new string X { get; set; } = "";
+    }
+
+    [CmsCollection("Coc leaf hides column", Name = "cocLeafHidesColumn")]
+    private sealed class LeafHidesMiddleWithColumn : MiddleWithout
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsNullable = true)] public new string X { get; set; } = "";
+    }
+
+    private abstract class ProtectedRoot { [SugarColumn(IsNullable = true)] protected virtual string Hidden { get; set; } = ""; }
+    private abstract class ProtectedMiddle : ProtectedRoot { protected override string Hidden { get; set; } = ""; }
+
+    [CmsCollection("Coc protected", Name = "cocProtected")]
+    private sealed class LeafOverBaseProtected : ProtectedMiddle
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    [CmsCollection("Coc leaf without", Name = "cocLeafWithout")]
+    private sealed class LeafWithoutOverMiddleRepeats : MiddleRepeats
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override string X { get; set; } = "";
+    }
+
+    [CmsCollection("Coc sibling", Name = "cocSibling")]
+    private sealed class SiblingInheritingMiddle : MiddleWithout
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    private abstract class GenericBase<T> { [SugarColumn(IsNullable = true)] public virtual T? Note { get; set; } }
+
+    [CmsCollection("Coc generic", Name = "cocGeneric")]
+    private sealed class OverridesGenericBase : GenericBase<string>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override string? Note { get; set; }
+    }
+
+    [CmsCollection("Coc get only", Name = "cocGetOnly")]
+    private sealed class GetOnlyOverride : NullableBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override string Note => "";
+    }
+
+    private sealed class TrKeyOverride : PrimaryKeyBase
+    {
+        public override Guid Id { get; set; }
+        public Guid TrKeyParentId { get; set; }
+        public string Locale { get; set; } = "";
+    }
+
+    [CmsCollection("Coc tr key", Name = "cocTrKey")]
+    private sealed class TrKeyParent
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsTranslations(typeof(TrKeyOverride))]
+        [SugarColumn(IsIgnore = true)] public List<TrKeyOverride> Translations { get; set; } = [];
+    }
+
+    [CmsCollection("Coc other key", Name = "cocOtherKey")]
+    private sealed class OtherMarkedKey : PrimaryKeyBase
+    {
+        public override Guid Id { get; set; }
+        [SugarColumn(IsPrimaryKey = true)] public Guid Code { get; set; }
+    }
+
+    private abstract class ColumnAndFieldBase
+    {
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "Note", Interface = FieldInterface.Text)] public virtual string Note { get; set; } = "";
+    }
+
+    [CmsCollection("Coc both dropped", Name = "cocBothDropped")]
+    private sealed class DropsColumnAndField : ColumnAndFieldBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override string Note { get; set; } = "";
+    }
+
     // ── tests ──
 
     public static TheoryData<Type[], string, string> Refused() => new()
     {
+        { [typeof(LeafWithoutOverMiddleRepeats)], "LeafWithoutOverMiddleRepeats.X", "MiddleRepeats.X" },
+        { [typeof(OverridesGenericBase)], "OverridesGenericBase.Note", "GenericBase`1.Note" },
+        { [typeof(GetOnlyOverride)], "GetOnlyOverride.Note", "NullableBase.Note" },
+        { [typeof(TrKeyParent)], "TrKeyOverride.Id", "PrimaryKeyBase.Id" },
+        { [typeof(OtherMarkedKey)], "OtherMarkedKey.Id", "PrimaryKeyBase.Id" },
+        { [typeof(DropsColumnAndField)], "DropsColumnAndField.Note", "ColumnAndFieldBase.Note" },
         { [typeof(CollectionIgnore)], "CollectionIgnore.Note", "IgnoreBase.Note" },
         { [typeof(CollectionNullable)], "CollectionNullable.Note", "NullableBase.Note" },
         { [typeof(CollectionJson)], "CollectionJson.Note", "JsonBase.Note" },
@@ -300,6 +406,10 @@ public sealed class ColumnOverrideCheckTests
         { [typeof(OverridesPlainBase)] },
         { [typeof(TrRepeatsParent)] },
         { [typeof(OwnerOfRepeatingJunction), typeof(JunctionTarget)] },
+        { [typeof(LeafRepeatsOverMiddle)] },
+        { [typeof(LeafHidesMiddle)] },
+        { [typeof(LeafHidesMiddleWithColumn)] },
+        { [typeof(LeafOverBaseProtected)] },
     };
 
     [Theory]
@@ -309,6 +419,25 @@ public sealed class ColumnOverrideCheckTests
         var scan = () => MetadataScanner.ScanTypes(types);
 
         scan.Should().NotThrow();
+    }
+
+    [Fact]
+    public void A_collection_that_inherits_an_override_without_the_attribute_is_refused_and_named_as_inheriting_it()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(SiblingInheritingMiddle)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().StartWith("Property 'MiddleWithout.X' overrides 'RootColumn.X', which carries [SugarColumn], without repeating it.")
+            .And.EndWith("Repeat [SugarColumn(...)] on 'MiddleWithout.X', which 'SiblingInheritingMiddle' inherits.");
+    }
+
+    [Fact]
+    public void An_override_that_drops_both_attributes_reports_SugarColumn_first()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(DropsColumnAndField)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Contain("which carries [SugarColumn]")
+            .And.NotContain("[CmsField]");
     }
 
     [Fact]
