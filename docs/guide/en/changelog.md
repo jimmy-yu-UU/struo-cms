@@ -14,6 +14,14 @@
   migration. A validator that reads the database must not depend on migrated tables.
 :::
 
+### Changed
+
+- A request to `/graphql` that fails on the server before it reaches the GraphQL server (for
+  example, the credential store cannot be reached during authentication) answers HTTP `500` in the
+  GraphQL `errors` shape, with `INTERNAL_SERVER_ERROR` and the masked message; it answered in the
+  REST error envelope. The status, code, message and the error-level log entry are unchanged
+  ([Chapter 14](14-graphql.md#error-shapes)).
+
 ### Fixed
 
 - With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
@@ -21,6 +29,11 @@
   migration. It applied the migrations first and then failed on that value; measured for
   `RateLimiting:Login:PermitLimit`, `RateLimiting:LoginConcurrency:PermitLimit`, `Query:MaxLimit`
   and `Api:MaxJsonBodyBytes` ([Chapter 4](04-configuration.md)).
+- A cookie-authenticated `POST /graphql` without the `X-Struo-CSRF` header is answered in the
+  GraphQL `errors` shape:
+  `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`.
+  It was answered in the REST error envelope. The status `403`, the code and the message are
+  unchanged ([Chapter 14](14-graphql.md#error-shapes)).
 
 ## 0.34.0 — 2026-11-25
 

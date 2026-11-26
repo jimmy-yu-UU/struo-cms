@@ -400,7 +400,8 @@ HTTP_STATUS:400
 （`null`，或某個成員是 `null` 的物件），代碼是[第 12 章](12-rest-conventions.md#錯誤代碼)列出的
 穩定代碼，狀態碼是 `200`；文件在 resolver 開始跑之前就出錯時，回應沒有 `data` 鍵，錯誤沒有代碼，
 或只帶 GraphQL 伺服器自己的代碼，狀態碼隨 `Accept` 而變；格式不對的請求是例外，見下一段：它帶
-`BAD_USER_INPUT`，狀態碼是 `400`。
+`BAD_USER_INPUT`，狀態碼是 `400`。要數字的位置給了不是數字的值，不論寫成字面值還是用變數傳，也
+在 resolver 開始跑之前被擋：沒有 `data` 鍵，帶的是 `BAD_USER_INPUT`，狀態碼同樣隨 `Accept` 而變。
 
 以 POST 送出 JSON body，而伺服器讀不成 GraphQL 請求時，沒帶 `Accept`、帶 `*/*` 或帶
 `application/json` 都回 HTTP `400`，沒有 `data` 鍵，只有一則錯誤，`extensions.code` 是
@@ -431,6 +432,12 @@ JSON 請求 body 超過 `Api:MaxJsonBodyBytes` 時，回 HTTP `413`，內容是�
 `BAD_USER_INPUT` 的錯誤，訊息是
 `GraphQL does not accept multipart requests; upload a file through POST /api/files.`。檔案走
 [第 15 章](15-files-and-media.md)的 REST 端點。
+
+請求還沒進到 GraphQL 伺服器就被擋下時，回的也是 `errors` 形狀、沒有 `data` 鍵，狀態、代碼與訊息跟
+REST 對同一種拒絕回的一樣，`Content-Type` 是 `application/json`。用 cookie 認證的 `POST` 少了
+`X-Struo-CSRF` 標頭，是 HTTP `403`，代碼 `FORBIDDEN`，訊息
+`Missing required 'X-Struo-CSRF' header.`。伺服器在這個階段自己出錯，例如認證時查不到憑證儲存，
+是 HTTP `500`，代碼 `INTERNAL_SERVER_ERROR`，訊息是遮罩過的那一句，並以 error 等級記錄。
 
 共用驗證器對 `sort` 引數與關聯路徑的訊息——未知欄位、未知關聯、跨多對多或一對多關聯的排序、超過
 `Query:MaxRelationDepth` 的 `sort`／`filter` 路徑與選擇集，內容見[第 10 章](10-query-basics.md)與

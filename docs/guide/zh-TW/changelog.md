@@ -12,6 +12,13 @@
   驗證器要改成不依賴已經 migrate 過的資料表。
 :::
 
+### 變更
+
+- `/graphql` 的請求在進到 GraphQL 伺服器之前、伺服器自己出錯時（例如認證階段查不到憑證儲存），回
+  HTTP `500` 與 GraphQL 的 `errors` 形狀，代碼是 `INTERNAL_SERVER_ERROR`，訊息是遮罩過的那一句；
+  原本回的是 REST 的錯誤信封。狀態、代碼、訊息與 error 等級的記錄都不變
+  （[第 14 章](14-graphql.md#錯誤形狀)）。
+
 ### 修正
 
 - `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在
@@ -19,6 +26,9 @@
   啟動失敗；量到的鍵是 `RateLimiting:Login:PermitLimit`、
   `RateLimiting:LoginConcurrency:PermitLimit`、`Query:MaxLimit` 與 `Api:MaxJsonBodyBytes`
   （[第 4 章](04-configuration.md)）。
+- 用 cookie 認證、少了 `X-Struo-CSRF` 標頭的 `POST /graphql`，回的是 GraphQL 的 `errors` 形狀：
+  `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`。先前回的是 REST 的
+  錯誤信封。狀態 `403`、代碼與訊息都不變（[第 14 章](14-graphql.md#錯誤形狀)）。
 
 ## 0.34.0 — 2026-11-25
 
