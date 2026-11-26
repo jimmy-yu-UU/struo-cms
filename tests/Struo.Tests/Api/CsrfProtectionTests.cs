@@ -34,6 +34,46 @@ public class CsrfProtectionTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    private async Task<HttpResponseMessage> CookiePostWithoutCsrfHeaderAsync(string path, object body)
+    {
+        await _factory.CreateAuthenticatedClientAsync();
+        var bare = _factory.CreateClient();
+        var login = await bare.PostAsJsonAsync("/api/auth/login",
+            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword });
+        login.EnsureSuccessStatusCode();
+        return await bare.PostAsJsonAsync(path, body);
+    }
+
+    [Fact]
+    public async Task Graphql_cookie_post_without_csrf_header_is_forbidden_in_the_graphql_shape()
+    {
+        var resp = await CookiePostWithoutCsrfHeaderAsync("/graphql", new { query = "{ __typename }" });
+
+        var text = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden, text);
+        var root = Root(text);
+        root.TryGetProperty("success", out _).Should().BeFalse(text);
+        root.TryGetProperty("error", out _).Should().BeFalse(text);
+        var error = root.GetProperty("errors").EnumerateArray().Should().ContainSingle().Subject;
+        error.GetProperty("message").GetString().Should().Be("Missing required 'X-Struo-CSRF' header.");
+        var extensions = error.GetProperty("extensions");
+        extensions.GetProperty("code").GetString().Should().Be("FORBIDDEN");
+        extensions.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Rest_cookie_post_without_csrf_header_keeps_the_error_envelope()
+    {
+        var resp = await CookiePostWithoutCsrfHeaderAsync("/api/items/fxArticle", ArticleBody);
+
+        var text = await resp.Content.ReadAsStringAsync();
+        resp.StatusCode.Should().Be(HttpStatusCode.Forbidden, text);
+        var root = Root(text);
+        root.TryGetProperty("errors", out _).Should().BeFalse(text);
+        root.GetProperty("success").GetBoolean().Should().BeFalse();
+        root.GetProperty("error").GetProperty("code").GetString().Should().Be("FORBIDDEN");
+    }
+
     [Fact]
     public async Task Cookie_mutation_with_csrf_header_is_allowed()
     {

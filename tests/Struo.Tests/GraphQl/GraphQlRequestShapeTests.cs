@@ -537,7 +537,8 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
 
         using var response = await client.PostAsync(GraphQlPath, JsonBody(declaredLength: true));
 
-        (await response.Content.ReadAsStringAsync()).Should().NotContain("errors");
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().NotContain(Unreadable).And.NotContain("BAD_USER_INPUT");
         _sink.Events.Should().NotContain(e => e.MessageTemplate.Text == UnreadableTemplate);
     }
 

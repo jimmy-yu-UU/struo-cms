@@ -78,6 +78,31 @@ public class AuthenticationFailureEnvelopeTests(ApiFactory factory)
         body.Should().NotContain("credential store unreachable");
     }
 
+    [Theory]
+    [InlineData("POST")]
+    [InlineData("GET")]
+    public async Task Exception_during_authentication_on_graphql_is_a_500_in_the_graphql_shape(string method)
+    {
+        using var host = HostWithFailingAuthentication();
+        using var client = host.CreateClient();
+        var request = new HttpRequestMessage(new HttpMethod(method), "/graphql?query=%7B__typename%7D");
+        request.Headers.Add("Authorization", "Bearer any-token-value");
+
+        var response = await client.SendAsync(request);
+
+        var body = await response.Content.ReadAsStringAsync();
+        response.StatusCode.Should().Be(HttpStatusCode.InternalServerError, body);
+        using var doc = JsonDocument.Parse(body);
+        doc.RootElement.TryGetProperty("success", out _).Should().BeFalse(body);
+        doc.RootElement.TryGetProperty("error", out _).Should().BeFalse(body);
+        var error = doc.RootElement.GetProperty("errors").EnumerateArray().Should().ContainSingle().Subject;
+        error.GetProperty("message").GetString().Should().Be("An internal error occurred.");
+        var extensions = error.GetProperty("extensions");
+        extensions.GetProperty("code").GetString().Should().Be("INTERNAL_SERVER_ERROR");
+        extensions.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
+        body.Should().NotContain("credential store unreachable");
+    }
+
     [Fact]
     public async Task Authentication_stage_failure_does_not_affect_requests_without_a_bearer_header()
     {
