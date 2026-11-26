@@ -10,7 +10,7 @@ const i18n = createI18n({
   } } },
 })
 
-function mountPanel(props: { disabled?: boolean; disabledHint?: string } = {}) {
+function mountPanel(props: { disabled?: boolean; disabledHint?: string; describedBy?: string } = {}) {
   return mount(PasswordPanel, { props, global: { plugins: [i18n] } })
 }
 
@@ -42,6 +42,11 @@ describe('PasswordPanel', () => {
     expect(button.attributes('disabled')).toBeDefined()
     expect(button.attributes('title')).toBe('Only a super-admin can change it.')
     expect(button.element.parentElement!.getAttribute('title')).toBe('Only a super-admin can change it.')
+  })
+
+  it('points the disabled button at the note that explains it', () => {
+    expect(mountPanel({ disabled: true, describedBy: 'why' }).get('button').attributes('aria-describedby')).toBe('why')
+    expect(mountPanel({ describedBy: 'why' }).get('button').attributes('aria-describedby')).toBeUndefined()
   })
 
   it('has no tooltip when it is enabled', () => {

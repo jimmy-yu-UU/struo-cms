@@ -18,7 +18,8 @@ export type FileRow = {
 // `tile` is the media-grid square; `sm` is the inline row thumbnail every list-shaped consumer
 // (FilePicker's current value, FilesField's rows, MediaFileList, the trash table) needs. A class
 // passed in by a consumer can never out-specify this component's own scoped rule, which is why
-// sizing is a prop instead of a class override.
+// sizing is a prop instead of a class override. Every consumer renders the file name next to the thumbnail,
+// so the image carries an empty alt.
 const props = withDefaults(defineProps<{ file: FileRow; size?: 'tile' | 'sm' }>(), { size: 'tile' })
 const broken = ref(false)
 const isImage = computed(() => props.file.contentType.startsWith('image/') && !broken.value)
@@ -30,7 +31,7 @@ const typeIcon = computed(() => resolveIcon(typeDisplay.value.icon))
 
 <template>
   <div class="file-thumb" :data-size="size">
-    <img v-if="isImage" :src="src" :alt="file.fileName" loading="lazy" class="rounded-md" draggable="false" @error="broken = true" />
+    <img v-if="isImage" :src="src" alt="" loading="lazy" class="rounded-md" draggable="false" @error="broken = true" />
     <div v-else class="file-chip rounded-md">
       <component :is="typeIcon" class="file-chip__icon size-8 text-muted-foreground" aria-hidden="true" />
       <span class="file-chip__meta text-muted-foreground">{{ typeDisplay.label }}</span>

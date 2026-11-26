@@ -22,11 +22,10 @@ const props = withDefaults(defineProps<{
   /** Hides the rows-per-page control. */
   showPageSizeSelector?: boolean
   /** False while `total` has not been fetched yet: the range text stays blank instead of reading 0. */
-  ready?: boolean
+  ready: boolean
 }>(), {
   pageSizeOptions: () => [10, 25, 50, 100],
   showPageSizeSelector: true,
-  ready: true,
 })
 const emit = defineEmits<{ 'update:page': [number]; 'update:pageSize': [number] }>()
 
