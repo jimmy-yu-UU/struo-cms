@@ -2499,7 +2499,7 @@ describe('ItemFormView', () => {
         await matrixBanner(w).findComponent({ name: 'Button' }).vm.$emit('click')
         await flushPromises()
         expect(matrixBanner(w).exists()).toBe(false)
-        expect(vi.mocked(rbacApi.getRolePermissions).mock.calls.length).toBe(before + 1)
+        expect(vi.mocked(rbacApi.getRolePermissions).mock.calls).toHaveLength(before + 1)
         expect(matrixVm.dirty).toBe(false)
       })
 
