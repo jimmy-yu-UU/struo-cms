@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using SqlSugar;
@@ -21,13 +22,24 @@ namespace Struo.Tests.GraphQl;
 /// field filters through <c>LongFilter</c>, so a value above 2^31 filters instead of failing.
 /// </summary>
 [Collection("ApiIntegration")]
-public class GraphQlNumberCoercionTests(ApiFactory factory)
+public sealed class GraphQlNumberCoercionTests(ApiFactory factory) : IDisposable
 {
+    private readonly CapturingLogSink _sink = new();
+    private WebApplicationFactory<Program>? _host;
+
+    public void Dispose() => _host?.Dispose();
+
+    private Task<HttpClient> ClientAsync()
+    {
+        _host ??= factory.WithSink(_sink);
+        return _host.AdminClientAsync(factory);
+    }
+
     private static JsonElement Root(string body) => JsonDocument.Parse(body).RootElement;
 
     private async Task<(HttpClient Client, string Id)> CreateArticleAsync()
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
         var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "N" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -45,7 +57,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
         JsonDocument.Parse($"{{\"query\":{JsonSerializer.Serialize(query)},\"variables\":{{\"v\":{rawJsonValue}}}}}")
             .RootElement.Clone();
 
-    private static void AssertSingleCode(JsonElement root, string code)
+    private void AssertSingleCode(JsonElement root, string code)
     {
         root.TryGetProperty("errors", out var errors).Should().BeTrue(root.GetRawText());
         errors.GetArrayLength().Should().Be(1, root.GetRawText());
@@ -53,6 +65,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
         var message = errors[0].GetProperty("message").GetString();
         message.Should().NotContain("Unexpected Execution Error").And.NotContain("internal error");
         message.Should().NotContain("coerce").And.NotContain("does not match");
+        _sink.ShouldHaveLoggedNoErrors();
     }
 
     private static async Task AssertRowUntouchedAsync(HttpClient client, string id) =>
@@ -68,7 +81,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [InlineData("limit: 1.5")]
     public async Task A_list_argument_literal_that_is_not_an_Int_is_BAD_USER_INPUT(string argument)
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
 
         AssertSingleCode(await PostAsync(client, new { query = $"{{ fxArticles({argument}) {{ total }} }}" }),
             "BAD_USER_INPUT");
@@ -82,7 +95,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [InlineData("1.5")]
     public async Task A_list_argument_variable_that_is_not_an_Int_is_BAD_USER_INPUT(string value)
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
         var query = "query($v: Int) { fxArticles(limit: $v) { total } }";
 
         AssertSingleCode(await PostAsync(client, WithVariable(query, value)), "BAD_USER_INPUT");
@@ -120,6 +133,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [InlineData("\"abc\"")]
     [InlineData("true")]
     [InlineData("1.5")]
+    [InlineData("99999999999999999999999")]
     public async Task Update_with_a_version_literal_of_the_wrong_kind_is_INVALID_VERSION(string literal)
     {
         var (client, id) = await CreateArticleAsync();
@@ -133,6 +147,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [InlineData("\"abc\"")]
     [InlineData("true")]
     [InlineData("1.5")]
+    [InlineData("99999999999999999999999")]
     public async Task Revert_with_a_version_literal_of_the_wrong_kind_is_INVALID_VERSION(string literal)
     {
         var (client, id) = await CreateArticleAsync();
@@ -146,6 +161,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [InlineData("\"abc\"")]
     [InlineData("true")]
     [InlineData("1.5")]
+    [InlineData("99999999999999999999999")]
     public async Task Update_with_a_version_variable_of_the_wrong_kind_is_BAD_USER_INPUT(string value)
     {
         var (client, id) = await CreateArticleAsync();
@@ -176,7 +192,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
 
     private async Task<(HttpClient Client, Guid Big, Guid Small)> SeedFilesAsync()
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
         async Task<Guid> UploadAsync(string name)
         {
             var content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(name));
@@ -245,7 +261,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [Fact]
     public async Task Rest_limit_beyond_the_Int_range_falls_back_to_the_default_limit()
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
         var defaultLimit = factory.Services.GetRequiredService<IOptions<StruoQueryOptions>>().Value.DefaultLimit;
 
         var resp = await client.GetAsync("/api/items/fxArticle?limit=99999999999");
@@ -263,7 +279,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [InlineData("size: { nin: [true] }")]
     public async Task A_list_operand_of_the_wrong_kind_is_BAD_USER_INPUT(string operand)
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
 
         var root = await PostAsync(client, new { query = $"{{ files(filter: {{ {operand} }}) {{ total }} }}" });
 
@@ -273,7 +289,7 @@ public class GraphQlNumberCoercionTests(ApiFactory factory)
     [Fact]
     public async Task An_int_field_still_filters_through_IntFilter()
     {
-        var client = await factory.CreateAuthenticatedClientAsync();
+        var client = await ClientAsync();
 
         var root = await PostAsync(client, new { query = "{ files(filter: { width: { gt: 99999999999 } }) { total } }" });
 

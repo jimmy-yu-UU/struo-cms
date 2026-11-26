@@ -26,10 +26,12 @@ public class JsonBodyLimitTests(ApiFactory factory)
     private const int Limit = 1024;
     private const string TooLargeMessage = "Request body is too large.";
     private readonly ApiFactory _factory = factory;
+    private readonly CapturingLogSink _sink = new();
 
     private WebApplicationFactory<Program> Host(string limit = "1024") =>
         _factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
-            c.AddInMemoryCollection(new Dictionary<string, string?> { ["Api:MaxJsonBodyBytes"] = limit })));
+            c.AddInMemoryCollection(new Dictionary<string, string?> { ["Api:MaxJsonBodyBytes"] = limit })))
+            .WithSink(_sink);
 
     private async Task<HttpClient> AdminClientAsync(WebApplicationFactory<Program> host)
     {
@@ -64,7 +66,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
         }
     }
 
-    private static async Task AssertPayloadTooLargeEnvelopeAsync(HttpResponseMessage response)
+    private async Task AssertPayloadTooLargeEnvelopeAsync(HttpResponseMessage response)
     {
         response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge, await response.Content.ReadAsStringAsync());
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -74,6 +76,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
         error.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
         AssertFixedMessage(error.GetProperty("message").GetString());
         error.TryGetProperty("details", out _).Should().BeFalse("a JSON body cap names no limit");
+        _sink.ShouldHaveLoggedNoErrors();
     }
 
     // The same sentence on every path, with no number: the cap is not disclosed to an anonymous caller.
@@ -84,7 +87,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
     }
 
     // /graphql keeps its own error shape: { errors: [{ message, extensions: { code, traceId } }] }.
-    private static async Task AssertGraphQlPayloadTooLargeAsync(HttpResponseMessage response)
+    private async Task AssertGraphQlPayloadTooLargeAsync(HttpResponseMessage response)
     {
         var body = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge, body);
@@ -95,6 +98,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
         AssertFixedMessage(doc.RootElement.GetProperty("errors")[0].GetProperty("message").GetString());
         doc.RootElement.GetProperty("errors").GetArrayLength().Should().Be(1, body);
         extensions.TryGetProperty("details", out _).Should().BeFalse("a JSON body cap names no limit");
+        _sink.ShouldHaveLoggedNoErrors();
     }
 
     [Fact]

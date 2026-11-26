@@ -341,3 +341,39 @@ public sealed class SqliteOnlyAttributeTests
         attribute.Skip.Should().Be(TestBackend.IsLive ? "SQLite-only: uses a file path" : null);
     }
 }
+
+public sealed class LiveBackendSwitchFactAttributeTests
+{
+    private const string Switch = "STRUO_TEST_SWITCH_PROBE";
+
+    [Fact]
+    public void Without_a_live_backend_the_reason_names_both_requirements()
+    {
+        var reason = LiveBackendSwitchFactAttribute.SkipReason(Switch, isLive: false);
+
+        reason.Should().Contain("STRUO_TEST_BACKEND").And.Contain($"{Switch}=1");
+    }
+
+    [Fact]
+    public void A_live_backend_without_the_switch_is_skipped_naming_the_switch()
+    {
+        LiveBackendSwitchFactAttribute.SkipReason(Switch, isLive: true).Should().Be($"Set {Switch}=1 to run.");
+    }
+
+    [Fact]
+    public void A_live_backend_with_the_switch_set_to_one_runs()
+    {
+        var previous = Environment.GetEnvironmentVariable(Switch);
+        try
+        {
+            Environment.SetEnvironmentVariable(Switch, "1");
+            LiveBackendSwitchFactAttribute.SkipReason(Switch, isLive: true).Should().BeNull();
+            Environment.SetEnvironmentVariable(Switch, "0");
+            LiveBackendSwitchFactAttribute.SkipReason(Switch, isLive: true).Should().NotBeNull();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(Switch, previous);
+        }
+    }
+}

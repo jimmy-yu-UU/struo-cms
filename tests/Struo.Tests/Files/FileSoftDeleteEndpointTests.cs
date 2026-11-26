@@ -62,6 +62,7 @@ public class FileSoftDeleteEndpointTests(ApiFactory factory)
         // Gone for good: restore finds nothing to restore.
         (await client.PostAsync($"/api/files/{id}/restore", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await client.GetAsync($"/api/files/{id}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
