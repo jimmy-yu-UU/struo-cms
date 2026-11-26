@@ -30,7 +30,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     /// per-interface validators still run for every field, so a Required list-type field is checked here.
     /// </summary>
     public object DeserializeForCreate(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, validateAllFields: true, onlyFields: null);
+        DeserializeCore(collection, body, meta, validateAllFields: true, onlyFields: null, isCreate: true);
 
     /// <summary>
     /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
@@ -40,7 +40,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     /// all, once the caller re-runs <see cref="EnforceRequiredFields"/> against the merged entity.
     /// </summary>
     public object DeserializeForUpdate(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields: null);
+        DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields: null, isCreate: false);
 
     /// <summary>
     /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
@@ -52,7 +52,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         string collection, JsonElement body, CollectionMetadata meta, IReadOnlySet<string> onlyFields)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
-        var entity = DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields);
+        var entity = DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields, isCreate: false);
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (body.ValueKind != JsonValueKind.Object) return result;
 
@@ -70,7 +70,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     private object DeserializeCore(
         string collection, JsonElement body, CollectionMetadata meta, bool validateAllFields,
-        IReadOnlySet<string>? onlyFields)
+        IReadOnlySet<string>? onlyFields, bool isCreate)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
 
@@ -78,7 +78,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         var entity = DeserializeEntity(d, body, stripNames);
 
         SetJsonFieldRawText(meta, body, d, entity);
-        ClearSystemReadOnlyFields(meta, d, entity);
+        ClearSystemReadOnlyFields(meta, d, entity, isCreate);
         SanitizeRichTextFields(meta, d, entity);
 
         // The scalar Required check is not run here: ItemService runs it (create after BeforeWrite,
@@ -219,18 +219,32 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         }
     }
 
-    // strip system/read-only fields (audit columns and identity are owned by AOP); only nullable props can be nulled
-    private static void ClearSystemReadOnlyFields(CollectionMetadata meta, EntityDescriptor d, object entity)
+    // System fields (audit columns and identity are owned by AOP) and update-side read-only fields are nulled
+    // where the property can hold null. A create gives each non-system read-only field the value a new
+    // instance of the entity has, whatever the body carried.
+    private static void ClearSystemReadOnlyFields(
+        CollectionMetadata meta, EntityDescriptor d, object entity, bool isCreate)
     {
+        var fresh = isCreate ? NewInstance(d.EntityType) : null;
         foreach (var field in meta.Fields.Where(f => f.IsSystem || f.ReadOnly))
         {
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
             var pi = d.Properties.GetValueOrDefault(prop);
             if (pi is not { CanWrite: true }) continue;
+            if (fresh is not null && !field.IsSystem)
+            {
+                pi.SetValue(entity, pi.GetValue(fresh));
+                continue;
+            }
             var canBeNull = !pi.PropertyType.IsValueType || Nullable.GetUnderlyingType(pi.PropertyType) is not null;
             if (canBeNull) pi.SetValue(entity, null);
         }
     }
+
+    // Built the way the request entity is, so a constructor marked [JsonConstructor] is used too.
+    private static object NewInstance(Type entityType) =>
+        JsonSerializer.Deserialize("{}", entityType, JsonOpts)
+        ?? throw new QueryException("Request body could not be parsed.");
 
     // Sanitize non-translatable RichText field values on the entity before required validation,
     // so stored HTML is XSS-clean and a blank editor document is treated as missing.
