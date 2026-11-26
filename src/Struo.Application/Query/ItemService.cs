@@ -679,8 +679,9 @@ public sealed class ItemService(
     /// The captured snapshot is FULL item state incl. <c>Hidden</c> fields (a revert needs
     /// them all); that full-fidelity form is internal to <see cref="RevertAsync"/> only. The snapshot
     /// returned HERE to external callers (REST/GraphQL <c>xRevision</c>) has hidden fields redacted via
-    /// <see cref="RevisionSnapshotRedactor.RedactHidden"/> first. Otherwise gated only by collection-level
-    /// <c>CanRead</c>; a future field-level-read-grant feature should tighten this further.
+    /// <see cref="RevisionSnapshotRedactor.RedactHidden"/> first, and the many-to-many arrays and foreign keys of
+    /// relations whose target collection the caller cannot read are left out. Otherwise gated only by
+    /// collection-level <c>CanRead</c>; a future field-level-read-grant feature should tighten this further.
     /// </para></summary>
     public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
@@ -691,7 +692,30 @@ public sealed class ItemService(
         if (!await IsItemVisibleForRevisionsAsync(collection, id, ct)) return null;
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
-        return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, m2mSource.M2MDescriptors(collection)) };
+        var descriptors = m2mSource.M2MDescriptors(collection);
+        var redacted = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, descriptors);
+        return rec with { Snapshot = WithoutUnreadableRelations(redacted, meta, descriptors) };
+    }
+
+    // The item read shows a relation key only for a target the caller can read, so the snapshot omits the
+    // many-to-many arrays and foreign keys that run to a collection the caller cannot read. A key that is also a
+    // declared field stays, as the item read returns it. The stored snapshot is not changed.
+    private string WithoutUnreadableRelations(
+        string snapshot, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> descriptors)
+    {
+        var fieldNames = meta.Fields.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var keys = descriptors
+            .Where(desc => !permissions.CanRead(desc.TargetCollection))
+            .Select(desc => desc.RelationName)
+            .Concat(meta.Relations
+                .Where(rel => rel is { Kind: RelationKind.ManyToOne, ForeignKey: { } fk }
+                              && !fieldNames.Contains(fk) && !permissions.CanRead(rel.TargetCollection))
+                .Select(rel => rel.ForeignKey!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (keys.Count == 0) return snapshot;
+        using var doc = JsonDocument.Parse(snapshot);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return snapshot;
+        return System.Text.Encoding.UTF8.GetString(JsonBodyUtil.StripKeys(doc.RootElement, keys));
     }
 
     // U5b: post-commit change notification. CancellationToken.None on purpose — the write already
