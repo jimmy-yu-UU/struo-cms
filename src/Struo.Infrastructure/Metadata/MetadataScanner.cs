@@ -575,6 +575,7 @@ public static class MetadataScanner
         ColumnOverrideCheck.Require(tType, primaryKeyRuleReports: false);
         FieldInheritanceCheck.Require(tType);
         FieldSetterCheck.RequireSetters(tType);
+        TranslationReadOnlyCheck.Require(tType);
         var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         var hasId = tProps.Any(p => string.Equals(p.Name, "Id", StringComparison.Ordinal));
