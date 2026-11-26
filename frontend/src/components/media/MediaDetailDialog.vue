@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
@@ -42,6 +42,8 @@ const activeLocale = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const conflict = ref(false)
+// The conflict notice is an alert a save raises; it takes focus, since Save is disabled while the request runs.
+const conflictNotice = ref<HTMLElement | null>(null)
 const error = ref('')
 
 const fileMeta = computed(() => schema.get('file'))
@@ -53,6 +55,11 @@ const localeOptions = computed(() =>
   locales.value.map((l) => ({ label: l.name, value: l.code })),
 )
 
+// The preview is the only label of the file here: the alt text being edited, or the file name when it is empty.
+const previewAlt = computed(() => {
+  const alt = activeValues.value.alt
+  return typeof alt === 'string' && alt.trim() !== '' ? alt : (props.file?.fileName ?? '')
+})
 const isImage = computed(() => (props.file?.contentType ?? '').startsWith('image/'))
 const previewSrc = computed(() => (props.file ? filesApi.contentUrl(props.file.id) : ''))
 const dimensions = computed(() => {
@@ -195,6 +202,8 @@ async function onSave(): Promise<void> {
       if (raw.value !== null && String(raw.value.id) === savedId) {
         conflict.value = true
         await recoverFromConflict(savedId)
+        await nextTick()
+        conflictNotice.value?.focus()
       }
     } else {
       error.value = e instanceof Error ? e.message : t('media.saveFailed')
@@ -271,7 +280,7 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 
       <div v-if="file" class="md-grid">
         <div class="md-preview rounded-xl">
-          <img v-if="isImage" :src="previewSrc" :alt="file.fileName" class="rounded-md" />
+          <img v-if="isImage" :src="previewSrc" :alt="previewAlt" class="rounded-md" />
           <FileThumbnail v-else :file="file" />
         </div>
         <div class="md-fields">
@@ -335,6 +344,8 @@ defineExpose({ model, conflict, onSave, onDelete, onCopyUrl, activeLocale, setFi
 
           <div
             v-if="conflict"
+            ref="conflictNotice"
+            tabindex="-1"
             class="md-conflict flex items-center gap-3 rounded-md border border-warning bg-warning/10 px-3 py-2 text-foreground"
             role="alert"
           >
