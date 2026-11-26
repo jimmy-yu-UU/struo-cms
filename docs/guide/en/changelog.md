@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.35.0
+
+### Changed
+
+- A request to `/graphql` that fails on the server before it reaches the GraphQL server (for
+  example, the credential store cannot be reached during authentication) answers HTTP `500` in the
+  GraphQL `errors` shape, with `INTERNAL_SERVER_ERROR` and the masked message; it answered in the
+  REST error envelope. The status, code, message and the error-level log entry are unchanged
+  ([Chapter 14](14-graphql.md#error-shapes)).
+
+### Fixed
+
+- A cookie-authenticated `POST /graphql` without the `X-Struo-CSRF` header is answered in the
+  GraphQL `errors` shape:
+  `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`.
+  It was answered in the REST error envelope. The status `403`, the code and the message are
+  unchanged ([Chapter 14](14-graphql.md#error-shapes)).
+
 ## 0.34.0 — 2026-11-25
 
 ::: danger Breaking
