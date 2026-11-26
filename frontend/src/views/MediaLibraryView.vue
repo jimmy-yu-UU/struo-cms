@@ -540,7 +540,8 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
       surface to right-click.
     -->
     <ContextMenu>
-      <ContextMenuTrigger as="div" class="media-body rounded-xl border border-border bg-muted p-4 min-h-80">
+      <ContextMenuTrigger as="div" class="media-body rounded-xl border border-border bg-muted p-4 min-h-80"
+                          :aria-busy="loading ? 'true' : 'false'">
         <MediaFolderCards v-if="mode === 'active' && view === 'grid'" :folders="visibleFolders"
                           :can-manage="canManageFolders || canDeleteFolders" :can-move="canManageFolders"
                           :can-rename="canManageFolders" :can-delete="canDeleteFolders"
@@ -622,6 +623,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
           to which of the two components is rendering them as it already is to grid vs. list for
           files.
         -->
+        <p v-if="loading && !files.length && !visibleFolders.length" class="text-muted-foreground">{{ t('common.loading') }}</p>
         <p v-if="!loading && !files.length && !visibleFolders.length" class="empty text-muted-foreground">{{ t(mode === 'trash' ? 'collectionList.emptyTrash' : 'media.empty') }}</p>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -636,6 +638,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 
     <DataTablePagination
       v-if="total > 0"
+      :ready="true"
       :page="page"
       :page-size="perPage"
       :total="total"

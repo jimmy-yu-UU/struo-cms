@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button'
 
 // The "Password" section of the user edit page: one short line saying what a reset does, and the reset
 // action. The page owns the dialog and what happens after it; this only raises `reset`. A disabled
-// button gets no pointer events, so the reason is also the tooltip of the span around it.
-defineProps<{ disabled?: boolean; disabledHint?: string }>()
+// button gets no pointer events, so the reason is also the tooltip of the span around it, and `describedBy`
+// names the page note that states it.
+defineProps<{ disabled?: boolean; disabledHint?: string; describedBy?: string }>()
 const emit = defineEmits<{ (e: 'reset'): void }>()
 const { t } = useI18n()
 </script>
@@ -19,7 +20,7 @@ const { t } = useI18n()
         <!-- type="button" is defensive: ui/button injects no type of its own, so a control re-parented
              inside a <form> would otherwise start submitting it. -->
         <Button type="button" variant="outline" :disabled="disabled" :title="disabled ? disabledHint : undefined"
-                @click="emit('reset')">
+                :aria-describedby="disabled ? describedBy : undefined" @click="emit('reset')">
           {{ t('password.resetTitle') }}
         </Button>
       </span>

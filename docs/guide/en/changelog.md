@@ -12,6 +12,9 @@
   ([Chapter 5](05-collections.md)).
 - A fork's own options validation registered with `ValidateOnStart()` runs before the startup
   migration. A validator that reads the database must not depend on migrated tables.
+- The admin SPA's `DataTablePagination` component requires its `ready` prop. A fork whose own views
+  use the component passes `:ready`: `true` once the total is known, `false` until the first total
+  has arrived. Without it, the type check of `pnpm build` fails.
 :::
 
 ### Changed
@@ -21,6 +24,8 @@
   GraphQL `errors` shape, with `INTERNAL_SERVER_ERROR` and the masked message; it answered in the
   REST error envelope. The status, code, message and the error-level log entry are unchanged
   ([Chapter 14](14-graphql.md#error-shapes)).
+- A related list in a form shows no range before its first total arrives; when the parent item
+  changes, the list is cleared and loaded again.
 
 ### Fixed
 
@@ -34,6 +39,27 @@
   `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`.
   It was answered in the REST error envelope. The status `403`, the code and the message are
   unchanged ([Chapter 14](14-graphql.md#error-shapes)).
+- On the role form, the reason a disabled Delete button is disabled is shown as a note on the page,
+  and the button points at it with `aria-describedby`. The reason was only in the button's `title`,
+  and a disabled button receives no pointer events, so it never showed.
+- A permissions save that meets a role someone else has changed (`409`): when the form has no
+  unsaved edits, the form takes the latest content and a notice about the permissions is shown,
+  which goes away once the permissions are saved or reloaded. The notice shown was "This item was
+  changed by someone else", and it stayed after the permissions were saved. A form with unsaved
+  edits keeps the item's conflict notice.
+- When a save meets a conflict, the conflict notice takes keyboard focus (item form, permissions,
+  revert, media file dialog). On the item form and in the media file dialog, focus was left on the
+  page body.
+- When the item id in the address is not a valid id, the form page shows a sentence that says so,
+  the server's message and a button back to the list. It showed the "Edit" header and the server's
+  sentence. The collection-not-found and item-not-found pages each have a button back as well.
+- The token section of the user form and its messages say "API access token" throughout, as the
+  password section does ([Chapter 16](16-authentication.md)).
+- While the media library loads, its results are marked `aria-busy`, and the first load shows a
+  loading text.
+- A media thumbnail that has the file name next to it has an empty alternative text, so the name is
+  not repeated.
+- Sentences of the Traditional Chinese interface use full-width punctuation throughout (40 strings).
 
 ## 0.34.0 — 2026-11-25
 
