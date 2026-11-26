@@ -17,6 +17,7 @@ internal static class StruoCmsStartupChecks
         var sp = scope.ServiceProvider;
         // Need only configuration and DI, so they run before anything touches the database. The startup
         // validator runs every ValidateOnStart() registration, so no invalid setting reaches the migration.
+        // Why: docs/ai/decisions/options-are-validated-before-the-startup-migration.md
         sp.GetRequiredService<IStartupValidator>().Validate();
         VerifyCustomFileStorage(sp);
         await StruoCmsGraphQlCheck.RunAsync(sp);

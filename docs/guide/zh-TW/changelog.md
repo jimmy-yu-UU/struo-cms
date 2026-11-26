@@ -1,5 +1,25 @@
 # 版本紀錄
 
+## 0.35.0
+
+::: danger 破壞性變更
+- `[CmsField]` 掛在不是 public 的屬性上（private、protected、internal，或明確實作介面的屬性），
+  或掛在 static 屬性上，主機在啟動時失敗，丟出 `MetadataException`，訊息點名那個屬性。集合類別、
+  翻譯類別、Repeater 的子型別，以及它們的基底類別都檢查。非 public 的屬性原本不會被讀到，欄位
+  無聲地不存在；static 屬性原本在建立項目時丟例外。這兩項是在 SQLite 上、HTTP 層之下量到的。
+  改成 public 的 instance 屬性，或拿掉 `[CmsField]`（[第 5 章](05-collections.md)）。
+- fork 自己以 `ValidateOnStart()` 註冊的設定驗證，在啟動時的 migration 之前執行。會讀資料庫的
+  驗證器要改成不依賴已經 migrate 過的資料表。
+:::
+
+### 修正
+
+- `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在
+  連資料庫之前就啟動失敗，不套用任何 migration。先前是先套用 migration，主機才因為那個設定值
+  啟動失敗；量到的鍵是 `RateLimiting:Login:PermitLimit`、
+  `RateLimiting:LoginConcurrency:PermitLimit`、`Query:MaxLimit` 與 `Api:MaxJsonBodyBytes`
+  （[第 4 章](04-configuration.md)）。
+
 ## 0.34.0 — 2026-11-25
 
 ::: danger 破壞性變更

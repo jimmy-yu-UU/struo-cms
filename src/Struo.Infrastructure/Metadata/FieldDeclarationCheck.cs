@@ -5,6 +5,7 @@ namespace Struo.Infrastructure.Metadata;
 
 /// <summary>
 /// The scan-time check that a <c>[CmsField]</c> property is one the scan reads: a public instance property.
+/// Why: docs/ai/decisions/cmsfield-is-a-public-instance-property.md
 /// </summary>
 internal static class FieldDeclarationCheck
 {

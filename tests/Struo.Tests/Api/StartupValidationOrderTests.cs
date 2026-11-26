@@ -24,7 +24,7 @@ public sealed class StartupValidationOrderTests
     [SqliteOnlyTheory("options validation order; a fresh SQLite file shows whether the migration ran")]
     [InlineData("RateLimiting:Login:PermitLimit", "0", "RateLimiting:Login:PermitLimit")]
     [InlineData("RateLimiting:LoginConcurrency:PermitLimit", "0", "RateLimiting:LoginConcurrency:PermitLimit")]
-    [InlineData("Query:MaxLimit", "0", "MaxLimit")]
+    [InlineData("Query:MaxLimit", "0", "Query:MaxLimit")]
     [InlineData("Api:MaxJsonBodyBytes", "0", "Api:MaxJsonBodyBytes")]
     [InlineData("Auth:Password:MinLength", "0", "Auth:Password:MinLength")]
     [InlineData("Auth:Cookie:Name", "bad name", "Auth:Cookie:Name")]

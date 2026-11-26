@@ -102,6 +102,9 @@ API 不使用 `Database:MigrationsPath` 與 `Database:AutoSyncSchema` 這兩個�
 [07:39:45 WRN]  The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command. <s:Struo.Startup>
 ```
 
+以 `ValidateOnStart` 綁定的設定在這一段之前就驗證完：有無效值時，主機在連資料庫之前就啟動失敗，
+`MigrateOnStartup` 也不會套用任何 migration。命令列的命令不做這一整輪驗證，只驗證它自己讀到的設定。
+
 啟動時資料庫這一段的順序是：
 
 1. 設定裡有上面這兩個不使用的鍵時，各記一筆警告。
