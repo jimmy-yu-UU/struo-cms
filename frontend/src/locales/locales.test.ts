@@ -10,6 +10,13 @@ function keyPaths(obj: Record<string, unknown>, prefix = ''): string[] {
   )
 }
 
+function stringLeaves(obj: Record<string, unknown>, prefix = ''): Array<[string, string]> {
+  return Object.entries(obj).flatMap(([k, v]): Array<[string, string]> => {
+    if (typeof v === 'string') return [[`${prefix}${k}`, v]]
+    return v !== null && typeof v === 'object' ? stringLeaves(v as Record<string, unknown>, `${prefix}${k}.`) : []
+  })
+}
+
 describe('locale packs', () => {
   it('every bundled catalog exposes the same key set', () => {
     const [first, ...rest] = CATALOG_LOCALES
@@ -39,6 +46,33 @@ describe('locale packs', () => {
   it('pins the zh-TW password-change toast wording to the ruled sentences', () => {
     expect(zhTW.password.changed).toBe('密碼已更新，API 存取權杖已撤銷。')
     expect(zhTW.password.changedSelf).toBe('密碼已更新，你的 API 存取權杖已撤銷。')
+  })
+
+  // The one name of the credential is 「API 存取權杖」 / "API access token", a maintainer ruling. Every string
+  // that names it, in the password section and in the access-token panel, carries the full name.
+  it('names the credential in full wherever a string names it', () => {
+    const keys = [
+      'password.sectionDescription', 'password.tokenRevokeNote', 'password.tokenRevokeNoteSelf',
+      'password.changed', 'password.changedSelf',
+      'accessToken.title', 'accessToken.none', 'accessToken.regenerateConfirmHeader',
+      'accessToken.revokeConfirmHeader', 'accessToken.issuedTitle', 'accessToken.revoked',
+      'accessToken.generateFailed', 'accessToken.revokeFailed', 'accessToken.loadFailed',
+    ]
+    const full: Record<string, RegExp> = { 'zh-TW': /API 存取權杖/, en: /API access token/i }
+    for (const locale of CATALOG_LOCALES) {
+      const leaves = new Map(stringLeaves(catalogs[locale] as unknown as Record<string, unknown>))
+      for (const key of keys) expect(leaves.get(key), `${locale} ${key}`).toMatch(full[locale])
+    }
+  })
+
+  // A half-width , ; : ? ! after a Chinese character, a closing Chinese bracket or quote, or the closing
+  // brace of a placeholder, in a string that holds Chinese, belongs to the full-width forms. Half-width
+  // parentheses are out of scope. No string is exempt.
+  it('writes zh-TW punctuation after Chinese text in full width', () => {
+    const offenders = stringLeaves(zhTW as unknown as Record<string, unknown>)
+      .filter(([, value]) => /[㐀-鿿]/.test(value) && /[㐀-鿿」』）】》}]\s*[,;:?!]/.test(value))
+      .map(([path, value]) => `${path}: ${value}`)
+    expect(offenders).toEqual([])
   })
 
   // Pins the maintainer's 2026-08-12 ruling against the real shipped pack, not a suite-local mirror: narrative-guard:allow: cites the specific ruling this test pins against, not a changelog date

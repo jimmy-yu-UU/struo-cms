@@ -76,9 +76,9 @@ masked message, `An internal error occurred.` — never the exception's own cont
 authentication itself goes through the same masking and the same envelope.
 
 GraphQL is the one exception — see [Chapter 14: GraphQL API](14-graphql.md) for its own spelling:
-a `/graphql` response is native GraphQL shape (`data`/`errors`), not this envelope at all, unless
-the request is stopped before it ever reaches GraphQL — a missing CSRF header, for instance — in
-which case it still comes back in this chapter's envelope.
+a `/graphql` response is native GraphQL shape (`data`/`errors`), not this envelope at all. That
+holds for a request stopped before it reaches GraphQL as well — a missing CSRF header, or a failure
+in authentication itself: the status, code and message are this chapter's, in the `errors` shape.
 
 ## Status codes
 

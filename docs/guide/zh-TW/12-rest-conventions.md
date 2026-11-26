@@ -65,8 +65,8 @@ HTTP_STATUS:201
 絕不洩漏例外本身的內容；這件事，連同認證階段本身失敗的情況，也走同一套遮罩與同一種信封。
 
 GraphQL 是唯一的例外，拼法見[第 14 章：GraphQL API](14-graphql.md)：`/graphql` 的回應是原生的
-GraphQL 形狀（`data`／`errors`），完全不套這個信封，除非是像少了 CSRF 標頭這種請求根本到不了
-GraphQL 就先被擋下的情況——那種回應仍然是這裡的信封形狀。
+GraphQL 形狀（`data`／`errors`），完全不套這個信封。請求還沒進到 GraphQL 就被擋下時也一樣，例如
+少了 CSRF 標頭，或認證階段本身失敗：狀態、代碼與訊息跟這一章相同，形狀是 `errors`。
 
 ## 狀態碼
 

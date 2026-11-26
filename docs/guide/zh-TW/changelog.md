@@ -1,5 +1,53 @@
 # 版本紀錄
 
+## 0.35.0
+
+::: danger 破壞性變更
+- `[CmsField]` 掛在不是 public 的屬性上（private、protected、internal，或明確實作介面的屬性），
+  或掛在 static 屬性上，主機在啟動時失敗，丟出 `MetadataException`，訊息點名那個屬性。集合類別、
+  翻譯類別、Repeater 的子型別，以及它們的基底類別都檢查。非 public 的屬性原本不會被讀到，欄位
+  無聲地不存在；static 屬性原本在建立項目時丟例外。這兩項是在 SQLite 上、HTTP 層之下量到的。
+  改成 public 的 instance 屬性，或拿掉 `[CmsField]`（[第 5 章](05-collections.md)）。
+- fork 自己以 `ValidateOnStart()` 註冊的設定驗證，在啟動時的 migration 之前執行。會讀資料庫的
+  驗證器要改成不依賴已經 migrate 過的資料表。
+- 後台的 `DataTablePagination` 元件，`ready` 是必填的 prop。自己的畫面用到這個元件的 fork 要傳
+  `:ready`：總筆數已知時是 `true`，還沒拿到第一次的總筆數時是 `false`。沒傳的話，`pnpm build`
+  的型別檢查會失敗。
+:::
+
+### 變更
+
+- `/graphql` 的請求在進到 GraphQL 伺服器之前、伺服器自己出錯時（例如認證階段查不到憑證儲存），回
+  HTTP `500` 與 GraphQL 的 `errors` 形狀，代碼是 `INTERNAL_SERVER_ERROR`，訊息是遮罩過的那一句；
+  原本回的是 REST 的錯誤信封。狀態、代碼、訊息與 error 等級的記錄都不變
+  （[第 14 章](14-graphql.md#錯誤形狀)）。
+- 表單裡的關聯清單在第一次拿到總筆數之前不顯示筆數範圍；上層項目換了之後，清單先清空再重新載入。
+
+### 修正
+
+- `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在
+  連資料庫之前就啟動失敗，不套用任何 migration。先前是先套用 migration，主機才因為那個設定值
+  啟動失敗；量到的鍵是 `RateLimiting:Login:PermitLimit`、
+  `RateLimiting:LoginConcurrency:PermitLimit`、`Query:MaxLimit` 與 `Api:MaxJsonBodyBytes`
+  （[第 4 章](04-configuration.md)）。
+- 用 cookie 認證、少了 `X-Struo-CSRF` 標頭的 `POST /graphql`，回的是 GraphQL 的 `errors` 形狀：
+  `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`。先前回的是 REST 的
+  錯誤信封。狀態 `403`、代碼與訊息都不變（[第 14 章](14-graphql.md#錯誤形狀)）。
+- 角色表單上停用的「刪除」按鈕，停用的理由顯示成頁面上的一則說明，按鈕以 `aria-describedby` 指向
+  它。先前理由只放在按鈕的 `title`，而停用的按鈕不接收滑鼠事件，所以看不到。
+- 儲存權限時，別人已經改過這個角色（`409`）：表單沒有未儲存的編輯時，表單換成最新的內容，並顯示
+  一則講權限的提示，權限儲存成功或重新載入後提示就消失。先前顯示的是「此項目已被他人變更」，權限
+  儲存成功之後還留著。表單有未儲存的編輯時，維持項目的衝突提示。
+- 儲存遇到衝突時，衝突提示會取得鍵盤焦點（項目表單、權限、還原、媒體檔案對話框）。先前在項目表單
+  與媒體檔案對話框，焦點落在頁面本體。
+- 網址裡的項目 id 不是合法的 id 時，表單頁顯示一句說明、伺服器回的訊息與返回列表的按鈕。先前顯示
+  「編輯」的表頭與伺服器的英文句子。找不到集合、找不到項目的頁面也各有一個返回的按鈕。
+- 使用者表單的權杖區塊與它的訊息一律稱「API 存取權杖」（英文介面是 `API access token`），和密碼
+  區塊一致（[第 16 章](16-authentication.md)）。
+- 媒體庫載入時，結果區標示 `aria-busy`，第一次載入顯示載入中的文字。
+- 媒體縮圖旁邊已經有檔名時，圖片的替代文字留空，不重複檔名。
+- 繁體中文介面的句子一律用全形標點，共 40 個字串。
+
 ## 0.34.0 — 2026-11-25
 
 ::: danger 破壞性變更

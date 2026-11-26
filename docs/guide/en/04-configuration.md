@@ -118,6 +118,11 @@ configuration they have no effect, and startup logs a warning for each, for exam
 [07:39:45 WRN]  The configuration key Database:MigrationsPath is not used: migrations are code in the scanned assemblies and are applied with the 'migrate' command. <s:Struo.Startup>
 ```
 
+Settings bound with `ValidateOnStart` are validated before this part: with an invalid value the
+host fails to start before it connects to the database, and `MigrateOnStartup` applies no
+migration. A command-line command does not run that whole round; it validates the settings it
+reads.
+
 The database part of startup runs in this order:
 
 1. Log a warning for each of those two unused keys present in the configuration.

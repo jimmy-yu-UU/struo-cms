@@ -78,8 +78,10 @@ const item = {
 
 type MountFile = { id: string; fileName: string; contentType: string; size: number } | null
 
-function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelete?: boolean } = {}, plugin: typeof i18n = i18n) {
+function mountDialog(overrides: { file?: MountFile; canWrite?: boolean; canDelete?: boolean } = {}, plugin: typeof i18n = i18n,
+  attachTo?: HTMLElement) {
   return mount(MediaDetailDialog, {
+    attachTo,
     props: {
       file: { id: 'f1', fileName: 'a.png', contentType: 'image/png', size: 1024 },
       canWrite: true,
@@ -490,6 +492,18 @@ describe('MediaDetailDialog', () => {
     expect('folderId' in payload).toBe(false)
   })
 
+  it('describes the preview with the file alt text, or the file name when it has none', async () => {
+    vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    const w = mountDialog()
+    await flushPromises()
+    expect(w.get('.md-preview img').attributes('alt')).toBe('An image')
+
+    vi.spyOn(itemsApi, 'get').mockResolvedValue({ ...item, translations: { en: { title: 'Hello', alt: '' }, 'zh-TW': { title: '', alt: '' } } } as never)
+    const empty = mountDialog()
+    await flushPromises()
+    expect(empty.get('.md-preview img').attributes('alt')).toBe('a.png')
+  })
+
   // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
   // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
   // not cosmetic: without a description, assistive tech follows a dangling reference.
@@ -717,6 +731,24 @@ describe('MediaDetailDialog save conflict', () => {
     await flushPromises()
     return { w, vm, get, update }
   }
+
+  it('moves focus to the conflict notice, inside the dialog, after a 409', async () => {
+    const container = document.body.appendChild(document.createElement('div'))
+    const get = vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
+    vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(conflictErr())
+    const w = mountDialog({}, i18n, container)
+    await flushPromises()
+    const vm = w.vm as unknown as ConflictVm
+    vm.setField('title', 'Mine')
+    await vm.onSave()
+    await flushPromises()
+    const notice = w.get('.md-conflict')
+    expect(notice.attributes('tabindex')).toBe('-1')
+    expect(document.activeElement).toBe(notice.element)
+    expect(get).toHaveBeenCalled()
+    w.unmount()
+    container.remove()
+  })
 
   it('shows the overwrite notice (zh-TW) with a reload button after a 409', async () => {
     const { w } = await mountConflicted(realI18n('zh-TW'))

@@ -492,7 +492,9 @@ carries one of the stable codes listed in [Chapter 12](12-rest-conventions.md#er
 status `200`; a document that fails before any resolver runs has no `data` key, carries no code or
 only a code of the GraphQL server itself, and its status changes with `Accept`. A malformed request
 is the exception, described in the next paragraph: it carries `BAD_USER_INPUT` and its status is
-`400`.
+`400`. A value that is not a number where a number is expected, written as a literal or passed in a
+variable, is refused before any resolver runs as well: no `data` key, `BAD_USER_INPUT`, and a status
+that changes with `Accept`.
 
 A `POST` whose JSON body the server cannot read as a GraphQL request is answered with HTTP `400`
 with no `Accept` header, with `*/*` and with `application/json`, with no `data` key and one error
@@ -527,6 +529,14 @@ A `multipart/form-data` request to `/graphql` is refused before its body is read
 and one error with `BAD_USER_INPUT` and the message
 `GraphQL does not accept multipart requests; upload a file through POST /api/files.`. Files go
 through the REST endpoint described in [Chapter 15](15-files-and-media.md).
+
+A request stopped before it reaches the GraphQL server is answered in the `errors` shape too, with
+no `data` key, with the status, code and message REST gives the same refusal, and with
+`Content-Type: application/json`. A cookie-authenticated `POST` without the `X-Struo-CSRF` header
+is HTTP `403` with `FORBIDDEN` and the message `Missing required 'X-Struo-CSRF' header.`. A failure
+of the server at this stage, such as a credential store that cannot be reached during
+authentication, is HTTP `500` with `INTERNAL_SERVER_ERROR` and the masked message, logged at error
+level.
 
 The messages the shared validator raises for the `sort` argument and for relation paths — an unknown
 field, an unknown relation, a sort across a to-many relation, a `sort` or `filter` path or a
