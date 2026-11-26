@@ -53,7 +53,7 @@ public sealed class JsonBodyLimitMiddleware(
             return;
         }
 
-        var isGraphQl = IsGraphQl(context.Request);
+        var isGraphQl = GraphQlTransportError.IsGraphQl(context.Request);
         if (isGraphQl && await RefuseGraphQlRequestShapeAsync(context)) return;
 
         if (context.Request.ContentLength > _limit)
@@ -79,12 +79,12 @@ public sealed class JsonBodyLimitMiddleware(
     {
         if (IsMultipartFormData(context.Request.ContentType))
         {
-            await WriteGraphQlErrorAsync(context, StatusCodes.Status415UnsupportedMediaType,
+            await GraphQlTransportError.WriteAsync(context, StatusCodes.Status415UnsupportedMediaType,
                 ErrorCodes.BadUserInput, MultipartMessage);
             return true;
         }
         if (GraphQlQueryStringCheck.Problem(context.Request) is not { } problem) return false;
-        await WriteGraphQlErrorAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
+        await GraphQlTransportError.WriteAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
         return true;
     }
 
@@ -151,32 +151,13 @@ public sealed class JsonBodyLimitMiddleware(
         status switch
         {
             StatusCodes.Status413PayloadTooLarge =>
-                WriteGraphQlErrorAsync(context, status, ErrorCodes.PayloadTooLarge, TooLargeMessage),
+                GraphQlTransportError.WriteAsync(context, status, ErrorCodes.PayloadTooLarge, TooLargeMessage),
             StatusCodes.Status500InternalServerError =>
-                WriteGraphQlErrorAsync(context, status, ErrorCodes.Internal, DomainErrorMap.InternalErrorMessage),
-            _ => WriteGraphQlErrorAsync(context, status, ErrorCodes.BadUserInput, UnreadableBodyMessage),
+                GraphQlTransportError.WriteAsync(context, status, ErrorCodes.Internal, DomainErrorMap.InternalErrorMessage),
+            _ => GraphQlTransportError.WriteAsync(context, status, ErrorCodes.BadUserInput, UnreadableBodyMessage),
         };
 
-    private static Task WriteGraphQlErrorAsync(HttpContext context, int status, string code, string message)
-    {
-        context.Response.StatusCode = status;
-        var error = new Dictionary<string, object?>
-        {
-            ["message"] = message,
-            ["extensions"] = new Dictionary<string, object?>
-            {
-                ["code"] = code,
-                ["traceId"] = RequestTraceId.For(context),
-            },
-        };
-        return context.Response.WriteAsJsonAsync(
-            new Dictionary<string, object?> { ["errors"] = new[] { error } }, context.RequestAborted);
-    }
-
-    internal static bool IsCapped(HttpRequest request) => IsGraphQl(request) || IsJson(request.ContentType);
-
-    private static bool IsGraphQl(HttpRequest request) =>
-        request.Path.StartsWithSegments("/graphql", StringComparison.OrdinalIgnoreCase);
+    internal static bool IsCapped(HttpRequest request) => GraphQlTransportError.IsGraphQl(request) || IsJson(request.ContentType);
 
     private static string MediaTypeOf(string? contentType) => (contentType ?? "").Split(';', 2)[0].Trim();
 
