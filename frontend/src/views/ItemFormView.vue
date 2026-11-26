@@ -262,7 +262,8 @@ async function init(): Promise<void> {
         captureSavedRole()
       if (name.value === USER_COLLECTION) void captureSavedUser(id.value!)
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
+      // A 400 means the id in the URL is not a valid id for this collection: the item cannot exist.
+      if (e instanceof ApiError && (e.code === 'NOT_FOUND' || e.status === 400)) notFound.value = true
       else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
     }
   }
@@ -533,6 +534,10 @@ async function deleteAfterConfirm(): Promise<void> {
   }
 }
 
+function onBackToDashboard(): void {
+  void router.push({ name: 'dashboard' })
+}
+
 function onCancel(): void {
   // Routes back — naturally intercepted by the leave guard below, so no extra prompt here.
   void router.push({ name: 'collection-list', params: { name: name.value } })
@@ -583,8 +588,14 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
 <template>
   <section class="item-form-view grid gap-1">
     <p v-if="loading" class="text-muted-foreground">{{ t('itemForm.loading') }}</p>
-    <p v-else-if="!meta" class="text-muted-foreground">{{ t('itemForm.collectionNotFound') }}</p>
-    <p v-else-if="notFound" class="text-muted-foreground">{{ t('itemForm.itemNotFound') }}</p>
+    <div v-else-if="!meta" class="grid justify-items-start gap-3">
+      <p class="text-muted-foreground">{{ t('itemForm.collectionNotFound') }}</p>
+      <Button type="button" variant="outline" @click="onBackToDashboard">{{ t('itemForm.backToDashboard') }}</Button>
+    </div>
+    <div v-else-if="notFound" class="grid justify-items-start gap-3">
+      <p class="text-muted-foreground">{{ t('itemForm.itemNotFound') }}</p>
+      <Button type="button" variant="outline" @click="onCancel">{{ t('itemForm.back') }}</Button>
+    </div>
     <p v-else-if="isCreate && !canWrite" class="text-muted-foreground">{{ t('itemForm.noCreatePermission') }}</p>
     <template v-else>
       <PageHeader :title="isCreate ? t('itemForm.new', { label: meta.label }) : t('itemForm.edit', { label: meta.label })">

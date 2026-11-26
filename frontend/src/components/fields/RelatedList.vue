@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { itemsApi } from '../../api/itemsApi'
@@ -26,6 +26,8 @@ const perPage = ref(10)
 // True from the first render when onMounted's load will run, so the table never shows its empty message first.
 const loading = ref(Boolean(props.parentId && props.relation.foreignKey))
 const error = ref('')
+// False until a list response has supplied `total`, so the pager's range text stays blank rather than reading 0.
+const totalKnown = ref(false)
 
 const targetMeta = computed(() => schema.get(props.relation.targetCollection))
 
@@ -53,6 +55,7 @@ async function load(): Promise<void> {
       label: tm ? resolveDisplayLabel(r, props.relation, tm, langStore.defaultCode) : String(r.id),
     }))
     total.value = res.total
+    totalKnown.value = true
   } catch (e) {
     if (!loadGuard.isCurrent(token)) return
     error.value = e instanceof Error ? e.message : t('fields.relatedLoadFailed')
@@ -106,6 +109,13 @@ const columns = computed<DataTableColumn<Row>[]>(() => [{
   }, () => row.original.label),
 }])
 
+// A different parent or relation is a different list: its total is unknown until it loads.
+watch(() => [props.parentId, props.relation.targetCollection, props.relation.foreignKey], () => {
+  totalKnown.value = false
+  page.value = 0
+  void load()
+})
+
 onMounted(load)
 defineExpose({ load, onPage, rows, total, loading, error })
 </script>
@@ -130,6 +140,7 @@ defineExpose({ load, onPage, rows, total, loading, error })
         :page-size="perPage"
         :total="total"
         :show-page-size-selector="false"
+        :ready="totalKnown"
         @update:page="onPage"
         @update:page-size="onPageSize"
       />

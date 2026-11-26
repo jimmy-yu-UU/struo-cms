@@ -88,6 +88,7 @@ const i18n = createI18n({
     loading: 'Loading…', collectionNotFound: 'Collection not found', itemNotFound: 'Item not found',
     noCreatePermission: "You don't have permission to create items here",
     new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', saving: 'Saving…', back: 'Back to list',
+    backToDashboard: 'Back to dashboard',
     translatableBadge: 'Translatable',
     conflictText: 'This item was changed by someone else.', reloadLatest: 'Reload latest',
     savedNotOpened: 'Saved, but the page could not be opened.',
@@ -340,6 +341,57 @@ describe('ItemFormView', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('treats a 400 for the route id as not-found and shows no server sentence', async () => {
+    routeParams = { name: 'article', id: 'abc' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(400, "The value 'abc' is not valid.", 'BAD_USER_INPUT'))
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    expect((w.vm as any).notFound).toBe(true)
+    expect((w.vm as any).serverError).toBe('')
+    expect(w.text()).toContain('Item not found')
+    expect(w.text()).not.toContain('is not valid')
+    expect(w.text()).not.toContain('Edit Article')
+  })
+
+  it.each([403, 500])('keeps the server sentence on the edit form for a %i load error', async (status) => {
+    routeParams = { name: 'article', id: '5' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(status, 'Nope', 'X'))
+    const w = mountView()
+    await w.vm.init()
+    expect((w.vm as any).notFound).toBe(false)
+    expect((w.vm as any).serverError).toBe('Nope')
+  })
+
+  it('offers a way back to the list from the item-not-found state', async () => {
+    routeParams = { name: 'article', id: '404' }
+    setupStores()
+    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(404, 'gone', 'NOT_FOUND'))
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    const back = w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Back to list')
+    expect(back).toBeDefined()
+    await back!.vm.$emit('click')
+    expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
+  })
+
+  it('offers a way back to the dashboard from the collection-not-found state', async () => {
+    routeParams = { name: 'nope', id: '5' }
+    const { schema } = setupStores()
+    ;(schema.get as any).mockReturnValue(undefined)
+    const w = mountView()
+    await w.vm.init()
+    await flushPromises()
+    expect(w.text()).toContain('Collection not found')
+    const back = w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Back to dashboard')
+    expect(back).toBeDefined()
+    await back!.vm.$emit('click')
+    expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 
   it('shows serverError (not notFound) on a non-404 load error', async () => {
@@ -1764,7 +1816,7 @@ describe('ItemFormView', () => {
       expect(buttonByText(w, 'Save')!.attributes('aria-describedby')).toBeUndefined()
     })
 
-    it('shows the lock reason once and points both disabled buttons at it when the hints are the same sentence', async () => {
+    it('shows the lock reason as a single note and points both disabled buttons at it when the hints are the same sentence', async () => {
       const w = await mountUserEdit({ user: { read: true, write: true, delete: true } }, true)
       const notes = noteWith(w, 'Super-admin account: only a super-admin can change it.')
       expect(notes).toHaveLength(1)

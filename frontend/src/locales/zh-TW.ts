@@ -211,6 +211,7 @@ export default {
     save: '儲存',
     saving: '儲存中…',
     back: '返回列表',
+    backToDashboard: '回到儀表板',
     translatableBadge: '多語系',
     translatableBadgeHint: '此欄位每個語言各存一份值，切換上方語言即可分別編輯',
     localeComplete: '已有內容',

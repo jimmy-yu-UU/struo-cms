@@ -638,6 +638,7 @@ defineExpose({ load, reload, onType, onSort, onPageChange, onPageSizeChange, onS
 
     <DataTablePagination
       v-if="total > 0"
+      :ready="true"
       :page="page"
       :page-size="perPage"
       :total="total"

@@ -211,6 +211,7 @@ export default {
     save: 'Save',
     saving: 'Saving…',
     back: 'Back to list',
+    backToDashboard: 'Back to dashboard',
     translatableBadge: 'Per language',
     translatableBadgeHint: 'This field keeps one value per language; switch the language above to edit each.',
     localeComplete: 'Has content',
