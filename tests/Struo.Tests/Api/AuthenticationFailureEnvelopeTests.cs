@@ -92,6 +92,7 @@ public class AuthenticationFailureEnvelopeTests(ApiFactory factory)
 
         var body = await response.Content.ReadAsStringAsync();
         response.StatusCode.Should().Be(HttpStatusCode.InternalServerError, body);
+        response.Content.Headers.ContentType?.MediaType.Should().Be("application/json");
         using var doc = JsonDocument.Parse(body);
         doc.RootElement.TryGetProperty("success", out _).Should().BeFalse(body);
         doc.RootElement.TryGetProperty("error", out _).Should().BeFalse(body);

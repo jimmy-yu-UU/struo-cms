@@ -53,6 +53,7 @@ public class CsrfProtectionTests(ApiFactory factory)
 
         var text = await resp.Content.ReadAsStringAsync();
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden, text);
+        resp.Content.Headers.ContentType?.MediaType.Should().Be("application/json");
         var root = Root(text);
         root.TryGetProperty("success", out _).Should().BeFalse(text);
         root.TryGetProperty("error", out _).Should().BeFalse(text);
