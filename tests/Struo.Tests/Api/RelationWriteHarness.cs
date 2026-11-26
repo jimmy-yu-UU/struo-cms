@@ -1,7 +1,9 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Infrastructure.Files;
@@ -40,6 +42,22 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         Missing => MissingId,
         _ => MalformedId,
     };
+
+    /// <summary>Every outcome is the read refusal on <paramref name="target"/>, and no two bodies differ.</summary>
+    public static void AssertRefusedAlike(IReadOnlyList<WriteOutcome> outcomes, string channel, string target)
+    {
+        foreach (var outcome in outcomes)
+        {
+            outcome.Code.Should().Be("FORBIDDEN", outcome.Body);
+            outcome.Message.Should().Be($"Read not permitted on '{target}'.");
+            if (channel == Rest) outcome.Status.Should().Be(HttpStatusCode.Forbidden);
+        }
+        outcomes.Select(o => o.Body).Distinct().Should().ContainSingle("the answer must not tell the ids apart");
+    }
+
+    /// <summary>The write was accepted.</summary>
+    public static void AssertWritten(WriteOutcome outcome) =>
+        outcome.Code.Should().BeNull($"the write should succeed: {outcome.Body}");
 
     public async Task<HttpClient> CallerAsync(string[] read, string[] write) =>
         (await factory.CreateEditorClientAsync(read, write)).client;
@@ -119,6 +137,41 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         return Guid.Parse(root.GetProperty("data").GetProperty("id").GetString()!);
     }
 
+    /// <summary>An article-tag junction row, inserted directly.</summary>
+    public async Task<Guid> SeedLinkAsync(Guid article, Guid tag) => await WithDbAsync(async db =>
+    {
+        var id = Guid.CreateVersion7();
+        await db.Insertable(new FxArticleTag { Id = id, ArticleId = article, TagId = tag }).ExecuteCommandAsync();
+        return id;
+    });
+
+    /// <summary>A user-role junction row, inserted directly.</summary>
+    public async Task<Guid> SeedUserRoleAsync(Guid user, Guid role) => await WithDbAsync(async db =>
+    {
+        var id = Guid.CreateVersion7();
+        await db.Insertable(new UserRole { Id = id, UserId = user, RoleId = role }).ExecuteCommandAsync();
+        return id;
+    });
+
+    public Task<FxArticleTag> LinkAsync(Guid id) =>
+        WithDbAsync(db => db.Queryable<FxArticleTag>().Where(l => l.Id == id).FirstAsync());
+
+    public Task<UserRole> UserRoleAsync(Guid id) =>
+        WithDbAsync(db => db.Queryable<UserRole>().Where(l => l.Id == id).FirstAsync());
+
+    public Task<int> LinkRowCountAsync() => WithDbAsync(db => db.Queryable<FxArticleTag>().CountAsync());
+    public Task<int> UserRoleRowCountAsync() => WithDbAsync(db => db.Queryable<UserRole>().CountAsync());
+
+    /// <summary>How many article translation rows carry the file as their OG image.</summary>
+    public Task<int> OgImageLinksToAsync(Guid file) =>
+        WithDbAsync(db => db.Queryable<FxArticleTranslation>().Where(t => t.SeoOgImageId == file).CountAsync());
+
+    public Task<int> FileCountAsync() =>
+        WithDbAsync(db => db.Queryable<Struo.Infrastructure.Files.File>().CountAsync());
+
+    public Task<int> FilesInFolderAsync(Guid folder) =>
+        WithDbAsync(db => db.Queryable<Struo.Infrastructure.Files.File>().Where(f => f.FolderId == folder).CountAsync());
+
     public Task<int> ArticleCountAsync() => WithDbAsync(db => db.Queryable<FxArticle>().CountAsync());
     public Task<int> LexiconCountAsync() => WithDbAsync(db => db.Queryable<FxLexicon>().CountAsync());
 
@@ -145,26 +198,48 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     /// </summary>
     public async Task<WriteOutcome> SendAsync(
         HttpClient client, string channel, string collection, Guid? id, Dictionary<string, object?> fields,
-        bool translated = false)
+        bool translated = false, Dictionary<string, object?>? translation = null)
     {
         var body = new Dictionary<string, object?>(fields);
+        var english = EnglishFields(id is null, translated, translation);
         if (channel == Rest)
         {
-            if (translated && id is null) body["translations"] = new { en = new { title = "x" } };
+            if (english is not null) body["translations"] = new Dictionary<string, object?> { ["en"] = english };
             var resp = id is null
                 ? await client.PostAsJsonAsync($"/api/items/{collection}", body)
                 : await client.PutAsJsonAsync($"/api/items/{collection}/{id}", body);
             return await OutcomeAsync(resp, restEnvelope: true);
         }
 
-        if (translated && id is null)
-            body["translations"] = new[] { new { locale = "en", fields = new { title = "x" } } };
+        if (english is not null) body["translations"] = new[] { new { locale = "en", fields = english } };
         var type = Pascal(collection) + (id is null ? "CreateInput" : "UpdateInput");
         var query = id is null
             ? $"mutation($i: {type}!) {{ create{Pascal(collection)}(input: $i) {{ id }} }}"
             : $"mutation($i: {type}!) {{ update{Pascal(collection)}(id: \"{id}\", input: $i) {{ id }} }}";
         var gql = await client.PostAsJsonAsync("/graphql", new { query, variables = new { i = body } });
         return await OutcomeAsync(gql, restEnvelope: false);
+    }
+
+    // The English translation a write carries: the given fields, plus a title on a create of a translated
+    // collection. Null when the write carries no translations.
+    private static Dictionary<string, object?>? EnglishFields(
+        bool create, bool translated, Dictionary<string, object?>? translation)
+    {
+        if (translation is null && !(translated && create)) return null;
+        var english = new Dictionary<string, object?>(translation ?? []);
+        if (create) english.TryAdd("title", "x");
+        return english;
+    }
+
+    /// <summary>One multipart upload of a small text file; <paramref name="folderId"/> is sent as a form field when not null.</summary>
+    public async Task<WriteOutcome> UploadAsync(HttpClient client, string? folderId)
+    {
+        using var content = new ByteArrayContent([1, 2, 3]);
+        content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+        using var form = new MultipartFormDataContent { { content, "file", "upload.txt" } };
+        if (folderId is not null) form.Add(new StringContent(folderId), "folderId");
+        using var resp = await client.PostAsync("/api/files", form);
+        return await OutcomeAsync(resp, restEnvelope: true);
     }
 
     private static JsonElement? ErrorOf(JsonElement root, bool restEnvelope)

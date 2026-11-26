@@ -32,6 +32,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
 {
     private readonly IReadOnlyList<CollectionMetadata> _collections;
     private readonly Dictionary<string, IReadOnlyList<RelationDescriptor>> _byCollection;
+    private readonly Dictionary<string, IReadOnlyList<JunctionKeyLink>> _junctionLinks;
     private readonly Dictionary<string, IReadOnlyList<(string, string)>> _inboundRestrict;
     private readonly Dictionary<string, IReadOnlyList<(string, string)>> _inboundSetNull;
     private readonly Dictionary<string, IReadOnlyList<(string, string)>> _inboundCascade;
@@ -94,6 +95,7 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
         }
 
         _byCollection = map;
+        _junctionLinks = BuildJunctionKeyLinks(map);
         _inboundRestrict = Freeze(inboundRestrict);
         _inboundSetNull = Freeze(inboundSetNull);
         _inboundCascade = Freeze(inboundCascade);
@@ -187,7 +189,25 @@ public sealed class RelationshipGraph : IRelationshipGraph, IM2MDescriptorSource
                     d.JunctionPayload))))
             .ToList();
 
+    public IReadOnlyList<JunctionKeyLink> JunctionKeyLinks(string junctionCollection) =>
+        _junctionLinks.TryGetValue(junctionCollection, out var links) ? links : [];
+
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    // Keyed by the junction collection; the owner of each many-to-many is the collection that declares it.
+    private static Dictionary<string, IReadOnlyList<JunctionKeyLink>> BuildJunctionKeyLinks(
+        Dictionary<string, IReadOnlyList<RelationDescriptor>> byCollection) =>
+        byCollection
+            .SelectMany(kv => kv.Value
+                .Where(d => d.JunctionCollection is not null && d.JunctionParentFk is not null && d.JunctionTargetFk is not null)
+                .Select(d => (
+                    Junction: d.JunctionCollection!,
+                    Link: new JunctionKeyLink(d.JunctionParentFk!, kv.Key, d.JunctionTargetFk!, d.Meta.TargetCollection))))
+            .GroupBy(x => x.Junction, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<JunctionKeyLink>)g.Select(x => x.Link).ToList(),
+                StringComparer.OrdinalIgnoreCase);
 
     private RelationDescriptor BuildDescriptor(Type entityType, RelationMetadata r)
     {

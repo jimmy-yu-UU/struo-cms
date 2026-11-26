@@ -18,6 +18,8 @@ public sealed class FileAccessPolicy(
 
     public bool CanDelete() => permissions.CanDelete(FileCollection.Name);
 
+    public bool CanReadFolders() => permissions.CanRead(FileCollection.FolderName);
+
     /// <summary>
     /// May the current caller read a NON-published file? Requires both (a) an authenticated identity
     /// and (b) a <c>CanWrite("file")</c> grant.

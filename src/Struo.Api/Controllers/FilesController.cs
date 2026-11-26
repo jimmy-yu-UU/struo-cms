@@ -41,6 +41,9 @@ public sealed class FilesController(
         var folderRaw = form["folderId"].ToString();
         if (!string.IsNullOrEmpty(folderRaw))
         {
+            // The folder id links a mediaFolder row: it needs read on mediaFolder, decided before the id is parsed or looked up.
+            if (!access.CanReadFolders())
+                throw Struo.Application.Query.RelationTargetReadGuard.ReadDenied(FileCollection.FolderName);
             if (!Guid.TryParse(folderRaw, out var parsedFolder))
                 return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Invalid 'folderId'.");
             folderId = parsedFolder;

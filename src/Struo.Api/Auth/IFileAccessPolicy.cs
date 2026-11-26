@@ -15,6 +15,9 @@ public interface IFileAccessPolicy
 
     bool CanDelete();
 
+    /// <summary>May the current caller read the media folders a file's <c>folderId</c> links?</summary>
+    bool CanReadFolders();
+
     /// <summary>
     /// May the current caller read a NON-published file? Requires both (a) an authenticated identity
     /// and (b) a <c>CanWrite("file")</c> grant. See

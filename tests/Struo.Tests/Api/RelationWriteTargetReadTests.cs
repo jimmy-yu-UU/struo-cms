@@ -1,4 +1,3 @@
-using System.Net;
 using AwesomeAssertions;
 using Struo.Tests.Support;
 using Xunit;
@@ -12,27 +11,12 @@ namespace Struo.Tests.Api;
 [Collection("ApiIntegration")]
 public class RelationWriteTargetReadTests(ApiFactory factory)
 {
-    private const string Forbidden = "FORBIDDEN";
     private const string TagsKey = "tags";
     private const string GlossaryKey = "glossaryId";
     private const string Article = "fxArticle";
     private const string Lexicon = "fxLexicon";
 
     private readonly RelationWriteHarness h = new(factory);
-
-    private static void AssertRefusedAlike(IReadOnlyList<WriteOutcome> outcomes, string channel, string target)
-    {
-        foreach (var outcome in outcomes)
-        {
-            outcome.Code.Should().Be(Forbidden);
-            outcome.Message.Should().Be($"Read not permitted on '{target}'.");
-            if (channel == Rest) outcome.Status.Should().Be(HttpStatusCode.Forbidden);
-        }
-        outcomes.Select(o => o.Body).Distinct().Should().ContainSingle("the answer must not tell the ids apart");
-    }
-
-    private static void AssertWritten(WriteOutcome outcome) =>
-        outcome.Code.Should().BeNull($"the write should succeed: {outcome.Body}");
 
     private async Task<(HttpClient Client, Guid Tag)> TagCallerAsync(bool readsTag)
     {

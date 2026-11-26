@@ -42,6 +42,13 @@ public sealed record M2MDescriptor(
 public sealed record InboundM2MDescriptor(string SourceCollection, M2MDescriptor Descriptor);
 
 /// <summary>
+/// The two keys of a junction collection that carries a many-to-many: the CLR property that holds the owning
+/// collection's id and the one that holds the target collection's id, with the collection each one points at.
+/// </summary>
+public sealed record JunctionKeyLink(
+    string ParentKeyProperty, string ParentCollection, string TargetKeyProperty, string TargetCollection);
+
+/// <summary>
 /// Returns the M2M junction descriptors for a collection. Implemented by
 /// <c>RelationshipGraph</c> (Infrastructure) and injected into <see cref="Struo.Application.Query.ItemService"/>.
 /// </summary>
@@ -54,4 +61,10 @@ public interface IM2MDescriptorSource
     /// Default empty for any implementer that predates this addition.
     /// </summary>
     IReadOnlyList<InboundM2MDescriptor> InboundM2MDescriptors(string targetCollection) => [];
+
+    /// <summary>
+    /// The many-to-many relations that run through <paramref name="junctionCollection"/>, a junction that is
+    /// itself a collection, as the two keys it holds. Empty for a collection that is no such junction.
+    /// </summary>
+    IReadOnlyList<JunctionKeyLink> JunctionKeyLinks(string junctionCollection) => [];
 }

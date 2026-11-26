@@ -58,7 +58,7 @@ public sealed class ItemService(
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
     private readonly RelationTargetReadGuard relationTargets = new(m2mSource, permissions);
-    private readonly ItemPurgePipeline purge =new(repository, metadata, registry, graph, m2mSource, revisions);
+    private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
