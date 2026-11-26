@@ -51,7 +51,7 @@ public sealed class FieldSetterCheckTests
     private sealed class ExpressionBodied
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        [CmsField(Label = "X", Interface = FieldInterface.Text)] public string X => "x";
+        [CmsField(Label = "X", Interface = FieldInterface.Text)] public string X => Id.ToString();
     }
 
     [CmsCollection("Fsc ignored", Name = "fscIgnored")]
@@ -81,7 +81,7 @@ public sealed class FieldSetterCheckTests
         [CmsField(Label = "Internal", Interface = FieldInterface.Text, ReadOnly = true)] public string? Internal { get; internal set; }
         [CmsField(Label = "Private", Interface = FieldInterface.Text, ReadOnly = true)] public string? Private { get; private set; }
         [CmsField(Label = "Bare", Interface = FieldInterface.Text, ReadOnly = true)] public string? Bare { get; }
-        [CmsField(Label = "Expression", Interface = FieldInterface.Text, ReadOnly = true)] public string Expression => "x";
+        [CmsField(Label = "Expression", Interface = FieldInterface.Text, ReadOnly = true)] public string Expression => Id.ToString();
     }
 
     // ── translation classes ──
