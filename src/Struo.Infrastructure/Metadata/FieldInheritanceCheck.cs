@@ -40,9 +40,7 @@ internal static class FieldInheritanceCheck
         DeclaredProperties.Hierarchy(type)
             .TakeWhile(t => t != prop.DeclaringType)
             .SelectMany(DeclaredProperties.DeclaredOn)
-            .FirstOrDefault(p => p.Name == prop.Name)
-        ?? throw new InvalidOperationException(
-            $"Field '{prop.DeclaringType!.Name}.{prop.Name}' is not served and no member replaces it.");
+            .First(p => p.Name == prop.Name);
 
     private static MetadataException Refusal(PropertyInfo prop, PropertyInfo replacement)
     {

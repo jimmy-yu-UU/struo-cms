@@ -303,6 +303,13 @@ public sealed class ColumnOverrideCheckTests
         public override string X { get; set; } = "";
     }
 
+    [CmsCollection("Coc leaf both without", Name = "cocLeafBothWithout")]
+    private sealed class LeafWithoutOverMiddleWithout : MiddleWithout
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override string X { get; set; } = "";
+    }
+
     [CmsCollection("Coc sibling", Name = "cocSibling")]
     private sealed class SiblingInheritingMiddle : MiddleWithout
     {
@@ -365,6 +372,7 @@ public sealed class ColumnOverrideCheckTests
     public static TheoryData<Type[], string, string> Refused() => new()
     {
         { [typeof(LeafWithoutOverMiddleRepeats)], "LeafWithoutOverMiddleRepeats.X", "MiddleRepeats.X" },
+        { [typeof(LeafWithoutOverMiddleWithout)], "LeafWithoutOverMiddleWithout.X", "RootColumn.X" },
         { [typeof(OverridesGenericBase)], "OverridesGenericBase.Note", "GenericBase`1.Note" },
         { [typeof(GetOnlyOverride)], "GetOnlyOverride.Note", "NullableBase.Note" },
         { [typeof(TrKeyParent)], "TrKeyOverride.Id", "PrimaryKeyBase.Id" },
