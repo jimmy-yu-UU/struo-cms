@@ -10,6 +10,9 @@ namespace Struo.Api.Auth;
 /// credentialed request unless the target's CORS policy allows its origin (the browser blocks the
 /// pre-flight), so a forged request from an untrusted origin never reaches the controller.
 ///
+/// The refusal is the 403 error envelope, or a 403 GraphQL error for a request to <c>/graphql</c> or a
+/// path under it.
+///
 /// Exemptions: safe methods (GET/HEAD/OPTIONS/TRACE); Bearer-token requests (no ambient cookie, so
 /// not forgeable); and requests with no session cookie (e.g. POST /api/auth/login before a session
 /// exists — those are already CORS-guarded by their JSON content type triggering a pre-flight).
@@ -28,13 +31,21 @@ public sealed class CsrfProtectionMiddleware(RequestDelegate next, SessionCookie
     {
         if (RequiresCsrfHeader(context))
         {
+            var message = $"Missing required '{HeaderName}' header.";
+            if (GraphQlTransportError.IsGraphQl(context.Request))
+            {
+                await GraphQlTransportError.WriteAsync(
+                    context, StatusCodes.Status403Forbidden, ErrorCodes.Forbidden, message);
+                return;
+            }
+
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             // This middleware runs before MVC, so EnvelopeResultFilter never sees this
             // response; the camelCase envelope must be written by hand via the shared options
             // (see EnvelopeJsonOptionsHolder) rather than relying on WriteAsJsonAsync's default
             // (non-camelCase) HttpResponseJsonOptions.
             await context.Response.WriteAsJsonAsync(
-                Envelope.Error(ErrorCodes.Forbidden, $"Missing required '{HeaderName}' header.",
+                Envelope.Error(ErrorCodes.Forbidden, message,
                     traceId: RequestTraceId.For(context)),
                 EnvelopeJsonOptionsHolder.Instance,
                 context.RequestAborted);
