@@ -65,6 +65,28 @@ public class FileSoftDeleteEndpointTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Purge_true_on_a_live_file_removes_its_content_and_blob()
+    {
+        var before = BlobsOnDisk().ToHashSet();
+        var client = await _factory.CreateAuthenticatedClientAsync();
+        var id = await UploadAsync(client, "purge-live.txt");
+        var blobPath = BlobsOnDisk().Except(before).Single();
+
+        (await client.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.OK);
+        System.IO.File.Exists(blobPath).Should().BeTrue();
+
+        (await client.DeleteAsync($"/api/files/{id}?purge=true")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        (await client.GetAsync($"/api/files/{id}/content")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        System.IO.File.Exists(blobPath).Should().BeFalse();
+    }
+
+    private string[] BlobsOnDisk() =>
+        Directory.Exists(_factory.FilesRoot)
+            ? Directory.GetFiles(_factory.FilesRoot, "*", SearchOption.AllDirectories)
+            : [];
+
+    [Fact]
     public async Task Delete_unknown_id_is_404()
     {
         var client = await _factory.CreateAuthenticatedClientAsync();
