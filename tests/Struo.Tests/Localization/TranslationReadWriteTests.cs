@@ -173,18 +173,9 @@ public class TranslationReadWriteTests(ApiFactory factory)
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
 
-        // Create article with a random (non-existent) file id
-        var danglingId = Guid.NewGuid();
-        var body = System.Text.Json.JsonSerializer.SerializeToElement(new
-        {
-            status = "draft",
-            translations = new Dictionary<string, object>
-            {
-                ["en"] = new { title = "Dangling", seoOgImageId = danglingId }
-            }
-        });
-        var articleId = Root(await (await c.PostAsJsonAsync("/api/items/fxArticle", body)).Content.ReadAsStringAsync())
-            .GetProperty("data").GetProperty("id").GetString()!;
+        // An article stored with the id of a file that does not exist
+        var articleId = (await new Struo.Tests.Api.RelationWriteHarness(_factory)
+            .SeedDanglingArticleAsync(Guid.NewGuid())).ToString();
 
         // GET → seoOgImage must be null, no throw
         var tr = Root(await (await c.GetAsync($"/api/items/fxArticle/{articleId}")).Content.ReadAsStringAsync())
