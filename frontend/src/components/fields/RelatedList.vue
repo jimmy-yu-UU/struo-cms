@@ -110,7 +110,12 @@ const columns = computed<DataTableColumn<Row>[]>(() => [{
 }])
 
 // A different parent or relation is a different list: its total is unknown until it loads.
-watch(() => [props.parentId, props.relation.targetCollection, props.relation.foreignKey], () => {
+// A response still in flight for the previous list is dropped, and its rows are not shown meanwhile.
+watch([() => props.parentId, () => props.relation.targetCollection, () => props.relation.foreignKey], () => {
+  loadGuard.next()
+  rows.value = []
+  total.value = 0
+  loading.value = false
   totalKnown.value = false
   page.value = 0
   void load()

@@ -227,6 +227,35 @@ describe('RevisionHistoryDrawer', () => {
     expect(toastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ severity: 'error' }))
   })
 
+  describe('focus when the sheet closes', () => {
+    const closeEvent = () => ({ preventDefault: vi.fn() })
+    const emitClose = (w: ReturnType<typeof mountDrawer>, ev: ReturnType<typeof closeEvent>) =>
+      w.findComponent({ name: 'SheetContent' }).vm.$emit('closeAutoFocus', ev)
+
+    it('is left to the trigger after a normal close', async () => {
+      vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+      const w = mountDrawer()
+      await flushPromises()
+      const ev = closeEvent()
+      emitClose(w, ev)
+      expect(ev.preventDefault).not.toHaveBeenCalled()
+    })
+
+    it('is not returned to the trigger after a revert conflict, once', async () => {
+      vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+      vi.spyOn(itemsApi, 'revert').mockRejectedValue(new ApiError(409, 'stale', 'VERSION_CONFLICT'))
+      const w = mountDrawer({ version: 4 })
+      await flushPromises()
+      await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
+      const first = closeEvent()
+      emitClose(w, first)
+      expect(first.preventDefault).toHaveBeenCalledTimes(1)
+      const second = closeEvent()
+      emitClose(w, second)
+      expect(second.preventDefault).not.toHaveBeenCalled()
+    })
+  })
+
   it('onRevert adds the trace id to the toast of a server fault', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     vi.spyOn(itemsApi, 'revert').mockRejectedValue(new ApiError(500, 'x', 'INTERNAL_SERVER_ERROR', undefined, undefined, 'abc123'))

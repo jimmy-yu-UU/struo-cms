@@ -86,6 +86,7 @@ const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
   messages: { en: { itemForm: {
     loading: 'Loading…', collectionNotFound: 'Collection not found', itemNotFound: 'Item not found',
+    itemLoadRejected: 'This item could not be loaded. The address may contain an id that is not valid.',
     noCreatePermission: "You don't have permission to create items here",
     new: 'New {label}', edit: 'Edit {label}', delete: 'Delete', save: 'Save', saving: 'Saving…', back: 'Back to list',
     backToDashboard: 'Back to dashboard',
@@ -343,18 +344,44 @@ describe('ItemFormView', () => {
     }
   })
 
-  it('treats a 400 for the route id as not-found and shows no server sentence', async () => {
-    routeParams = { name: 'article', id: 'abc' }
-    setupStores()
-    vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(400, "The value 'abc' is not valid.", 'BAD_USER_INPUT'))
-    const w = mountView()
-    await w.vm.init()
-    await flushPromises()
-    expect((w.vm as any).notFound).toBe(true)
-    expect((w.vm as any).serverError).toBe('')
-    expect(w.text()).toContain('Item not found')
-    expect(w.text()).not.toContain('is not valid')
-    expect(w.text()).not.toContain('Edit Article')
+  describe('a 400 on the item load', () => {
+    async function mountRejected(message: string) {
+      routeParams = { name: 'article', id: 'abc' }
+      setupStores()
+      vi.spyOn(itemsApi, 'get').mockRejectedValue(new ApiError(400, message, 'BAD_USER_INPUT'))
+      const w = mountView()
+      await w.vm.init()
+      await flushPromises()
+      return w
+    }
+
+    it('shows the localized sentence, the server detail and a way back, without the edit header', async () => {
+      const w = await mountRejected("Invalid id 'abc' for type 'Guid'.")
+      expect((w.vm as any).notFound).toBe(false)
+      expect(w.text()).toContain('This item could not be loaded.')
+      expect(w.text()).toContain("Invalid id 'abc' for type 'Guid'.")
+      expect(w.text()).not.toContain('Item not found')
+      expect(w.text()).not.toContain('Edit Article')
+      const back = w.findAllComponents({ name: 'Button' }).find((b) => b.text() === 'Back to list')
+      await back!.vm.$emit('click')
+      expect(push).toHaveBeenCalledWith({ name: 'collection-list', params: { name: 'article' } })
+    })
+
+    it('keeps a real defect visible instead of reporting not found', async () => {
+      const w = await mountRejected("Unknown relation 'x' on 'role'.")
+      expect((w.vm as any).notFound).toBe(false)
+      expect(w.text()).toContain("Unknown relation 'x' on 'role'.")
+      expect(w.text()).not.toContain('Item not found')
+    })
+
+    it('is reset by a re-entrant init that loads', async () => {
+      const w = await mountRejected("Invalid id 'abc' for type 'Guid'.")
+      vi.spyOn(itemsApi, 'get').mockResolvedValue({ id: 'abc', status: 'x', translations: {} })
+      await (w.vm as any).init()
+      await flushPromises()
+      expect(w.text()).not.toContain('This item could not be loaded.')
+      expect(w.text()).toContain('Edit Article')
+    })
   })
 
   it.each([403, 500])('keeps the server sentence on the edit form for a %i load error', async (status) => {
@@ -1678,6 +1705,14 @@ describe('ItemFormView', () => {
     expect(w.findComponent(EffectivePermissionsPanel).exists()).toBe(true)
   })
 
+  it('points no token button at a lock note when the page has none', async () => {
+    const w = await mountUserEdit({ user: { read: true, write: false, delete: false } })
+    expect(w.find('[role="note"]').exists()).toBe(false)
+    const buttons = w.findComponent(AccessTokenPanel).findAllComponents({ name: 'Button' })
+    expect(buttons.length).toBeGreaterThan(0)
+    for (const b of buttons) expect(b.attributes('aria-describedby')).toBeUndefined()
+  })
+
   // The server drops a relation the caller cannot read from the item, so a caller without read on
   // `role` gets no `roles` back. An empty selection sent as `?roles=` would preview the public floor
   // and report "no permissions" for a user who has roles; the panel reads the saved roles instead.
@@ -2539,6 +2574,124 @@ describe('ItemFormView', () => {
         await matrixVm.save()
         await flushPromises()
         expect((w.vm as any).conflict).toBe(true)
+      })
+    })
+
+    describe('the conflict recovery fetch', () => {
+      type Item = { id: string; name: string; isSuperAdmin: boolean; version: number }
+      function deferred() {
+        let resolve: (v: Item) => void = () => {}
+        const promise = new Promise<Item>((r) => { resolve = r })
+        return { promise, resolve }
+      }
+      const emitConflict = (w: ReturnType<typeof mountView>) => w.findComponent(PermissionMatrix).vm.$emit('conflict')
+      const item = (name: string, version: number, isSuperAdmin = false): Item => ({ id: 'r1', name, isSuperAdmin, version })
+
+      it('drops a result that arrives after the view moved on to another load', async () => {
+        const { w, get } = await mountRole(3)
+        const late = deferred()
+        get.mockReturnValueOnce(late.promise as never)
+        void emitConflict(w)
+        await flushPromises()
+        get.mockResolvedValueOnce(item('other role', 8) as never)
+        await (w.vm as any).init()
+        await flushPromises()
+        late.resolve(item('stale', 9))
+        await flushPromises()
+        expect((w.vm as any).model.shared.name).toBe('other role')
+        expect((w.vm as any).model.version).toBe(8)
+        expect(matrixBanner(w).exists()).toBe(false)
+        expect((w.vm as any).conflict).toBe(false)
+      })
+
+      it('applies only the latest of two conflicts in flight', async () => {
+        const { w, get } = await mountRole(3, document.body)
+        const first = deferred()
+        const second = deferred()
+        get.mockReturnValueOnce(first.promise as never).mockReturnValueOnce(second.promise as never)
+        void emitConflict(w)
+        void emitConflict(w)
+        await flushPromises()
+        second.resolve(item('second', 5))
+        await flushPromises()
+        first.resolve(item('first', 4))
+        await flushPromises()
+        expect((w.vm as any).model.shared.name).toBe('second')
+        expect((w.vm as any).model.version).toBe(5)
+        expect(matrixBanner(w).exists()).toBe(true)
+        w.unmount()
+        document.body.innerHTML = ''
+      })
+
+      it('keeps an edit typed while the fetch is pending and shows the item banner', async () => {
+        const { w, get } = await mountRole(3)
+        const pending = deferred()
+        get.mockReturnValueOnce(pending.promise as never)
+        void emitConflict(w)
+        await flushPromises()
+        ;(w.vm as any).model.shared.name = 'my edit'
+        pending.resolve(item('renamed by B', 5))
+        await flushPromises()
+        expect((w.vm as any).model.shared.name).toBe('my edit')
+        expect((w.vm as any).model.version).toBe(5)
+        expect((w.vm as any).conflict).toBe(true)
+        expect(matrixBanner(w).exists()).toBe(false)
+        ;(w.vm as any).reloadLatest()
+        expect((w.vm as any).model.shared.name).toBe('renamed by B')
+      })
+
+      it('arms no permission banner when the latest copy is a super-admin role', async () => {
+        seedRoleEdit()
+        vi.mocked(useSchemaStore().get).mockReturnValue({
+          ...roleMeta,
+          fields: [...roleMeta.fields, { ...roleMeta.fields[0], name: 'isSuperAdmin', label: 'Super admin', interface: 'checkbox', required: false }],
+        } as never)
+        const get = vi.spyOn(itemsApi, 'get').mockResolvedValue(item('editor', 3) as never)
+        const w = mountView()
+        await (w.vm as any).init()
+        await flushPromises()
+        get.mockResolvedValue(item('editor', 5, true) as never)
+        await emitConflict(w)
+        await flushPromises()
+        expect((w.vm as any).model.version).toBe(5)
+        expect(matrixBanner(w).exists()).toBe(false)
+      })
+    })
+
+    describe('the permission banner is cleared by every other outcome', () => {
+      async function openBanner() {
+        const ctx = await mountRole(3)
+        ctx.get.mockResolvedValue({ id: 'r1', name: 'renamed by B', isSuperAdmin: false, version: 5 })
+        await ctx.w.findComponent(PermissionMatrix).vm.$emit('conflict')
+        await flushPromises()
+        expect(matrixBanner(ctx.w).exists()).toBe(true)
+        return ctx
+      }
+
+      it('a revert reload', async () => {
+        const { w } = await openBanner()
+        await (w.vm as any).onReverted()
+        await flushPromises()
+        expect(matrixBanner(w).exists()).toBe(false)
+      })
+
+      it('a later item conflict, so the two banners never show together', async () => {
+        const { w } = await openBanner()
+        ;(w.vm as any).model.shared.name = 'my edit'
+        vi.spyOn(itemsApi, 'update').mockRejectedValueOnce(conflictError())
+        await (w.vm as any).onSubmit()
+        await flushPromises()
+        expect(w.find('.conflict-banner').exists()).toBe(true)
+        expect(matrixBanner(w).exists()).toBe(false)
+      })
+
+      it('a successful form save', async () => {
+        const { w, matrixVm } = await openBanner()
+        matrixVm.markFlushed()
+        vi.spyOn(itemsApi, 'update').mockResolvedValue({ id: 'r1', version: 6 })
+        await (w.vm as any).onSubmit()
+        await flushPromises()
+        expect(matrixBanner(w).exists()).toBe(false)
       })
     })
 

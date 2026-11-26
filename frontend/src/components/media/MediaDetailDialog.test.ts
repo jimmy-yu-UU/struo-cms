@@ -492,13 +492,6 @@ describe('MediaDetailDialog', () => {
     expect('folderId' in payload).toBe(false)
   })
 
-  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
-  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
-  // not cosmetic: without a description, assistive tech follows a dangling reference.
-  //
-  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
-  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
-  // this assertion fails whether or not the description exists, so it would prove nothing.
   it('describes the preview with the file alt text, or the file name when it has none', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const w = mountDialog()
@@ -511,6 +504,13 @@ describe('MediaDetailDialog', () => {
     expect(empty.get('.md-preview img').attributes('alt')).toBe('a.png')
   })
 
+  // reka points DialogContent's aria-describedby at a DialogDescription id whether or not one is
+  // rendered, and warns on mount when nothing in the document carries that id -- so the warning is
+  // not cosmetic: without a description, assistive tech follows a dangling reference.
+  //
+  // Mounted attached, unlike every other test in this file, and that is load-bearing: reka resolves
+  // the id with document.getElementById, which cannot see a detached wrapper. Mounted the usual way
+  // this assertion fails whether or not the description exists, so it would prove nothing.
   it('renders a description, so reka does not warn about a dangling aria-describedby', async () => {
     vi.spyOn(itemsApi, 'get').mockResolvedValue(item as never)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

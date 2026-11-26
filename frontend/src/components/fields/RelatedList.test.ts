@@ -213,6 +213,30 @@ describe('RelatedList', () => {
     expect(w.findComponent({ name: 'DataTablePagination' }).props('ready')).toBe(true)
   })
 
+  it('clears the previous parent rows and total when the parent changes', async () => {
+    setupStores()
+    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'a1', title: 'One' }], total: 1 })
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await flushPromises()
+    expect((w.vm as unknown as { rows: unknown[] }).rows).toHaveLength(1)
+    list.mockReturnValue(new Promise(() => {}))
+    await w.setProps({ parentId: 'p2' })
+    expect((w.vm as unknown as { rows: unknown[] }).rows).toHaveLength(0)
+    expect((w.vm as unknown as { total: number }).total).toBe(0)
+  })
+
+  it('ignores a response for the previous parent after the parent changes, even to an empty parent', async () => {
+    setupStores()
+    let resolveOld: (v: { data: { id: string; title: string }[]; total: number }) => void = () => {}
+    vi.spyOn(itemsApi, 'list').mockReturnValue(new Promise((r) => { resolveOld = r }))
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await w.setProps({ parentId: undefined })
+    resolveOld({ data: [{ id: 'a1', title: 'Old' }], total: 1 })
+    await flushPromises()
+    expect((w.vm as unknown as { rows: unknown[] }).rows).toHaveLength(0)
+    expect((w.vm as unknown as { total: number }).total).toBe(0)
+  })
+
   it('is loading from the first render, so the table never flashes its empty message', async () => {
     setupStores()
     let resolveList: (v: { data: never[]; total: number }) => void = () => {}

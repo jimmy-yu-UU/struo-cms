@@ -37,30 +37,40 @@ describe('locale packs', () => {
     expect([...CATALOG_LOCALES].sort()).toEqual(['en', 'zh-TW'])
   })
 
-  it('names the access token in the password section description in both locales', () => {
-    expect(zhTW.password.sectionDescription).toBe('為此帳號設定新密碼；它的工作階段與存取權杖會被撤銷。')
-    expect(catalogs.en.password.sectionDescription).toBe('Set a new password for this account. Its sessions and access token are revoked.')
+  it('names the API access token in the password section description in both locales', () => {
+    expect(zhTW.password.sectionDescription).toBe('為此帳號設定新密碼；它的工作階段與 API 存取權杖會被撤銷。')
+    expect(catalogs.en.password.sectionDescription).toBe('Set a new password for this account. Its sessions and API access token are revoked.')
   })
 
+  // The zh-TW password-change toasts name the API access token; the wording is a maintainer ruling.
   it('pins the zh-TW password-change toast wording to the ruled sentences', () => {
-    expect(zhTW.password.changed).toBe('密碼已更新，存取權杖已撤銷。')
-    expect(zhTW.password.changedSelf).toBe('密碼已更新，你的存取權杖已撤銷。')
+    expect(zhTW.password.changed).toBe('密碼已更新，API 存取權杖已撤銷。')
+    expect(zhTW.password.changedSelf).toBe('密碼已更新，你的 API 存取權杖已撤銷。')
   })
 
-  it('calls the token the same thing in the password section as in the access-token panel', () => {
+  // The one name of the credential is 「API 存取權杖」 / "API access token", a maintainer ruling. Every string
+  // that names it, in the password section and in the access-token panel, carries the full name.
+  it('names the credential in full wherever a string names it', () => {
+    const keys = [
+      'password.sectionDescription', 'password.tokenRevokeNote', 'password.tokenRevokeNoteSelf',
+      'password.changed', 'password.changedSelf',
+      'accessToken.title', 'accessToken.none', 'accessToken.regenerateConfirmHeader',
+      'accessToken.revokeConfirmHeader', 'accessToken.issuedTitle', 'accessToken.revoked',
+      'accessToken.generateFailed', 'accessToken.revokeFailed', 'accessToken.loadFailed',
+    ]
+    const full: Record<string, RegExp> = { 'zh-TW': /API 存取權杖/, en: /API access token/i }
     for (const locale of CATALOG_LOCALES) {
-      const { password } = catalogs[locale] as { password: Record<string, string> }
-      for (const key of ['sectionDescription', 'tokenRevokeNote', 'tokenRevokeNoteSelf', 'changed', 'changedSelf']) {
-        expect(password[key], `${locale} password.${key}`).not.toMatch(/\bAPI\b/)
-      }
+      const leaves = new Map(stringLeaves(catalogs[locale] as unknown as Record<string, unknown>))
+      for (const key of keys) expect(leaves.get(key), `${locale} ${key}`).toMatch(full[locale])
     }
   })
 
-  // A half-width , ; : ? ! right after a Chinese character belongs to the full-width forms.
-  // No string is exempt.
-  it('writes zh-TW punctuation after a Chinese character in full width', () => {
+  // A half-width , ; : ? ! after a Chinese character, a closing Chinese bracket or quote, or the closing
+  // brace of a placeholder, in a string that holds Chinese, belongs to the full-width forms. Half-width
+  // parentheses are out of scope. No string is exempt.
+  it('writes zh-TW punctuation after Chinese text in full width', () => {
     const offenders = stringLeaves(zhTW as unknown as Record<string, unknown>)
-      .filter(([, value]) => /[㐀-鿿][,;:?!]/.test(value))
+      .filter(([, value]) => /[㐀-鿿]/.test(value) && /[㐀-鿿」』）】》}]\s*[,;:?!]/.test(value))
       .map(([path, value]) => `${path}: ${value}`)
     expect(offenders).toEqual([])
   })

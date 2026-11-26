@@ -24,6 +24,7 @@ import { writeFailureMessage } from '@/lib/apiErrorMessage'
 import { blankItemForm, parseItemToForm } from '../lib/parseItemToForm'
 import { primitiveText } from '../lib/primitiveText'
 import { navigationCompleted } from '../lib/navigation'
+import { createLatestWins } from '../lib/latestWins'
 import { buildItemPayload } from '../lib/buildItemPayload'
 import { nullsAfterSave } from '../lib/loadedNulls'
 import { validateItem } from '../lib/validateItem'
@@ -35,7 +36,7 @@ import { hasDrafts, relationOfDraftKey, withDraft, type FieldDraft, type FieldDr
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
-import type { RelationMeta } from '../types/schema'
+import type { CollectionMeta, RelationMeta } from '../types/schema'
 
 const route = useRoute()
 const router = useRouter()
@@ -203,6 +204,9 @@ const deleting = ref(false)
 // swap plus :disabled="submitting" on the button below.
 const saveLabel = computed(() => (submitting.value ? t('itemForm.saving') : t('itemForm.save')))
 const notFound = ref(false)
+// The item GET answered 400 (an id the collection cannot hold, or a request the server rejects): the server's own
+// sentence, which keeps a real defect diagnosable. Null when the load was not rejected.
+const loadRejected = ref<string | null>(null)
 const conflict = ref(false)
 // The permission matrix's save met a role that has moved on while the form held no unsaved edits: the form
 // already shows the latest fields, and the banner offers to reload the grants.
@@ -212,6 +216,8 @@ const revertConflict = ref(false)
 const showHistory = ref(false)
 // Holds the server copy fetched during 409 recovery so "Reload latest" can apply it verbatim.
 let latestFromServer: FormModel | null = null
+// One token for every conflict recovery fetch and every init: a result for a superseded request or item is dropped.
+const recoveryGuard = createLatestWins()
 // Last committed snapshot of the user-editable model; the leave/unload guards compare against it.
 // Seeded with the empty model so navigating away before load never falsely prompts.
 const baseline = ref(snapshotModel(model))
@@ -230,16 +236,17 @@ function setModel(next: FormModel): void {
   // the version chain breaks at the view layer and the optimistic lock silently degrades to
   // last-write-wins. On create, next.version is undefined and stays undefined.
   model.version = next.version
-  // Every setModel is a fresh committed state: initial load (create blank / edit fetch) and
-  // "Reload latest". Re-baseline so it is not considered dirty. (recoverFromConflict deliberately
-  // does NOT call setModel — it only refreshes version and keeps the user's edits, staying dirty.)
+  // The model is a fresh committed state, so it is re-baselined and not considered dirty. Keeping the
+  // user's edits instead means refreshing only the version, never calling setModel.
   captureBaseline()
 }
 
 async function init(): Promise<void> {
+  recoveryGuard.next()
   loading.value = true
   serverError.value = ''
   notFound.value = false
+  loadRejected.value = null
   errors.value = {}
   // Clear stale 409-recovery state so a re-entrant init (route param change) never carries item A's
   // cached server copy or conflict banner into item B.
@@ -248,26 +255,31 @@ async function init(): Promise<void> {
   revertConflict.value = false
   latestFromServer = null
   await Promise.all([schema.load(), langStore.load()])
+  const itemId = id.value
   if (!meta.value) { loading.value = false; return }
-  if (isCreate.value) {
-    setModel(blankItemForm(meta.value, langStore.languages, resolveCollection))
-  } else {
-    try {
-      const item = await itemsApi.get(name.value, id.value!, {
-        deep: editableRelations.value,
-      })
-      setModel(parseItemToForm(meta.value, item, langStore.languages, resolveCollection))
-      // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
-      if (name.value === ROLE_COLLECTION)
-        captureSavedRole()
-      if (name.value === USER_COLLECTION) void captureSavedUser(id.value!)
-    } catch (e) {
-      // A 400 means the id in the URL is not a valid id for this collection: the item cannot exist.
-      if (e instanceof ApiError && (e.code === 'NOT_FOUND' || e.status === 400)) notFound.value = true
-      else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
-    }
-  }
+  if (itemId === undefined) setModel(blankItemForm(meta.value, langStore.languages, resolveCollection))
+  else await loadItem(meta.value, itemId)
   loading.value = false
+}
+
+async function loadItem(m: CollectionMeta, itemId: string): Promise<void> {
+  try {
+    const item = await itemsApi.get(name.value, itemId, { deep: editableRelations.value })
+    setModel(parseItemToForm(m, item, langStore.languages, resolveCollection))
+    // The matrix's super-admin notice reflects the last-SAVED state, not the unsaved checkbox.
+    if (name.value === ROLE_COLLECTION) captureSavedRole()
+    if (name.value === USER_COLLECTION) void captureSavedUser(itemId)
+  } catch (e) {
+    onItemLoadFailed(e)
+  }
+}
+
+// NOT_FOUND is an item that does not exist. A 400 is a request the server rejected: an id the collection cannot
+// hold, but also a malformed query, so its sentence is shown. Anything else is a load error on the form.
+function onItemLoadFailed(e: unknown): void {
+  if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
+  else if (e instanceof ApiError && e.status === 400) loadRejected.value = e.message
+  else serverError.value = e instanceof Error ? e.message : t('common.loadFailed')
 }
 
 // Opens `target` after a successful save. A navigation that does not complete is not a failed save: an
@@ -305,6 +317,7 @@ async function onSubmit(): Promise<void> {
     const created = isCreate.value ? await itemsApi.create(name.value, payload) : undefined
     const updated = !isCreate.value ? await itemsApi.update(name.value, id.value!, payload) : undefined
     conflict.value = false
+    matrixConflict.value = false
     latestFromServer = null
     // The update DID succeed even if the matrix flush below fails — refresh the
     // concurrency token from the response and re-baseline the FORM now, before the matrix flush.
@@ -396,20 +409,32 @@ async function onSubmit(): Promise<void> {
   }
 }
 
+async function fetchLatestForm(m: CollectionMeta, itemId: string): Promise<FormModel> {
+  const latest = await itemsApi.get(name.value, itemId, { deep: editableRelations.value })
+  return parseItemToForm(m, latest, langStore.languages, resolveCollection)
+}
+
+// Keeps the user's edits and refreshes only the token, so a re-save overwrites the server copy; the item
+// banner offers the server copy instead.
+function keepEditsWithLatest(latest: FormModel): void {
+  latestFromServer = latest
+  model.version = latest.version
+  conflict.value = true
+  matrixConflict.value = false
+  revertConflict.value = false // the save-conflict banner covers this state
+  void focusBannerEl(conflictBanner)
+}
+
 async function recoverFromConflict(): Promise<void> {
-  if (!meta.value) return
+  const forId = id.value
+  const m = meta.value
+  if (!m || forId === undefined) return
+  const token = recoveryGuard.next()
   try {
-    const latest = await itemsApi.get(name.value, id.value!, {
-      deep: editableRelations.value,
-    })
-    latestFromServer = parseItemToForm(meta.value, latest, langStore.languages, resolveCollection)
-    // Only refresh the token; keep the user's edits so a re-save overwrites the server copy.
-    model.version = latestFromServer.version
-    conflict.value = true
-    revertConflict.value = false // the save-conflict banner covers this state
-    void focusBannerEl(conflictBanner)
+    const latest = await fetchLatestForm(m, forId)
+    if (recoveryGuard.isCurrent(token)) keepEditsWithLatest(latest)
   } catch (e) {
-    onLatestFetchFailed(e)
+    if (recoveryGuard.isCurrent(token)) onLatestFetchFailed(e)
   }
 }
 
@@ -438,22 +463,34 @@ function onMatrixSaved(version: number): void {
 // takes over (the stale fields stay until the warned overwrite or Reload latest). Without any, nothing of the
 // user's is at stake: the form takes the latest item and a permission-specific banner offers the grants reload.
 async function onMatrixConflict(): Promise<void> {
-  if (!meta.value || hasUnsavedEdits()) {
+  const forId = id.value
+  const m = meta.value
+  if (!m || forId === undefined || hasUnsavedEdits()) {
     await recoverFromConflict()
     return
   }
+  const token = recoveryGuard.next()
   try {
-    const latest = await itemsApi.get(name.value, id.value!, { deep: editableRelations.value })
-    setModel(parseItemToForm(meta.value, latest, langStore.languages, resolveCollection))
-    captureSavedRole()
-    latestFromServer = null
-    conflict.value = false
-    revertConflict.value = false
-    matrixConflict.value = true
-    void focusBannerEl(matrixConflictBanner)
+    const latest = await fetchLatestForm(m, forId)
+    if (!recoveryGuard.isCurrent(token)) return
+    // The form stays editable during the fetch: an edit typed meanwhile is kept, as with unsaved edits at the start.
+    if (hasUnsavedEdits()) keepEditsWithLatest(latest)
+    else applyLatestToCleanForm(latest)
   } catch (e) {
-    onLatestFetchFailed(e)
+    if (recoveryGuard.isCurrent(token)) onLatestFetchFailed(e)
   }
+}
+
+// The latest copy of a role replaces the untouched form. When it locks the role for this caller, the lock note
+// and the matrix's own notice explain the state, so no grants-reload banner is armed.
+function applyLatestToCleanForm(latest: FormModel): void {
+  setModel(latest)
+  captureSavedRole()
+  latestFromServer = null
+  conflict.value = false
+  revertConflict.value = false
+  matrixConflict.value = !(savedRoleIsSuperAdmin.value || lockedBySuperAdmin.value)
+  if (matrixConflict.value) void focusBannerEl(matrixConflictBanner)
 }
 
 function reloadMatrix(): void {
@@ -492,6 +529,7 @@ async function onReverted(): Promise<void> {
     // The fetched copy is the server's committed state (after a revert, or the revert-conflict reload):
     // any pending conflict banner and its cached server copy are void.
     conflict.value = false
+    matrixConflict.value = false
     revertConflict.value = false
     latestFromServer = null
     errors.value = {}
@@ -596,6 +634,11 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
       <p class="text-muted-foreground">{{ t('itemForm.itemNotFound') }}</p>
       <Button type="button" variant="outline" @click="onCancel">{{ t('itemForm.back') }}</Button>
     </div>
+    <div v-else-if="loadRejected !== null" class="grid justify-items-start gap-3">
+      <p class="text-muted-foreground">{{ t('itemForm.itemLoadRejected') }}</p>
+      <p v-if="loadRejected" class="text-sm text-muted-foreground">{{ loadRejected }}</p>
+      <Button type="button" variant="outline" @click="onCancel">{{ t('itemForm.back') }}</Button>
+    </div>
     <p v-else-if="isCreate && !canWrite" class="text-muted-foreground">{{ t('itemForm.noCreatePermission') }}</p>
     <template v-else>
       <PageHeader :title="isCreate ? t('itemForm.new', { label: meta.label }) : t('itemForm.edit', { label: meta.label })">
@@ -688,11 +731,11 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         />
         <EffectivePermissionsPanel v-if="showEffective" :user-id="idStr" :role-ids="selectedRoleIds" />
         <PasswordPanel v-if="showResetPassword" :disabled="lockedBySuperAdmin" :disabled-hint="lockedHint"
-                       :described-by="LOCKED_NOTE_ID"
+                       :described-by="lockedHint ? LOCKED_NOTE_ID : undefined"
                        @reset="resetPasswordOpen = true" />
         <AccessTokenPanel v-if="showAccessToken" ref="tokenPanel" :user-id="idStr"
                           :manageable="canManageCredentials" :disabled-hint="lockedHint"
-                          :described-by="LOCKED_NOTE_ID" />
+                          :described-by="lockedHint ? LOCKED_NOTE_ID : undefined" />
       </div>
       <ChangePasswordDialog
         v-if="showResetPassword"
