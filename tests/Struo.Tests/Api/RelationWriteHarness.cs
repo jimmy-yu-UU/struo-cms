@@ -82,6 +82,14 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         return id;
     });
 
+    /// <summary>A vault inserted directly whose Files field is stored as NULL.</summary>
+    public async Task<Guid> SeedVaultAsync() => await WithDbAsync(async db =>
+    {
+        var id = Guid.CreateVersion7();
+        await db.Insertable(new FxVault { Id = id, Name = "vault", Shelf = null }).ExecuteCommandAsync();
+        return id;
+    });
+
     public async Task<Guid> SeedFileAsync() => await WithDbAsync(async db =>
     {
         var id = Guid.CreateVersion7();

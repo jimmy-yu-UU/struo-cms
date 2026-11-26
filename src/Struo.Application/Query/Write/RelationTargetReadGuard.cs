@@ -120,9 +120,8 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
     private static IEnumerable<SentFile> SentFiles(CollectionMetadata meta, JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object) yield break;
-        var fileFields = meta.Fields.Where(IsFileField).ToList();
-        var root = FieldsByName(fileFields.Where(f => !f.Translatable && !f.IsSystem && !f.ReadOnly));
-        var translated = FieldsByName(fileFields.Where(f => f.Translatable));
+        var root = FieldsByName(FileFields.Root(meta));
+        var translated = FieldsByName(FileFields.Translated(meta));
         foreach (var prop in body.EnumerateObject().Where(p => root.ContainsKey(p.Name)))
             yield return new SentFile(root[prop.Name], null, prop.Value);
 
@@ -138,9 +137,6 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
 
     private static Dictionary<string, FieldMetadata> FieldsByName(IEnumerable<FieldMetadata> fields) =>
         fields.ToDictionary(field => field.Name, StringComparer.OrdinalIgnoreCase);
-
-    private static bool IsFileField(FieldMetadata field) =>
-        field.Interface is FieldInterface.File or FieldInterface.Image or FieldInterface.Files;
 }
 
 /// <summary>A file field a body sends, with its locale when it sits in <c>translations</c>.</summary>

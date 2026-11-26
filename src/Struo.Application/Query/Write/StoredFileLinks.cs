@@ -30,41 +30,37 @@ internal sealed class StoredFileLinks
 
     /// <summary>Reads the file fields of <paramref name="existing"/> and, when the collection has translations, of its sidecar rows.</summary>
     internal static async Task<StoredFileLinks> LoadAsync(
-        IItemRepository repository, CollectionMetadata meta, EntityDescriptor d, object existing, CancellationToken ct)
+        CollectionMetadata meta, EntityDescriptor d, object existing, StoredTranslations? translations, CancellationToken ct)
     {
         var links = new StoredFileLinks();
-        foreach (var field in meta.Fields.Where(f => IsFileField(f) && !f.Translatable))
+        foreach (var field in FileFields.Root(meta))
         {
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
-            links.root[field.Name] = Canonical(d.Properties.GetValueOrDefault(prop)?.GetValue(existing));
+            links.root[field.Name] = Canonical(field.Interface, d.Properties.GetValueOrDefault(prop)?.GetValue(existing));
         }
-        if (meta.Translation is { } tm && meta.Fields.Any(f => IsFileField(f) && f.Translatable))
-        {
-            var parentId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(existing)!;
-            var rows = await repository.LoadTranslationsAsync(
-                tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, [parentId], null, ct);
-            links.AddTranslated(meta, tm, rows);
-        }
+        if (translations is not null && FileFields.Translated(meta).Any())
+            links.AddTranslated(meta, translations.Metadata, await translations.RowsAsync(ct));
         return links;
     }
 
     private void AddTranslated(CollectionMetadata meta, TranslationMetadata tm, IReadOnlyList<object> rows)
     {
-        var fields = meta.Fields.Where(f => IsFileField(f) && f.Translatable).ToList();
+        var fields = FileFields.Translated(meta).ToList();
         foreach (var row in rows)
         {
             if (PropertyAccessorCache.Read(row, tm.LocaleProperty) is not string locale) continue;
             translated[locale] = fields.ToDictionary(
-                f => f.Name, f => Canonical(PropertyAccessorCache.Read(row, f.Name)), StringComparer.OrdinalIgnoreCase);
+                f => f.Name, f => Canonical(f.Interface, PropertyAccessorCache.Read(row, f.Name)), StringComparer.OrdinalIgnoreCase);
         }
     }
 
     // A locale without a stored row holds no value: no id, or no ids.
     private static string NoneOrList(FieldMetadata field) => field.Interface == FieldInterface.Files ? "[]" : None;
 
-    private static string Canonical(object? stored) => stored switch
+    // A stored NULL and an empty list are the same value: a Files field holds no ids either way.
+    private static string Canonical(FieldInterface kind, object? stored) => stored switch
     {
-        null => None,
+        null => kind == FieldInterface.Files ? "[]" : None,
         IEnumerable<Guid> ids => List(ids.Select(id => id.ToString())),
         _ => stored.ToString() ?? NotAnId,
     };
@@ -88,7 +84,4 @@ internal sealed class StoredFileLinks
     private static string IdOf(string? text) => Guid.TryParse(text, out var id) ? id.ToString() : NotAnId;
 
     private static string List(IEnumerable<string> ids) => "[" + string.Join(",", ids) + "]";
-
-    private static bool IsFileField(FieldMetadata field) =>
-        field.Interface is FieldInterface.File or FieldInterface.Image or FieldInterface.Files;
 }

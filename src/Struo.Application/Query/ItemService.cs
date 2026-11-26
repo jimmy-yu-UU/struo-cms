@@ -187,11 +187,12 @@ public sealed class ItemService(
         // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
         var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
+        // The links the body sent, read before an interceptor can assign any: server code is not policed by this check.
+        var links = linkExistence.RootLinks(meta, d, ItemDeserializer.PresentNames(body), stored: null, entity);
         var hooks = writeInterceptors.Begin(
             ItemWriteOperation.Create, meta, entity, id: null, ItemDeserializer.PresentNames(body), body);
         await hooks.BeforeWriteAsync(ct);
         ItemDeserializer.EnforceRequiredFields(meta, d, entity);
-        var links = linkExistence.RootLinks(meta, d, ItemDeserializer.PresentNames(body), stored: null, entity);
 
         // Parent row + M2M junctions + translation sidecars must commit together or not at all —
         // otherwise a failure after the parent insert leaves a row that violates invariants the API
@@ -201,9 +202,9 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
-            await linkExistence.EnsureAsync(meta, body, links, parentId: null, includeDeleted: false, ct);
+            await linkExistence.EnsureAsync(meta, body, links, translations: null, includeDeleted: false, ct);
             created = await repository.CreateAsync(collection, entity, ct);
-            createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
+            createdId = IdOf(d, created);
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct: ct);
             hooks.Stored(created, createdId);
@@ -243,8 +244,10 @@ public sealed class ItemService(
         if (loaded is null) return null;
         var (existing, preMerge) = loaded.Value;
         // After the 404, and before the merge overwrites the stored values the file fields are compared with.
+        var parentId = IdOf(d, existing);
+        var translations = meta.Translation is { } tm ? new StoredTranslations(repository, tm, parentId) : null;
         await relationTargets.RequireFilesAsync(
-            meta, body, () => StoredFileLinks.LoadAsync(repository, meta, d, existing, ct));
+            meta, body, () => StoredFileLinks.LoadAsync(meta, d, existing, translations, ct));
 
         var (bodyKeys, links) = MergeBody(collection, meta, d, body, existing);
 
@@ -255,13 +258,16 @@ public sealed class ItemService(
         ValidateMerged(meta, d, body, existing);
 
         var persisted = await PersistUpdateAsync(
-            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links),
+            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links, translations),
             meta, d, body, existing, hooks, ct);
         if (persisted is null) return null;
         var (updated, updatedId) = persisted.Value;
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
         return projector.Project(updated, meta, null);
     }
+
+    private static object IdOf(EntityDescriptor d, object entity) =>
+        d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(entity)!;
 
     // Loads the stored row (null -> 404); the merge mutates it.
     private async Task<(object Existing, object? PreMerge)?> LoadForUpdateAsync(
@@ -360,22 +366,21 @@ public sealed class ItemService(
 
     private readonly record struct UpdateTarget(
         string Collection, string Id, string Operation, long? SourceRevisionNumber, bool LegacyJsonStrings,
-        IReadOnlyList<PendingLink> Links);
+        IReadOnlyList<PendingLink> Links, StoredTranslations? Translations);
 
     // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
     private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
         UpdateTarget target, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
         object existing, ItemWriteHooks hooks, CancellationToken ct)
     {
-        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links) = target;
+        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links, translations) = target;
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
             // A revert validates against rows trashed since the snapshot was captured too.
-            await linkExistence.EnsureAsync(
-                meta, body, links, d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(existing), operation == RevertOperation, ct);
+            await linkExistence.EnsureAsync(meta, body, links, translations, operation == RevertOperation, ct);
             // Self-referencing tree collections: lock the row and find out whether the update changes the
             // parent key. Each mover holds its own row's lock before it waits on a chain row, so opposite
             // movers form a deadlock the database detects.
@@ -384,7 +389,7 @@ public sealed class ItemService(
             if (updated is null) return;
             // Reject a parentId that points at the item itself or one of its descendants.
             await cycleGuard.EnsureNoCycleAsync(collection, moves, ct);
-            updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
+            updatedId = IdOf(d, updated);
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (a revert); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == RevertOperation, ct);

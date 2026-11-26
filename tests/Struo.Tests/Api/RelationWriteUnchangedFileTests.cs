@@ -75,6 +75,23 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
         (await h.OgImageLinksToAsync(first)).Should().Be(1);
     }
 
+    // A Files field stored as NULL, sent back as null or as an empty list, is the same empty value.
+    [Theory]
+    [InlineData(Rest, false)]
+    [InlineData(Rest, true)]
+    [InlineData(Gql, false)]
+    [InlineData(Gql, true)]
+    public async Task A_cleared_gallery_sent_back_unchanged_is_accepted(string channel, bool emptyList)
+    {
+        var vault = await h.SeedVaultAsync();
+        var client = await h.CallerAsync(["fxVault"], ["fxVault"]);
+        object? value = emptyList ? Array.Empty<string>() : null;
+
+        var outcome = await h.SendAsync(client, channel, "fxVault", vault, new() { ["shelf"] = value, ["name"] = "renamed" });
+
+        AssertWritten(outcome);
+    }
+
     [Theory]
     [InlineData(Rest, Hero)]
     [InlineData(Rest, OgImage)]

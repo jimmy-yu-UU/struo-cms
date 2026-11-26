@@ -2,7 +2,6 @@
 using System.Text.Json;
 using Struo.Application.Files;
 using Struo.Application.Metadata;
-using Struo.Application.Security;
 using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
@@ -19,7 +18,6 @@ internal sealed record PendingLink(string Key, string Target, IReadOnlyList<obje
 /// assigns is checked: on an update an id equal to the stored one passes, so an item that already holds a
 /// dangling or trashed reference stays saveable when the client sends the field back. A trashed row is not a
 /// valid new assignment, except for a revert. The ids of one target collection are looked up with one query.
-/// The <c>permission</c> collection's <c>roleId</c> has rules of its own and is not covered.
 /// </summary>
 internal sealed class LinkExistenceCheck(
     IItemRepository repository, IEntityRegistry registry, IM2MDescriptorSource m2mSource)
@@ -47,13 +45,13 @@ internal sealed class LinkExistenceCheck(
 
     /// <summary>
     /// Refuses (400) a new assignment to a row that does not exist, among <paramref name="rootLinks"/> and the
-    /// translated file fields <paramref name="body"/> sends. <paramref name="parentId"/> is null on a create.
+    /// translated file fields <paramref name="body"/> sends. <paramref name="translations"/> is null on a create.
     /// </summary>
     internal async Task EnsureAsync(
-        CollectionMetadata meta, JsonElement body, IReadOnlyList<PendingLink> rootLinks, object? parentId,
+        CollectionMetadata meta, JsonElement body, IReadOnlyList<PendingLink> rootLinks, StoredTranslations? translations,
         bool includeDeleted, CancellationToken ct)
     {
-        var links = rootLinks.Concat(await TranslatedLinksAsync(meta, body, parentId, ct)).ToList();
+        var links = rootLinks.Concat(await TranslatedLinksAsync(meta, body, translations, ct)).ToList();
         foreach (var target in links.GroupBy(link => link.Target, StringComparer.OrdinalIgnoreCase))
         {
             var found = await ExistingIdsAsync(target.Key, target.SelectMany(l => l.Ids).Distinct().ToList(), includeDeleted, ct);
@@ -73,7 +71,11 @@ internal sealed class LinkExistenceCheck(
             ? await repository.QueryWhereInWithDeletedAsync(target, "id", ids, ct)
             : await repository.QueryWhereInAsync(target, "id", ids, ct);
         var d = registry.Get(target)!;
-        return rows.Select(row => Read(d, d.IdProperty, row)?.ToString()).OfType<string>().ToHashSet();
+        // The database matched the sent ids by its own collation, which for a string key may ignore case.
+        var comparer = d.Properties.GetValueOrDefault(d.IdProperty)?.PropertyType == typeof(string)
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        return rows.Select(row => Read(d, d.IdProperty, row)?.ToString()).OfType<string>().ToHashSet(comparer);
     }
 
     // The keys that link another collection, each once (a key can be both a relation and a junction field).
@@ -86,11 +88,9 @@ internal sealed class LinkExistenceCheck(
     }
 
     private static IEnumerable<Slot> ManyToOneSlots(CollectionMetadata meta) =>
-        string.Equals(meta.Name, RbacCollections.Permission, StringComparison.OrdinalIgnoreCase)
-            ? []
-            : meta.Relations
-                .Where(rel => rel is { Kind: RelationKind.ManyToOne, ForeignKey: not null })
-                .Select(rel => new Slot(rel.ForeignKey!, rel.TargetCollection, rel.ForeignKey!, false));
+        meta.Relations
+            .Where(rel => rel is { Kind: RelationKind.ManyToOne, ForeignKey: not null })
+            .Select(rel => new Slot(rel.ForeignKey!, rel.TargetCollection, rel.ForeignKey!, false));
 
     private IEnumerable<Slot> JunctionSlots(CollectionMetadata meta, EntityDescriptor d) =>
         m2mSource.JunctionKeyLinks(meta.Name).SelectMany(link => new[]
@@ -105,24 +105,23 @@ internal sealed class LinkExistenceCheck(
         ?? property;
 
     private static IEnumerable<Slot> FileSlots(CollectionMetadata meta, EntityDescriptor d) =>
-        meta.Fields
-            .Where(f => IsFileField(f) && !f.Translatable && !f.IsSystem && !f.ReadOnly)
+        FileFields.Root(meta)
             .Where(f => d.FieldToProperty.ContainsKey(f.Name))
             .Select(f => new Slot(f.Name, FileCollection.Name, d.FieldToProperty[f.Name], f.Interface == FieldInterface.Files));
 
     // The ids a translated file field newly assigns, per locale object of the body.
     private async Task<IReadOnlyList<PendingLink>> TranslatedLinksAsync(
-        CollectionMetadata meta, JsonElement body, object? parentId, CancellationToken ct)
+        CollectionMetadata meta, JsonElement body, StoredTranslations? translations, CancellationToken ct)
     {
-        var fields = meta.Fields.Where(f => IsFileField(f) && f.Translatable)
+        var fields = FileFields.Translated(meta)
             .ToDictionary(f => f.Name, StringComparer.OrdinalIgnoreCase);
-        if (meta.Translation is not { } tm || fields.Count == 0 || body.ValueKind != JsonValueKind.Object
+        if (meta.Translation is null || fields.Count == 0 || body.ValueKind != JsonValueKind.Object
             || !body.TryGetProperty(TranslationsKey, out var locales) || locales.ValueKind != JsonValueKind.Object)
             return [];
 
         var sent = SentTranslated(locales, fields);
         if (sent.Count == 0) return [];
-        var stored = parentId is null ? [] : await StoredAsync(tm, parentId, ct);
+        var stored = translations is null ? [] : await StoredAsync(translations, ct);
         return sent
             .Select(s => (s.Field, Ids: s.Ids.Where(id => !stored.Contains((s.Locale, s.Field.Name.ToLowerInvariant(), id))).ToList()))
             .Where(s => s.Ids.Count > 0)
@@ -151,11 +150,11 @@ internal sealed class LinkExistenceCheck(
         return sent;
     }
 
-    private async Task<HashSet<(string Locale, string Field, Guid Id)>> StoredAsync(
-        TranslationMetadata tm, object parentId, CancellationToken ct)
+    private static async Task<HashSet<(string Locale, string Field, Guid Id)>> StoredAsync(
+        StoredTranslations translations, CancellationToken ct)
     {
-        var rows = await repository.LoadTranslationsAsync(
-            tm.TranslationEntityType, tm.ForeignKeyProperty, tm.LocaleProperty, [parentId], null, ct);
+        var tm = translations.Metadata;
+        var rows = await translations.RowsAsync(ct);
         var stored = new HashSet<(string, string, Guid)>();
         foreach (var row in rows)
         {
@@ -180,7 +179,4 @@ internal sealed class LinkExistenceCheck(
         System.Collections.IEnumerable list and not string => list.Cast<object>().Where(id => id is not Guid g || g != Guid.Empty).ToList(),
         _ => [value],
     };
-
-    private static bool IsFileField(FieldMetadata field) =>
-        field.Interface is FieldInterface.File or FieldInterface.Image or FieldInterface.Files;
 }
