@@ -230,13 +230,10 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
-        // A revert re-applies a snapshot the system stored itself, so neither the target-read check nor the
-        // link limit applies to it.
+        relationTargets.Require(meta, body);
+        // A revert replays a snapshot the system stored itself, so the link limit does not apply to it.
         if (operation != RevertOperation)
-        {
-            relationTargets.Require(meta, body);
             writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
-        }
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
@@ -578,6 +575,10 @@ public sealed class ItemService(
     /// A non-null <c>expectedVersion</c> must equal the item's current version, otherwise the update path
     /// throws <see cref="ConcurrencyConflictException"/> (→ 409 VERSION_CONFLICT).
     /// <para>
+    /// A relation, foreign key or file field whose target collection the caller cannot read is not replayed: it
+    /// keeps its stored value, and the revision the revert records holds that value.
+    /// </para>
+    /// <para>
     /// PINNED BEHAVIOUR: because a payload M2M relation's snapshot is captured as
     /// <c>[{id, ...payload}]</c> object elements (not bare ids), reverting such a relation goes through
     /// the same <c>ItemWriteSideSync.EnsureJunctionPayloadGrant</c> gate as any other payload write — the
@@ -619,8 +620,22 @@ public sealed class ItemService(
             ? []
             : (await languages.GetEnabledAsync()).Where(l => !l.IsDefault).Select(l => l.Code).ToList();
         using var withLocales = JsonDocument.Parse(JsonBodyUtil.WithNullLocales(src.RootElement, nonDefault));
-        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(withLocales.RootElement, expectedVersion));
+        // A relation whose target the caller cannot read keeps its stored value: its key is left out of the body.
+        using var readable = JsonDocument.Parse(WithoutUnreadableLinks(meta, withLocales.RootElement));
+        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(readable.RootElement, expectedVersion));
         return await UpdateCoreAsync(collection, id, doc.RootElement, RevertOperation, revisionNumber, legacyJsonStrings, ct: ct);
+    }
+
+    // The body without the keys the write guard would refuse this caller (see RelationTargetReadGuard), so a
+    // revert neither links nor unlinks a row the caller cannot read.
+    private byte[] WithoutUnreadableLinks(CollectionMetadata meta, JsonElement body)
+    {
+        var unreadable = relationTargets.UnreadableKeys(meta, body);
+        var names = (bool inTranslations) => unreadable
+            .Where(link => link.InTranslations == inTranslations)
+            .Select(link => link.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return JsonBodyUtil.WithoutLinkKeys(body, names(false), names(true));
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a

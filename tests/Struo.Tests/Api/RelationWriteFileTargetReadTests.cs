@@ -10,7 +10,7 @@ using static Struo.Tests.Api.RelationWriteHarness;
 namespace Struo.Tests.Api;
 
 /// <summary>A host where the <c>file</c> collection is not publicly readable.</summary>
-public sealed class NoPublicFileApiFactory : StruoApiFactory
+public class NoPublicFileApiFactory : StruoApiFactory
 {
     protected override IReadOnlyList<string> PublicReadCollections => ["fxArticle", "fxCategory"];
 

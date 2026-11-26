@@ -112,6 +112,54 @@ internal static class JsonBodyUtil
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// Serialises <paramref name="source"/> without the top-level keys in <paramref name="rootKeys"/> and without
+    /// the keys in <paramref name="translatedKeys"/> inside each locale object of its <c>translations</c> object.
+    /// Keys are matched ignoring case.
+    /// </summary>
+    internal static byte[] WithoutLinkKeys(
+        JsonElement source, IReadOnlySet<string> rootKeys, IReadOnlySet<string> translatedKeys)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var prop in source.EnumerateObject().Where(p => !rootKeys.Contains(p.Name)))
+            {
+                if (!string.Equals(prop.Name, "translations", StringComparison.Ordinal)
+                    || prop.Value.ValueKind != JsonValueKind.Object)
+                {
+                    prop.WriteTo(writer);
+                    continue;
+                }
+                writer.WritePropertyName(prop.Name);
+                WriteLocalesWithout(writer, prop.Value, translatedKeys);
+            }
+            writer.WriteEndObject();
+        }
+        return ms.ToArray();
+    }
+
+    private static void WriteLocalesWithout(
+        System.Text.Json.Utf8JsonWriter writer, JsonElement locales, IReadOnlySet<string> keys)
+    {
+        writer.WriteStartObject();
+        foreach (var locale in locales.EnumerateObject())
+        {
+            if (locale.Value.ValueKind != JsonValueKind.Object)
+            {
+                locale.WriteTo(writer);
+                continue;
+            }
+            writer.WritePropertyName(locale.Name);
+            writer.WriteStartObject();
+            foreach (var field in locale.Value.EnumerateObject().Where(f => !keys.Contains(f.Name)))
+                field.WriteTo(writer);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndObject();
+    }
+
     /// <summary>Converts a JSON value to a CLR primitive for translation field storage.</summary>
     internal static object? JsonValue(JsonElement e) => e.ValueKind switch
     {
