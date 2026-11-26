@@ -84,7 +84,8 @@ public sealed class JsonBodyLimitMiddleware(
             return true;
         }
         if (GraphQlQueryStringCheck.Problem(context.Request) is not { } problem) return false;
-        await GraphQlTransportError.WriteAsync(context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
+        await GraphQlTransportError.WriteAsync(
+            context, StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, problem);
         return true;
     }
 
@@ -157,7 +158,8 @@ public sealed class JsonBodyLimitMiddleware(
             _ => GraphQlTransportError.WriteAsync(context, status, ErrorCodes.BadUserInput, UnreadableBodyMessage),
         };
 
-    internal static bool IsCapped(HttpRequest request) => GraphQlTransportError.IsGraphQl(request) || IsJson(request.ContentType);
+    internal static bool IsCapped(HttpRequest request) =>
+        GraphQlTransportError.IsGraphQl(request) || IsJson(request.ContentType);
 
     private static string MediaTypeOf(string? contentType) => (contentType ?? "").Split(';', 2)[0].Trim();
 

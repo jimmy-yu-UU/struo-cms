@@ -34,6 +34,8 @@ public class CsrfProtectionTests(ApiFactory factory)
         resp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
+    private const string MissingHeaderMessage = "Missing required 'X-Struo-CSRF' header.";
+
     private async Task<HttpResponseMessage> CookiePostWithoutCsrfHeaderAsync(string path, object body)
     {
         await _factory.CreateAuthenticatedClientAsync();
@@ -54,8 +56,9 @@ public class CsrfProtectionTests(ApiFactory factory)
         var root = Root(text);
         root.TryGetProperty("success", out _).Should().BeFalse(text);
         root.TryGetProperty("error", out _).Should().BeFalse(text);
+        root.TryGetProperty("data", out _).Should().BeFalse(text);
         var error = root.GetProperty("errors").EnumerateArray().Should().ContainSingle().Subject;
-        error.GetProperty("message").GetString().Should().Be("Missing required 'X-Struo-CSRF' header.");
+        error.GetProperty("message").GetString().Should().Be(MissingHeaderMessage);
         var extensions = error.GetProperty("extensions");
         extensions.GetProperty("code").GetString().Should().Be("FORBIDDEN");
         extensions.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
@@ -71,7 +74,10 @@ public class CsrfProtectionTests(ApiFactory factory)
         var root = Root(text);
         root.TryGetProperty("errors", out _).Should().BeFalse(text);
         root.GetProperty("success").GetBoolean().Should().BeFalse();
-        root.GetProperty("error").GetProperty("code").GetString().Should().Be("FORBIDDEN");
+        var error = root.GetProperty("error");
+        error.GetProperty("code").GetString().Should().Be("FORBIDDEN");
+        error.GetProperty("message").GetString().Should().Be(MissingHeaderMessage);
+        error.GetProperty("traceId").GetString().Should().NotBeNullOrEmpty();
     }
 
     [Fact]

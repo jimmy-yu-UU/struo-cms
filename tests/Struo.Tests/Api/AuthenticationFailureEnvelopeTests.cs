@@ -95,6 +95,7 @@ public class AuthenticationFailureEnvelopeTests(ApiFactory factory)
         using var doc = JsonDocument.Parse(body);
         doc.RootElement.TryGetProperty("success", out _).Should().BeFalse(body);
         doc.RootElement.TryGetProperty("error", out _).Should().BeFalse(body);
+        doc.RootElement.TryGetProperty("data", out _).Should().BeFalse(body);
         var error = doc.RootElement.GetProperty("errors").EnumerateArray().Should().ContainSingle().Subject;
         error.GetProperty("message").GetString().Should().Be("An internal error occurred.");
         var extensions = error.GetProperty("extensions");

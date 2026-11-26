@@ -10,7 +10,8 @@ namespace Struo.Api.Auth;
 /// credentialed request unless the target's CORS policy allows its origin (the browser blocks the
 /// pre-flight), so a forged request from an untrusted origin never reaches the controller.
 ///
-/// The refusal is the 403 error envelope, or a 403 GraphQL error for a request to <c>/graphql</c>.
+/// The refusal is the 403 error envelope, or a 403 GraphQL error for a request to <c>/graphql</c> or a
+/// path under it.
 ///
 /// Exemptions: safe methods (GET/HEAD/OPTIONS/TRACE); Bearer-token requests (no ambient cookie, so
 /// not forgeable); and requests with no session cookie (e.g. POST /api/auth/login before a session

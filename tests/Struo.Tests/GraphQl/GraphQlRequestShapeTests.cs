@@ -528,7 +528,8 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         }
     }
 
-    // A cancellation is not a failed read: it is not turned into an answer or a log entry by the body read.
+    // A cancellation is not a failed read: the body read gives it no answer and no log entry, and the
+    // exception handler answers it.
     [Fact]
     public async Task A_cancellation_thrown_by_the_body_read_is_not_answered_as_a_failed_read()
     {
@@ -540,6 +541,8 @@ public class GraphQlRequestShapeTests(ApiFactory factory, ITestOutputHelper outp
         var body = await response.Content.ReadAsStringAsync();
         body.Should().NotContain(Unreadable).And.NotContain("BAD_USER_INPUT");
         _sink.Events.Should().NotContain(e => e.MessageTemplate.Text == UnreadableTemplate);
+        _sink.Events.Should().ContainSingle(
+            e => e.Level == LogEventLevel.Error && e.MessageTemplate.Text == "Unhandled API exception");
     }
 
     // Pin: percent-encoded bytes that are not UTF-8, an encoded NUL and a raw non-ASCII character reach the

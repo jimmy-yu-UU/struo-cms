@@ -8,7 +8,8 @@ namespace Struo.Api.Http;
 /// </summary>
 internal static class GraphQlTransportError
 {
-    private const string EndpointPath = "/graphql";
+    /// <summary>The path the GraphQL endpoint is mapped at; a path under it is the endpoint too.</summary>
+    internal const string EndpointPath = "/graphql";
 
     internal static bool IsGraphQl(HttpRequest request) =>
         request.Path.StartsWithSegments(EndpointPath, StringComparison.OrdinalIgnoreCase);
