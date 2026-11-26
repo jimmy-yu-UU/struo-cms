@@ -15,6 +15,8 @@ service cannot serve:
   rule holds whatever `OnDelete` the relation declares.
 - A key property has a column, the two junction keys are two properties, and a relation is a public
   instance property that carries both `[CmsRelation]` and `[Navigate]`.
+- An override, or a `new` member, of a base class navigation property that carries `[CmsRelation]`
+  repeats it (`RelationInheritanceCheck`): the attribute is not inherited.
 - `SortField` is declared on a many-to-many only; its property has a column and a setter, is neither
   junction key nor the junction's primary key, and has one of the types measured to keep the order.
 - `OnDelete` other than the default is declared on a many-to-one only.
@@ -112,6 +114,15 @@ name is that collection's:
 | One-to-many, the collection's class declares the child key with another type | expansion and the children write threw; filter matched nothing |
 | One-to-many, the collection's class declares no such key | expansion and filter threw |
 
+An override or a `new` member of a base class navigation property that carries `[CmsRelation]` and
+`[Navigate]`:
+
+| The derived member repeats | Result |
+|---|---|
+| neither, or `[Navigate]` only | scan passed; relation absent from the schema; a write left the key empty; a read that named it threw `Unknown relation` |
+| `[CmsRelation]` only | refused: no `[Navigate]` |
+| both | the relation |
+
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
@@ -122,12 +133,13 @@ name is that collection's:
 - An override that does not repeat a base declaration's `[SugarColumn]` is refused before these
   checks run, so the row above for a key with `IsIgnore` on a base class does not start:
   `docs/ai/decisions/an-override-repeats-sugarcolumn.md`.
-- `[CmsRelation]` on a class that is not a collection is never scanned, and an override that does
-  not repeat `[CmsRelation]` is not a relation.
+- `[CmsRelation]` on a class that is not a collection is never scanned, and one on an interface
+  member is not read.
 
 ## Referenced from
 
 - `src/Struo.Infrastructure/Metadata/KeyLookup.cs`
 - `src/Struo.Infrastructure/Metadata/NavigateShape.cs`
+- `src/Struo.Infrastructure/Metadata/RelationInheritanceCheck.cs`
 - `tests/Struo.Tests/Metadata/NavigateForeignKeyTests.cs`
 - `docs/ai/conventions.md`

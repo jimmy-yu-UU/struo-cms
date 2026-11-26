@@ -435,10 +435,9 @@ MariaDB 都一樣；在 PostgreSQL 上篩選也失敗。要明寫型別時，Pos
 
 建立時先報 `Required`；更新時如果 body 同時違反長度或結構驗證，先報的是那些錯誤。
 
-`ReadOnly` 欄位讀得到，更新時寫不進去：更新的欄位覆蓋邏輯會跳過每一個 `ReadOnly` 與
-`IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——
-`[CmsField(ReadOnly = true)] public int Views` 這種不可為 `null` 的值型別，建立時客戶端傳
-什麼就存什麼，之後才唯讀。後台的輸入框也會停用。
+`ReadOnly` 欄位讀得到、寫不進去：建立與更新時，送給它的鍵都會被丟掉。建立時存進去的是類別給這個
+屬性的值——`public string Source { get; set; } = "import";` 存的是 `import`，沒有初始值的屬性
+存該型別的預設值——除非寫入攔截器另外設定。後台的輸入框也會停用。
 
 四個稽核欄位由掃描器自動變成唯讀的系統欄位，介面依 CLR 型別挑——時間是 `DateTime`，使用者是
 `Text`。新增時四個都由框架蓋印，更新時只重蓋 `UpdatedAt`／`UpdatedBy`，客戶端傳的值一律無

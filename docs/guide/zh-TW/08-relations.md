@@ -7,7 +7,9 @@
 每個關聯宣告在一個 navigation 屬性上，要同時掛兩個 attribute：SqlSugar 的 `[Navigate]` 決定 join 的
 形狀，`[CmsRelation]` 負責其餘 CMS 的設定。兩個都要有，而且要掛在 public 的 instance 屬性上。只有
 `[Navigate]`、沒有 `[CmsRelation]` 的不是關聯，掃描器不理它；只有 `[CmsRelation]`、沒有
-`[Navigate]`，或掛在 static 或非 public 的屬性上，啟動就失敗，訊息點名那個屬性。
+`[Navigate]`，或掛在 static 或非 public 的屬性上，啟動就失敗，訊息點名那個屬性。覆寫基底類別的
+navigation 屬性、或用 `new` 遮住它，而沒有重複標 `[CmsRelation]`，啟動同樣失敗：這個 attribute
+不會繼承。
 `RelationKind` 只有三個值——`ManyToOne`、`OneToMany`、`ManyToMany`——掃描器依屬性的形狀自己推斷：
 純量或可為 `null` 的純量參照是多對一；清單屬性預設是一對多，只有當 `[Navigate]` 的第一個參數是一個型
 別時才算多對多。

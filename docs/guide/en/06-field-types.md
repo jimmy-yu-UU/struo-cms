@@ -495,11 +495,11 @@ the required check; `<img>` and `<hr>` both count as content.
 On create, `Required` is reported first. On update, when the body also violates a length or
 structural check, those errors are reported first instead.
 
-A `ReadOnly` field can be read but not written on update — the update field-overlay logic skips
-every `ReadOnly` and `IsSystem` field. Locking it on create as well requires the property to be
-nullable: a non-nullable value type such as `[CmsField(ReadOnly = true)] public int Views` stores
-whatever the client sends on create, and only becomes read-only afterward. The admin input is
-disabled as well.
+A `ReadOnly` field can be read but not written: a key sent for it is dropped, on create and on
+update. On create the field stores the value the class gives the property —
+`public string Source { get; set; } = "import";` stores `import`, and a property with no
+initializer stores the default of its type — unless a write interceptor sets it. The admin input
+is disabled as well.
 
 The scanner automatically turns the four audit fields into read-only system fields, picking their
 interface by CLR type — `DateTime` for the timestamps, `Text` for the users. The framework stamps

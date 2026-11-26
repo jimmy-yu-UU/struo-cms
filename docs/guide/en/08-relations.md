@@ -9,7 +9,9 @@ Every relation is declared on a navigation property carrying two attributes toge
 `[Navigate]` decides the join shape, and `[CmsRelation]` handles everything else CMS-specific.
 Both are required, on a public instance property. A `[Navigate]` without `[CmsRelation]` is not a
 relation and the scanner ignores it. A `[CmsRelation]` without `[Navigate]`, or on a property that
-is static or not public, stops startup with a message naming the property.
+is static or not public, stops startup with a message naming the property. So does an override, or
+a `new` member, of a base class navigation property that does not repeat `[CmsRelation]`: the
+attribute is not inherited.
 
 `RelationKind` has exactly three values — `ManyToOne`, `OneToMany`, `ManyToMany` — and the
 scanner infers which applies from the property's own shape: a scalar or nullable-scalar reference

@@ -63,18 +63,22 @@ public sealed class Announcement : AuditableEntity
 只有繼承 `AuditableEntity` 的集合才有，`Language`、`ArticleTag` 這類集合沒有。
 
 `[CmsField]` 要掛在 public 的 instance 屬性上；掛在非 public 或 static 的屬性上，啟動就失敗，訊息
-點名那個屬性。下面三種宣告也在啟動時失敗，訊息各自說明該怎麼改：
+點名那個屬性。下面五種宣告也在啟動時失敗，訊息各自說明該怎麼改：
 
 | 宣告 | 該怎麼寫 |
 |---|---|
 | 覆寫或用 `new` 遮住帶 `[CmsField]` 的屬性，自己沒標 | 在它上面重複標 `[CmsField]` |
 | 覆寫帶 `[SugarColumn]` 的屬性，自己沒標 | 在覆寫上重複標 `[SugarColumn]` |
 | 可寫的欄位沒有 public 的 setter | 加 public 的 `set` 或 `init`，或標 `ReadOnly = true` |
+| 覆寫或用 `new` 遮住帶 `[CmsRelation]` 的屬性，自己沒標 | 連同 `[Navigate]`、`[SugarColumn]` 重複標 |
+| 翻譯類別的欄位標 `ReadOnly = true` | 拿掉，或把屬性移到上層 entity |
 
-`[CmsField]` 不會繼承，ORM 也只讀屬性自己的 `[SugarColumn]`，所以覆寫時兩個都要重複。
-`ReadOnly = true` 是給伺服器自己算出或設定的值用的：只有 getter 的計算屬性標上它就能當唯讀欄位。
-集合類別的非 public setter 帶 `[JsonInclude]` 也收得到值。翻譯類別的欄位一律要有 setter。
-Repeater 子型別的欄位見[第 6 章](06-field-types.md)。
+`[CmsField]`、`[CmsRelation]` 都不會繼承，ORM 也只讀屬性自己的 `[SugarColumn]`，所以覆寫時每個都
+要重複。`ReadOnly = true` 是給伺服器自己算出或設定的值用的：只有 getter 的計算屬性標上它就能當唯讀
+欄位；只有 getter、帶初始值的屬性，讀出來永遠是那個初始值，不管欄位裡存什麼。集合類別的非 public
+setter 帶 `[JsonInclude]` 也收得到值。翻譯類別的欄位一律要有 setter，也不能標 `ReadOnly`：
+`translations` 的 payload 會寫入這個類別的每一個欄位。Repeater 子型別的欄位見
+[第 6 章](06-field-types.md)。
 
 沒有 `[CmsField]`、也不叫那四個稽核名稱的屬性，掃描器直接略過。可以在同一個
 entity 上放你自己要用的一般屬性。新項目的主鍵由框架自己指派，是 version 7 GUID，不用自己產生。
