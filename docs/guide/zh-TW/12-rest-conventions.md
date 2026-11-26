@@ -141,6 +141,9 @@ body 因為其他原因讀不出來時，回該失敗的狀態與 `BAD_USER_INPU
 例如 chunk 大小寫錯，是 `400`。每個會讀 body 的 REST 端點都一樣，伺服器為這次失敗寫一筆 warning
 等級的記錄；`/graphql` 用它自己的形狀回，見[第 14 章](14-graphql.md#錯誤形狀)。
 
+body 完整讀進來、但不是合法的 JSON，是另一種 `400`：代碼是 `VALIDATION`，`details` 裡的訊息出自
+JSON 剖析器，不是固定字串。見後面的「驗證錯誤的 `details`」。
+
 ### 自己的錯誤代碼
 
 fork 要加自己的、給客戶端看的錯誤，就繼承 `StruoDomainException`（在 `Struo.Domain`），給它代碼、HTTP 狀態與訊息：
