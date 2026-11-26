@@ -431,7 +431,12 @@ none of them runs when the `Repeater` property carries `[SugarColumn(IsIgnore = 
 rejected by `MetadataScanner.RequireOptionsForChoice`. A `[CmsField]` on a static or non-public
 property of a collection class, a translation class, a `Repeater` child type or a base class of
 one is refused by `FieldDeclarationCheck.RequirePublicInstanceFields`: the scan reads public
-instance properties only (`docs/ai/decisions/cmsfield-is-a-public-instance-property.md`). A
+instance properties only. `FieldInheritanceCheck` refuses a `[CmsField]` declaration lost through
+an override or a `new` member that carries none, and `FieldSetterCheck` a writable field no write
+can bind (`docs/ai/decisions/cmsfield-is-a-public-instance-property.md` has the accepted shapes).
+`ColumnOverrideCheck` refuses an override that does not repeat a base declaration's
+`[SugarColumn]`, on collection, translation and junction types
+(`docs/ai/decisions/an-override-repeats-sugarcolumn.md`). A
 `[CmsRelation]` property is checked at
 scan, and each refusal is a `MetadataException` that names the relation by the class declaring it
 and says what to declare. `MetadataScanner.ScanRelations` refuses one that is static or not public

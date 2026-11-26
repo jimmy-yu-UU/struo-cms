@@ -11,6 +11,7 @@ namespace Struo.Infrastructure.Metadata;
 /// sub-field through a public setter, or through a parameter of the same name and type on the one public
 /// constructor of its row type; a translation field is assigned through any setter its type can reach. A
 /// <c>ReadOnly</c> collection field or sub-field is not written, so it needs none.
+/// Why: docs/ai/decisions/cmsfield-is-a-public-instance-property.md
 /// </summary>
 internal static class FieldSetterCheck
 {

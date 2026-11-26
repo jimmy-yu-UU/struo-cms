@@ -13,6 +13,22 @@
 - 後台的 `DataTablePagination` 元件，`ready` 是必填的 prop。自己的畫面用到這個元件的 fork 要傳
   `:ready`：總筆數已知時是 `true`，還沒拿到第一次的總筆數時是 `false`。沒傳的話，`pnpm build`
   的型別檢查會失敗。
+- 覆寫基底類別的屬性時，基底的宣告帶 `[SugarColumn]`、覆寫沒有重複標，主機在啟動時失敗，丟出
+  `MetadataException`，訊息點名覆寫與帶著標記的那個基底宣告。集合類別、翻譯類別與多對多的
+  junction 型別都檢查。ORM 只讀覆寫自己的 `[SugarColumn]`，原本兩邊對欄位的認定因此不同：基底標
+  `IsNullable = true` 時欄位其實是 `NOT NULL`，送 `null` 的建立在資料庫失敗；基底標
+  `IsIgnore = true` 時 ORM 有建欄位，API 卻當它沒有欄位。在覆寫上重複標 `[SugarColumn(...)]`。
+  用 `new` 重新宣告的屬性不算覆寫（[第 5 章](05-collections.md)）。
+- 基底類別上帶 `[CmsField]` 的屬性，被衍生類別覆寫而沒有重複標 `[CmsField]`，或被沒有
+  `[CmsField]` 的 `new` 成員遮住，主機在啟動時失敗。`[CmsField]` 不會繼承，原本這個欄位無聲地不
+  存在，送來的值被忽略。在覆寫或 `new` 成員上重複標 `[CmsField(...)]`；不想要這個欄位的集合，
+  不要繼承宣告它的基底類別（[第 5 章](05-collections.md)）。
+- 可寫的 `[CmsField]`（沒有標 `ReadOnly = true`）寫入時綁不到值，主機在啟動時失敗。集合類別的
+  欄位要有 public 的 setter（`set` 或 `init`），或帶 `[JsonInclude]` 的非 public setter；
+  Repeater 子型別的欄位要有 public 的 setter，或由該型別唯一的 public 建構式裡同名、同型別的參數
+  設值；翻譯類別的欄位要有 setter。原本這種欄位照樣列為可寫，送來的值卻沒有存進去；翻譯類別沒有
+  setter 的欄位則在寫入時丟例外。加上 public 的 setter，或在伺服器自己算出這個值時標
+  `[CmsField(ReadOnly = true)]`（[第 5 章](05-collections.md)）。
 :::
 
 ### 變更

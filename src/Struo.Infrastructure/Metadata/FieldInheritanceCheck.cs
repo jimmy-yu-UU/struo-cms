@@ -8,6 +8,7 @@ namespace Struo.Infrastructure.Metadata;
 /// The scan-time check that a <c>[CmsField]</c> a base class declares is still served in the scanned type.
 /// The attribute is not inherited, so a member that overrides or hides the property without carrying
 /// <c>[CmsField]</c> itself replaces it, and the field is not served.
+/// Why: docs/ai/decisions/cmsfield-is-a-public-instance-property.md
 /// </summary>
 internal static class FieldInheritanceCheck
 {

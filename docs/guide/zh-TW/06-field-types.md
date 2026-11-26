@@ -162,7 +162,9 @@ UTC。
 收。規則見[啟動時被擋的宣告](#啟動時被擋的宣告)。
 
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
-是點名該欄位的啟動期 `MetadataException`。子欄位不能設為可翻譯，屬性型別照各介面的表檢查，
+是點名該欄位的啟動期 `MetadataException`。可寫的子欄位要有 public 的 setter（`set` 或 `init`），
+或由 `TChild` 唯一的 public 建構式裡同名、同型別的參數設值；兩者都沒有時啟動就失敗。
+子欄位不能設為可翻譯，屬性型別照各介面的表檢查，
 也只能用下列介面，範圍比單一值介面窄：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、
 `Url`、`Color`、`Phone`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、
 `DateTime`、`Select`、`Radio`。不允許的介面有：

@@ -15,6 +15,28 @@
 - The admin SPA's `DataTablePagination` component requires its `ready` prop. A fork whose own views
   use the component passes `:ready`: `true` once the total is known, `false` until the first total
   has arrived. Without it, the type check of `pnpm build` fails.
+- An override of a base class property stops the host at start when the base declaration carries
+  `[SugarColumn]` and the override does not repeat it; the `MetadataException` names the override
+  and the base declaration that carries the attribute. Collection classes, translation classes and
+  many-to-many junction types are checked. The ORM reads only the override's own `[SugarColumn]`,
+  so the two sides disagreed about the column: with `IsNullable = true` on the base the column was
+  `NOT NULL` and a create with `null` failed in the database; with `IsIgnore = true` on the base
+  the ORM created a column the API treated as absent. Repeat `[SugarColumn(...)]` on the override.
+  A property declared again with `new` is not an override ([Chapter 5](05-collections.md)).
+- A `[CmsField]` property of a base class that a derived class overrides without repeating
+  `[CmsField]`, or hides with a `new` member that carries none, stops the host at start.
+  `[CmsField]` is not inherited, so the field silently did not exist and a value sent for it was
+  ignored. Repeat `[CmsField(...)]` on the override or the `new` member; a collection that does
+  not want the field must not inherit the base class that declares it
+  ([Chapter 5](05-collections.md)).
+- A writable `[CmsField]` (one without `ReadOnly = true`) that a write cannot bind stops the host
+  at start. A field of a collection class needs a public setter (`set` or `init`), or a
+  non-public setter with `[JsonInclude]`; a field of a Repeater child type needs a public setter,
+  or a parameter of the same name and type on the type's one public constructor; a field of a
+  translation class needs a setter. Such a field was listed as writable and the value sent for it
+  was not stored; a translation field with no setter made the write throw. Add a public setter, or
+  declare `[CmsField(ReadOnly = true)]` when the server computes the value
+  ([Chapter 5](05-collections.md)).
 :::
 
 ### Changed

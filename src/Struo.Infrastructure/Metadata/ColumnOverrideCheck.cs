@@ -9,6 +9,7 @@ namespace Struo.Infrastructure.Metadata;
 /// repeats the attribute. SqlSugar reads only the override's own declaration, so an override without one
 /// has a column the base declaration does not describe. It looks at the public instance properties the
 /// scanned type exposes, the ones the scan and the ORM read.
+/// Why: docs/ai/decisions/an-override-repeats-sugarcolumn.md
 /// </summary>
 internal static class ColumnOverrideCheck
 {
