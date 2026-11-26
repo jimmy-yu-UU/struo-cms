@@ -282,11 +282,13 @@ the snapshot instead of verifying it. The full rules are in `schema/README.md`.
 
 ## The manual's own gate
 
-This gate is `pnpm build` from `docs/`, in three parts: first `vitepress build`, which resolves
+This gate is `pnpm build` from `docs/`, in four parts: first `vitepress build`, which resolves
 every chapter link; then `check-rendered-chapters.mjs`, confirming every chapter actually
-rendered content rather than an empty page; last `check-table-width.mjs`, which blocks tables
-over four columns and cells over 60 display width, where each CJK character counts as 2. If any of
-the three parts fails, `pnpm build` fails.
+rendered content rather than an empty page; then `check-table-width.mjs`, which blocks tables
+over four columns and cells over 60 display width, where each CJK character counts as 2; last
+`capture/capture.mjs --check`, confirming that the example blocks the manual captured from real
+requests have their markers intact and are byte-identical in both languages, without touching
+the network. If any of the four parts fails, `pnpm build` fails.
 
 `pnpm test` from the same directory runs the guard scripts' own unit tests, with the command
 `node --test "scripts/**/*.test.mjs"`; CI runs this step, but it's a step, not a gate.
@@ -309,8 +311,9 @@ build also does a full production build: `pnpm test` doesn't touch types — the
 TypeScript types are checked at this step.
 
 `docs`: inside the `docs` directory, `pnpm install --frozen-lockfile --ignore-scripts`, then
-`pnpm test` (the guard scripts' own `node --test` suite), then `pnpm build` (the three parts
-`vitepress build`, `check-rendered-chapters.mjs`, `check-table-width.mjs`).
+`pnpm test` (the guard scripts' own `node --test` suite), then `pnpm build` (the four parts
+`vitepress build`, `check-rendered-chapters.mjs`, `check-table-width.mjs`,
+`capture/capture.mjs --check`).
 
 `docker`: builds both container images and runs one smoke test against each, tagging the images
 `struo-api:ci`/`struo-admin:ci` (not the same tag as the `:local` you'd use building them
