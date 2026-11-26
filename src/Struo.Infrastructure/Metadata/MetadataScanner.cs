@@ -76,6 +76,7 @@ public static class MetadataScanner
         }
 
         ValidateReservedNames(collections);
+        ValidateJunctionColumnOverrides(typeList);
         ValidateJunctionKeyProperties(typeList);
         ValidateJunctionCollections(collections, typeList);
         ValidateJunctionPrimaryKeys(collections, typeList);
@@ -189,6 +190,22 @@ public static class MetadataScanner
         throw new MetadataException(
             $"Junction type '{junctionType.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare exactly one " +
             "[SugarColumn(IsPrimaryKey = true)] property; the M2M sync updates junction rows by primary key.");
+    }
+
+    /// <summary>
+    /// Fail-fast: a property of a many-to-many junction type that overrides a base property carrying
+    /// <c>[SugarColumn]</c> repeats the attribute (<see cref="ColumnOverrideCheck"/>). Runs for both
+    /// <see cref="ScanTypes"/> and the assembly-based <see cref="Scan"/> (which delegates to it).
+    /// </summary>
+    private static void ValidateJunctionColumnOverrides(IEnumerable<Type> types)
+    {
+        var junctions = types.Where(t => CollectionAttributeOf(t) is not null)
+            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            .Select(NavigateShape.TryOf)
+            .Where(nav => nav is { IsJunction: true })
+            .Select(nav => nav!.JunctionType!)
+            .Distinct();
+        foreach (var junction in junctions) ColumnOverrideCheck.Require(junction, primaryKeyRuleReports: true);
     }
 
     /// <summary>
@@ -476,6 +493,9 @@ public static class MetadataScanner
     private static CollectionMetadata BuildCollection(Type type, CmsCollectionAttribute attr)
     {
         FieldDeclarationCheck.RequirePublicInstanceFields(type);
+        ColumnOverrideCheck.Require(type, primaryKeyRuleReports: true);
+        FieldInheritanceCheck.Require(type);
+        FieldSetterCheck.RequirePublicSetters(type);
         var groups = type.GetCustomAttributes<CmsFieldGroupAttribute>()
             .Select(g => new FieldGroupMetadata(g.Name, g.Label, g.Sort))
             .ToList();
@@ -552,6 +572,9 @@ public static class MetadataScanner
 
         var tType = prop.GetCustomAttribute<CmsTranslationsAttribute>()!.TranslationEntityType;
         FieldDeclarationCheck.RequirePublicInstanceFields(tType);
+        ColumnOverrideCheck.Require(tType, primaryKeyRuleReports: false);
+        FieldInheritanceCheck.Require(tType);
+        FieldSetterCheck.RequireSetters(tType);
         var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         var hasId = tProps.Any(p => string.Equals(p.Name, "Id", StringComparison.Ordinal));
@@ -754,6 +777,8 @@ public static class MetadataScanner
                 $"Repeater field '{Camel(prop.Name)}' must be a List<T> of a child object type.");
 
         FieldDeclarationCheck.RequirePublicInstanceFields(childType);
+        FieldInheritanceCheck.Require(childType);
+        FieldSetterCheck.RequireRowSetters(childType);
         var subProps = childType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null)
             .ToList();

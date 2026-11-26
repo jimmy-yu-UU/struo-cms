@@ -71,7 +71,22 @@ turns them into system fields automatically.
 inherits `AuditableEntity` — a collection like `Language` or `ArticleTag` has none.
 
 `[CmsField]` goes on a public instance property; on a non-public or static property, startup fails
-with a message that names the property. A property with no `[CmsField]` and a name other than the
+with a message that names the property. Three more declarations fail at startup, each with a message
+that says what to write:
+
+| Declaration | What to write |
+|---|---|
+| Overrides or hides a `[CmsField]` property, has none itself | Repeat `[CmsField]` on it |
+| Overrides a `[SugarColumn]` property, has none itself | Repeat `[SugarColumn]` on it |
+| A writable field without a public setter | Add a public `set` or `init`, or `ReadOnly = true` |
+
+`[CmsField]` is not inherited, and the ORM reads only a property's own `[SugarColumn]`, so an
+override repeats both. `ReadOnly = true` is for a value the server computes or sets: a get-only
+computed property that carries it is a read-only field. On a collection class a non-public setter
+with `[JsonInclude]` receives the value too. A field of a translation class always needs a setter.
+For the fields of a Repeater child type, see [Chapter 6](06-field-types.md).
+
+A property with no `[CmsField]` and a name other than the
 four audit names is skipped by the scanner entirely, so you can keep ordinary properties of your
 own on the same entity. The framework
 assigns a new item's primary key itself, as a version-7 GUID — you never generate one yourself.

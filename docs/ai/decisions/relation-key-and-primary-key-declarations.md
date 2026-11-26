@@ -119,9 +119,9 @@ name is that collection's:
   measured.
 - `short` and `ushort` sort properties overflow past 32,768 and 65,536 links; a relation write is
   bounded by `Query:MaxRelationLinks`.
-- The field scan reads `IsIgnore` with inheritance: a property that overrides an ignored one without
-  the attribute has a column, and the field scan marks its field as having none, so the field cannot
-  be filtered or sorted.
+- An override that does not repeat a base declaration's `[SugarColumn]` is refused before these
+  checks run, so the row above for a key with `IsIgnore` on a base class does not start:
+  `docs/ai/decisions/an-override-repeats-sugarcolumn.md`.
 - `[CmsRelation]` on a class that is not a collection is never scanned, and an override that does
   not repeat `[CmsRelation]` is not a relation.
 

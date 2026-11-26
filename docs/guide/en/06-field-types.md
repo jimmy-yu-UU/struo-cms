@@ -185,7 +185,9 @@ interface accepts a property whose type is `object`, contains `object` or holds 
 The rules are in [Declarations rejected at startup](#declarations-rejected-at-startup).
 
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
-violating either throws a startup `MetadataException` naming the field. Child fields can't be set
+violating either throws a startup `MetadataException` naming the field. A writable child field
+needs a public setter (`set` or `init`), or a parameter of the same name and type on the one public
+constructor of `TChild`; with neither, startup fails. Child fields can't be set
 translatable, their property types are checked against the interface tables, and they can use only
 these interfaces, a narrower set than the single-value interfaces: `Text`, `Textarea`, `Markdown`,
 `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`, `Number`, `Slider`, `Rating`, `Boolean`,

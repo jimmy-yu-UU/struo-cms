@@ -87,13 +87,13 @@ public sealed class FieldDeclarationCheckTests
     }
 
     [CmsCollection("Fdc accessors", Name = "fdcAccessors")]
-    private sealed class PublicWithRestrictedAccessors
+    private sealed class PublicWithUnusualAccessors
     {
         [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
         [CmsField(Label = "Init", Interface = FieldInterface.Text)] public string Init { get; init; } = "";
-        [CmsField(Label = "Private set", Interface = FieldInterface.Text)] public string PrivateSet { get; private set; } = "";
         [CmsField(Label = "Private get", Interface = FieldInterface.Text)] public string PrivateGet { private get; set; } = "";
-        [CmsField(Label = "Get only", Interface = FieldInterface.Text)] public string GetOnly { get; } = "";
+        [CmsField(Label = "Private set", Interface = FieldInterface.Text, ReadOnly = true)] public string PrivateSet { get; private set; } = "";
+        [CmsField(Label = "Get only", Interface = FieldInterface.Text, ReadOnly = true)] public string GetOnly { get; } = "";
     }
 
     public static TheoryData<Type, string, string> MisplacedFields() => new()
@@ -123,8 +123,8 @@ public sealed class FieldDeclarationCheckTests
     [Fact]
     public void A_public_property_whose_accessors_are_restricted_is_still_a_field()
     {
-        var fields = MetadataScanner.ScanTypes([typeof(PublicWithRestrictedAccessors)]).Single().Fields;
+        var fields = MetadataScanner.ScanTypes([typeof(PublicWithUnusualAccessors)]).Single().Fields;
 
-        fields.Select(f => f.Name).Should().Contain(["init", "privateSet", "privateGet", "getOnly"]);
+        fields.Select(f => f.Name).Should().Contain(["init", "privateGet", "privateSet", "getOnly"]);
     }
 }
