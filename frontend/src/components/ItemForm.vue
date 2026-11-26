@@ -201,7 +201,16 @@ defineExpose({ activeLocale, focusBanner, revealErrors })
               <FieldLabel :for="translatableFieldId(f.name, loc.code)">{{ f.label }}<span v-if="f.required && (loc.isDefault || localeFilled(loc.code))" class="text-destructive ml-0.5">*</span></FieldLabel>
               <Badge variant="secondary" class="tr-badge" :title="t('itemForm.translatableBadgeHint')">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
+            <template v-if="isFileFieldUnreadable(f, canReadCollection)">
+              <Input
+                :id="translatableFieldId(f.name, loc.code)"
+                disabled
+                :aria-describedby="unreadableNoteId(translationErrorKey(loc.code, f.name, defaultCode))"
+              />
+              <FieldDescription :id="unreadableNoteId(translationErrorKey(loc.code, f.name, defaultCode))">{{ unreadableNote(FILE_COLLECTION) }}</FieldDescription>
+            </template>
             <FieldInput
+              v-else
               :id="translatableFieldId(f.name, loc.code)"
               :field="f"
               v-model="model.translations[loc.code][f.name]"

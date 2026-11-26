@@ -61,17 +61,21 @@ function validateFields(
 
 // The default locale is always validated; every other locale only when it carries content, i.e. when
 // buildItemPayload would send it.
+// A file field the caller cannot read is not sent in any locale, so it cannot be required there; it still
+// counts as content when a locale is judged, as it does in buildItemPayload.
 function validateTranslations(
   translatable: FieldMeta[],
   model: FormModel,
   defaultCode: string,
   errors: Record<string, string>,
   t: Translate,
+  canReadCollection?: CanReadCollection,
 ): void {
-  validateFields(translatable, model.translations[defaultCode] ?? {}, errors, t)
+  const sendable = translatable.filter((f) => !isFileFieldUnreadable(f, canReadCollection))
+  validateFields(sendable, model.translations[defaultCode] ?? {}, errors, t)
   for (const [code, values] of Object.entries(model.translations)) {
     if (code === defaultCode || !localeIsSent(translatable, values)) continue
-    validateFields(translatable, values, errors, t, (name) => translationErrorKey(code, name, defaultCode))
+    validateFields(sendable, values, errors, t, (name) => translationErrorKey(code, name, defaultCode))
   }
 }
 
@@ -112,7 +116,7 @@ export function validateItem(
   const errors: Record<string, string> = {}
   // A file field the caller cannot read is not sent, so it cannot be required.
   validateFields(shared.filter((f) => !isFileFieldUnreadable(f, canReadCollection)), model.shared, errors, t)
-  validateTranslations(translatable, model, defaultCode, errors, t)
+  validateTranslations(translatable, model, defaultCode, errors, t, canReadCollection)
   if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors, t, canReadCollection)
   return errors
 }

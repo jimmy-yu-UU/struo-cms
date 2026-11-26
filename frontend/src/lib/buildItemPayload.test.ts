@@ -361,7 +361,7 @@ describe('buildItemPayload with an unreadable target collection', () => {
       expect(p).not.toHaveProperty('tags')
       expect(p.status).toBe('draft')
     })
-    it(`omits shared file, image and files fields on ${mode} and keeps translatable ones`, () => {
+    it(`omits shared file, image and files fields on ${mode}`, () => {
       const p = buildItemPayload(m, model, langs, mode, denying('file'))
       expect(p).not.toHaveProperty('hero')
       expect(p).not.toHaveProperty('gallery')
@@ -369,13 +369,24 @@ describe('buildItemPayload with an unreadable target collection', () => {
       expect(p.status).toBe('draft')
       expect(p.categoryId).toBe('c1')
       expect(p.tags).toEqual([])
-      expect(p.translations).toEqual({ en: { cover: 'f3' } })
+    })
+    it(`leaves a translatable file field out of every locale entry on ${mode}`, () => {
+      const p = buildItemPayload(m, model, langs, mode, denying('file'))
+      expect(p.translations).toEqual({ en: {} })
     })
     it(`is identical to the payload without the option when every collection is readable on ${mode}`, () => {
       const without = buildItemPayload(m, model, langs, mode)
       expect(buildItemPayload(m, model, langs, mode, { canReadCollection: () => true })).toEqual(without)
     })
   }
+  it('still counts the loaded value of an unreadable translatable file field as locale content', () => {
+    const two: LanguageInfo[] = [...langs, { code: 'fr', name: 'French', isDefault: false }]
+    const imageOnly: FormModel = { ...model, translations: { en: { cover: 'f3' }, fr: { cover: 'f4' } } }
+    const p = buildItemPayload(m, imageOnly, two, 'update', {
+      ...denying('file'), baselineTranslations: { en: { cover: 'f3' }, fr: { cover: 'f4' } },
+    })
+    expect(p.translations).toEqual({ en: {}, fr: {} })
+  })
   it('sends the file keys and relation keys on update when the option is absent', () => {
     const p = buildItemPayload(m, model, langs, 'update')
     expect(p).toMatchObject({ hero: 'f1', gallery: ['f2'], attachment: null, categoryId: 'c1', parentId: null, tags: [] })

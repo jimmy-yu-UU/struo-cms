@@ -20,7 +20,7 @@ function camel(s: string): string {
 export type BuildItemPayloadOptions = {
   resolveCollection?: ResolveCollection
   canWriteJunction?: (rel: RelationMeta) => boolean
-  // A relation or shared file field whose target collection this denies is left out of the payload
+  // A relation or file field (shared or in a locale) whose target collection this denies is left out of the payload
   // (the server refuses a write to it). Without it every target counts as readable.
   canReadCollection?: CanReadCollection
   // Translations as of the form's baseline (see formDirty.baselineTranslations). On update, a
@@ -93,6 +93,7 @@ export function buildItemPayload(
     const entry: Record<string, unknown> = {}
     const nulls = mode === 'update' ? model.loadedNulls?.translations[loc.code] : undefined
     for (const f of translatable) {
+      if (isFileFieldUnreadable(f, options.canReadCollection)) continue
       entry[f.name] = nullIfLoadedNull(getFieldType(f.interface).serialize(values[f.name], f), nulls, f.name)
     }
     translations[loc.code] = entry

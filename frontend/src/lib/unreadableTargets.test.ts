@@ -22,13 +22,18 @@ describe('isRelationTargetUnreadable', () => {
 })
 
 describe('isFileFieldUnreadable', () => {
-  it('is true for a shared file, image or files field when the file collection is denied', () => {
+  it('is true for a shared or translatable file, image or files field when the file collection is denied', () => {
     for (const interfaceName of ['file', 'image', 'files']) {
-      expect(isFileFieldUnreadable(field({ interface: interfaceName as FieldMeta['interface'] }), deny('file'))).toBe(true)
+      for (const translatable of [false, true]) {
+        const f = field({ interface: interfaceName as FieldMeta['interface'], translatable })
+        expect(isFileFieldUnreadable(f, deny('file'))).toBe(true)
+      }
     }
   })
-  it('is false for a translatable field, another interface, a readable collection or no check', () => {
-    expect(isFileFieldUnreadable(field({ translatable: true }), deny('file'))).toBe(false)
+  it('is false for another interface, a readable collection or no check', () => {
+    expect(isFileFieldUnreadable(field({ translatable: true }), deny('tag'))).toBe(false)
+    expect(isFileFieldUnreadable(field({ translatable: true }))).toBe(false)
+    expect(isFileFieldUnreadable(field({ interface: 'text', translatable: true }), deny('file'))).toBe(false)
     expect(isFileFieldUnreadable(field({ interface: 'text' }), deny('file'))).toBe(false)
     expect(isFileFieldUnreadable(field({}), deny('tag'))).toBe(false)
     expect(isFileFieldUnreadable(field({}))).toBe(false)
