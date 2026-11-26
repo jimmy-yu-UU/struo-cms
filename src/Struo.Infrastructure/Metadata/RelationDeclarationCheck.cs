@@ -82,33 +82,12 @@ internal static class RelationDeclarationCheck
     /// </summary>
     public static void RequirePublicInstanceRelations(Type collection)
     {
-        var misplaced = Hierarchy(collection)
-            .SelectMany(type => type.GetTypeInfo().DeclaredProperties)
-            .FirstOrDefault(
-                prop => prop.IsDefined(typeof(CmsRelationAttribute), inherit: false) && !IsPublicInstance(prop));
-        if (misplaced is null) return;
+        if (DeclaredProperties.FirstMisplaced(collection, typeof(CmsRelationAttribute)) is not { } misplaced) return;
 
-        var what = AccessorsOf(misplaced)[0].IsStatic ? "static" : "not public";
         throw new MetadataException(
-            $"Relation '{RelationName(misplaced)}' has [CmsRelation] but is {what}, so the relation is not served. " +
-            "A relation is a public instance property: declare it public and without static.");
+            $"Relation '{RelationName(misplaced)}' has [CmsRelation] but is {DeclaredProperties.WhyNotRead(misplaced)}, " +
+            "so the relation is not served. A relation is a public instance property: declare it public and without static.");
     }
-
-    private static IEnumerable<Type> Hierarchy(Type type)
-    {
-        for (var current = type; current is not null; current = current.BaseType)
-            yield return current;
-    }
-
-    private static bool IsPublicInstance(PropertyInfo prop)
-    {
-        var accessors = AccessorsOf(prop);
-        return Array.Exists(accessors, accessor => accessor.IsPublic) && !accessors[0].IsStatic;
-    }
-
-    // The getter and the setter a property declares, whatever their accessibility; it has at least one.
-    private static MethodInfo[] AccessorsOf(PropertyInfo prop) =>
-        new[] { prop.GetMethod, prop.SetMethod }.OfType<MethodInfo>().ToArray();
 
     private static void RequireRelation(
         PropertyInfo prop, CmsRelationAttribute attribute, IReadOnlyDictionary<string, Type> collections)

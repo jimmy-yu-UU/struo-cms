@@ -3,6 +3,15 @@
 ## 0.35.0
 
 ::: danger Breaking
+- A `[CmsField]` on a property that is not public (private, protected, internal, or an explicit
+  interface implementation) or on a static property stops the host at start with a
+  `MetadataException` that names the property. Collection classes, translation classes, Repeater
+  child types and their base classes are all checked. A non-public property was not read, so its
+  field silently did not exist; a static property made creating an item throw. Both were measured
+  on SQLite below the HTTP layer. Make it a public instance property, or remove `[CmsField]`
+  ([Chapter 5](05-collections.md)).
+- A fork's own options validation registered with `ValidateOnStart()` runs before the startup
+  migration. A validator that reads the database must not depend on migrated tables.
 - The admin SPA's `DataTablePagination` component requires its `ready` prop. A fork whose own views
   use the component passes `:ready`: `true` once the total is known, `false` until the first total
   has arrived. Without it, the type check of `pnpm build` fails.
@@ -10,11 +19,26 @@
 
 ### Changed
 
+- A request to `/graphql` that fails on the server before it reaches the GraphQL server (for
+  example, the credential store cannot be reached during authentication) answers HTTP `500` in the
+  GraphQL `errors` shape, with `INTERNAL_SERVER_ERROR` and the masked message; it answered in the
+  REST error envelope. The status, code, message and the error-level log entry are unchanged
+  ([Chapter 14](14-graphql.md#error-shapes)).
 - A related list in a form shows no range before its first total arrives; when the parent item
   changes, the list is cleared and loaded again.
 
 ### Fixed
 
+- With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
+  `ValidateOnStart`, the host fails to start before it connects to the database and applies no
+  migration. It applied the migrations first and then failed on that value; measured for
+  `RateLimiting:Login:PermitLimit`, `RateLimiting:LoginConcurrency:PermitLimit`, `Query:MaxLimit`
+  and `Api:MaxJsonBodyBytes` ([Chapter 4](04-configuration.md)).
+- A cookie-authenticated `POST /graphql` without the `X-Struo-CSRF` header is answered in the
+  GraphQL `errors` shape:
+  `{"errors":[{"message":…,"extensions":{"code":"FORBIDDEN","traceId":…}}]}`.
+  It was answered in the REST error envelope. The status `403`, the code and the message are
+  unchanged ([Chapter 14](14-graphql.md#error-shapes)).
 - On the role form, the reason a disabled Delete button is disabled is shown as a note on the page,
   and the button points at it with `aria-describedby`. The reason was only in the button's `title`,
   and a disabled button receives no pointer events, so it never showed.

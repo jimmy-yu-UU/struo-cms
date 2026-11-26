@@ -475,6 +475,7 @@ public static class MetadataScanner
 
     private static CollectionMetadata BuildCollection(Type type, CmsCollectionAttribute attr)
     {
+        FieldDeclarationCheck.RequirePublicInstanceFields(type);
         var groups = type.GetCustomAttributes<CmsFieldGroupAttribute>()
             .Select(g => new FieldGroupMetadata(g.Name, g.Label, g.Sort))
             .ToList();
@@ -550,6 +551,7 @@ public static class MetadataScanner
         if (prop is null) return (null, []);
 
         var tType = prop.GetCustomAttribute<CmsTranslationsAttribute>()!.TranslationEntityType;
+        FieldDeclarationCheck.RequirePublicInstanceFields(tType);
         var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         var hasId = tProps.Any(p => string.Equals(p.Name, "Id", StringComparison.Ordinal));
@@ -751,6 +753,7 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Repeater field '{Camel(prop.Name)}' must be a List<T> of a child object type.");
 
+        FieldDeclarationCheck.RequirePublicInstanceFields(childType);
         var subProps = childType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null)
             .ToList();

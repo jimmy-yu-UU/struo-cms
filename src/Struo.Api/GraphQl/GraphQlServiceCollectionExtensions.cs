@@ -149,7 +149,7 @@ public static class GraphQlServiceCollectionExtensions
     public static void MapStruoGraphQl(this WebApplication app)
     {
         var exposeSchema = ResolveExposeSchema(app.Configuration, app.Environment);
-        app.MapGraphQL("/graphql")
+        app.MapGraphQL(Struo.Api.Http.GraphQlTransportError.EndpointPath)
             .WithOptions(options =>
             {
                 options.Tool.Enable = app.Environment.IsDevelopment(); // Nitro IDE dev-only
