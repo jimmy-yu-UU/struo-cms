@@ -83,7 +83,9 @@ that a file meant to be public has to be published one by one. The default stays
 
 Uploading is `POST /api/files`, `Content-Type: multipart/form-data`, with one required part named
 `file` plus an optional `folderId` part carrying a GUID. Uploading also requires the `file` write
-grant; without it the response is `Write not permitted.`.
+grant; without it the response is `Write not permitted.`. An upload that carries `folderId` also
+needs a read grant on `mediaFolder`; without it the response is
+`Read not permitted on 'mediaFolder'.`.
 
 Success is `201`, with `Location` pointing at the file just created, and a body that's the
 projected row:

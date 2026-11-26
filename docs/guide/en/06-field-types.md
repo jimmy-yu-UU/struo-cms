@@ -206,9 +206,9 @@ these interfaces, a narrower set than the single-value interfaces: `Text`, `Text
 | `Image` | `Guid`/`Guid?` | CLR default | `FileField` |
 | `Files` | `List<Guid>` | JSON | `FilesField` |
 
-`File` and `Image` share the same editor; `Image` adds an image preview. The ids `Files` stores
-aren't checked for existence on write — an id pointing at an already-purged file is stored just
-the same, and the admin picker can only fall back to showing the raw id.
+`File` and `Image` share the same editor; `Image` adds an image preview. A file id is checked on
+write ([Chapter 8](08-relations.md#what-a-link-write-requires)); for an id whose file has been
+purged since, the admin picker falls back to showing the raw id.
 
 ### Display-only and identifiers
 

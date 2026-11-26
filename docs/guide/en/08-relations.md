@@ -155,11 +155,10 @@ resolve differently:
 - The key is present but its value isn't an array: also skipped.
 - The key is sent as an explicit `[]`: every junction row for that relation is deleted.
 
-A many-to-one foreign key is never checked for existence on write — only many-to-many target ids
-are. This schema layer also carries no database-level foreign-key constraints at all:
-`OnDelete` and every reference check happen in application code, so a fork's own ETL or direct
-database access bypasses all of it and can leave a dangling child row behind. A relation's label in
-metadata is always the PascalCase CLR property name; no attribute member can override it.
+This schema layer carries no database-level foreign-key constraints: `OnDelete` and every
+reference check happen in application code, so a fork's own ETL or direct database access bypasses
+all of it and can leave a dangling child row behind. A relation's label in metadata is always the
+PascalCase CLR property name; no attribute member can override it.
 
 ## `[CmsRelation]` options
 
@@ -307,6 +306,39 @@ sample's `Article.Category` and `Category.Parent` both declare `OnDelete.SetNull
 so a cycle can't send it into infinite recursion. Referencing rows are read with the soft-delete
 filter bypassed, so a referrer already in the trash gets cascaded too, not skipped. Neither the
 framework nor the sample declares any relation as `Cascade`.
+
+## What a link write requires
+
+A write that names a link needs a read grant on the collection the link points at, on top of the
+write grant on the collection being written:
+
+| Key in the body | Read grant needed on |
+|---|---|
+| A many-to-many relation, an empty `[]` included | The relation's target |
+| A many-to-one foreign key, `null` included | The relation's target |
+| Either key of a junction row | The collection that key names |
+| A `File`, `Image` or `Files` field | `file` |
+| The same field inside `translations` | `file` |
+| `folderId` on an upload | `mediaFolder` |
+
+Without it the write is refused with `403` and `Read not permitted on '{target}'.`, before any id
+is looked at, so an id that exists, one that does not, one in the trash and one that is not an id
+all get the same answer. A key the body does not carry is not checked and the stored link stays as
+it is. A super-admin reads every collection.
+
+On update, a `File`, `Image` or `Files` field sent with the value it already holds is let through,
+inside `translations` as well: an item read returns those ids, and a form sends them back as they
+were. A `Hidden` file field has no such allowance, and neither has a create.
+
+For a caller who can read the target, the row must also exist. A many-to-many id is checked as
+described above. A many-to-one foreign key, a junction key or a file id that names no row, or a
+row in the trash, is refused with `400`: `The id in '{key}' does not exist in '{target}'.`, and for
+a `Files` list `One or more ids in '{field}' do not exist in 'file'.` On create every id sent is
+checked; on update only an id the stored value does not already hold, so an item that already holds
+a dangling id can still be saved. An all-zero GUID is not checked.
+
+The admin form shows a relation or file field whose target the signed-in user cannot read as a
+disabled input with a note, and leaves it out of what it saves.
 
 ## Reading related data with `deep`
 

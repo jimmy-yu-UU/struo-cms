@@ -416,6 +416,9 @@ HTTP_STATUS:400
 沒帶 `id` 這個鍵，則是另一句訊息：`Each object in '<relation>' must carry an 'id'.`，這一關一樣
 會在任何 payload 值被綁定之前就先擋下。
 
+寫入時指名關聯，需要目標集合的讀取授權，而且在看任何 id 之前就檢查；每一種連結的規則見
+[第 8 章](08-relations.md#連結的寫入要求)。
+
 每一個目標 id 都必須真的存在，不存在會得到 `One or more ids in '<relation>' do not exist in
 '<target>'.`；還原是唯一的例外，它連已經被丟進垃圾桶的目標也認，因為快照擷取當下那個目標可能還沒
 被丟——[第 9 章：版本紀錄與軟刪除](09-revisions-and-trash.md)已經說過這個道理。

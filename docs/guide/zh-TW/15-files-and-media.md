@@ -69,7 +69,8 @@ id 是隨機的 GUID，但連結分享或寫進 log 之後，id 就會流出部�
 
 上傳是 `POST /api/files`，`Content-Type: multipart/form-data`，一個必要的分段叫 `file`，外
 加一個選用的 `folderId` 分段帶 GUID。上傳另外要求 `file` 的寫入授權，沒有授權會得到 `Write
-not permitted.`。
+not permitted.`。帶 `folderId` 的上傳還需要 `mediaFolder` 的讀取授權，沒有的話得到
+`Read not permitted on 'mediaFolder'.`。
 
 成功是 `201`，`Location` 指向剛建立的檔案，body 是投影過的一列：
 

@@ -37,6 +37,20 @@
   was not stored; a translation field with no setter made the write throw. Add a public setter, or
   declare `[CmsField(ReadOnly = true)]` when the server computes the value
   ([Chapter 5](05-collections.md)).
+- A create or an update that names a link needs a read grant on the collection the link points at:
+  a many-to-many relation (an empty `[]` included), a many-to-one foreign key (`null` included),
+  either key of a junction row, a `File`, `Image` or `Files` field (inside `translations` too), and
+  `folderId` on an upload. Without it the write is refused with `403` and
+  `Read not permitted on '{target}'.`, before any id is looked at. A link write needed the write
+  grant only, so a caller could link and unlink rows of a collection they could not read. On update,
+  a file field sent with the value it already holds is let through. Give read on the target to a
+  role that writes such links; assigning roles to a user needs read on `role`
+  ([Chapter 8](08-relations.md#what-a-link-write-requires)).
+- A many-to-one foreign key, a junction key or a file id that names no row, or a row in the trash,
+  is refused with `400` `BAD_USER_INPUT`: `The id in '{key}' does not exist in '{target}'.` Such an
+  id was stored. On update only an id the stored value does not already hold is checked. A client
+  that writes the id of a row it creates afterwards creates that row first
+  ([Chapter 8](08-relations.md#what-a-link-write-requires)).
 :::
 
 ### Changed
@@ -48,6 +62,8 @@
   ([Chapter 14](14-graphql.md#error-shapes)).
 - A related list in a form shows no range before its first total arrives; when the parent item
   changes, the list is cleared and loaded again.
+- The item form shows a relation or file field whose target the signed-in user cannot read as a
+  disabled input with a note, and leaves it out of what it saves.
 
 ### Fixed
 
