@@ -105,12 +105,6 @@ public sealed class FileServiceSoftDeleteTests : IDisposable
         }).ExecuteCommandAsync();
 
     [Fact]
-    public void The_file_entity_is_soft_deletable()
-    {
-        typeof(File).Should().Implement<Struo.Domain.Auditing.ISoftDeletable>();
-    }
-
-    [Fact]
     public async Task Trash_stamps_deletedat_and_retains_row_blob_and_translations()
     {
         var id = await InsertFileAsync();

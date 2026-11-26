@@ -29,17 +29,20 @@ public sealed class GraphQlNumberCoercionTests(ApiFactory factory) : IDisposable
 
     public void Dispose() => _host?.Dispose();
 
+    // A test that asserts through AssertSingleCode gets a host of its own, so the sink holds only its events.
     private Task<HttpClient> ClientAsync()
     {
         _host ??= factory.WithSink(_sink);
         return _host.AdminClientAsync(factory);
     }
 
+    private Task<HttpClient> SharedClientAsync() => factory.CreateAuthenticatedClientAsync();
+
     private static JsonElement Root(string body) => JsonDocument.Parse(body).RootElement;
 
-    private async Task<(HttpClient Client, string Id)> CreateArticleAsync()
+    private async Task<(HttpClient Client, string Id)> CreateArticleAsync(bool isolatedHost = true)
     {
-        var client = await ClientAsync();
+        var client = isolatedHost ? await ClientAsync() : await SharedClientAsync();
         var create = await client.PostAsJsonAsync("/api/items/fxArticle",
             new { status = "draft", translations = new { en = new { title = "N" } } });
         create.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -174,7 +177,7 @@ public sealed class GraphQlNumberCoercionTests(ApiFactory factory) : IDisposable
     [Fact]
     public async Task A_valid_Int_and_Long_still_succeed()
     {
-        var (client, id) = await CreateArticleAsync();
+        var (client, id) = await CreateArticleAsync(isolatedHost: false);
 
         var list = await PostAsync(client, new { query = "{ fxArticles(limit: 1, offset: 0) { total } }" });
         list.TryGetProperty("errors", out _).Should().BeFalse(list.GetRawText());
@@ -192,7 +195,7 @@ public sealed class GraphQlNumberCoercionTests(ApiFactory factory) : IDisposable
 
     private async Task<(HttpClient Client, Guid Big, Guid Small)> SeedFilesAsync()
     {
-        var client = await ClientAsync();
+        var client = await SharedClientAsync();
         async Task<Guid> UploadAsync(string name)
         {
             var content = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(name));
@@ -261,7 +264,7 @@ public sealed class GraphQlNumberCoercionTests(ApiFactory factory) : IDisposable
     [Fact]
     public async Task Rest_limit_beyond_the_Int_range_falls_back_to_the_default_limit()
     {
-        var client = await ClientAsync();
+        var client = await SharedClientAsync();
         var defaultLimit = factory.Services.GetRequiredService<IOptions<StruoQueryOptions>>().Value.DefaultLimit;
 
         var resp = await client.GetAsync("/api/items/fxArticle?limit=99999999999");

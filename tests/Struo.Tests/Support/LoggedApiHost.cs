@@ -30,6 +30,9 @@ public static class LoggedApiHost
     }
 
     /// <summary>Asserts that nothing at Error level or above was logged.</summary>
-    public static void ShouldHaveLoggedNoErrors(this CapturingLogSink sink) =>
+    public static void ShouldHaveLoggedNoErrors(this CapturingLogSink sink)
+    {
+        sink.Events.Should().NotBeEmpty("the host's log events must reach this sink");
         sink.Events.Where(e => e.Level >= LogEventLevel.Error).Select(e => e.RenderMessage()).Should().BeEmpty();
+    }
 }

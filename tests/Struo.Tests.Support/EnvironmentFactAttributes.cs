@@ -146,12 +146,13 @@ public sealed class LiveBackendTheoryDiscoverer(IMessageSink diagnosticMessageSi
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class LiveBackendSwitchFactAttribute : FactAttribute
 {
-    public LiveBackendSwitchFactAttribute(string switchVariable) => Skip = SkipReason(switchVariable, TestBackend.IsLive);
+    public LiveBackendSwitchFactAttribute(string switchVariable) =>
+        Skip = SkipReason(switchVariable, Environment.GetEnvironmentVariable(switchVariable), TestBackend.IsLive);
 
     /// <summary>The reason the action does not run, or null when a live backend is selected and the switch is <c>1</c>.</summary>
-    public static string? SkipReason(string switchVariable, bool isLive)
+    public static string? SkipReason(string switchVariable, string? switchValue, bool isLive)
     {
         if (!isLive) return $"Needs a live backend: set STRUO_TEST_BACKEND, and {switchVariable}=1.";
-        return Environment.GetEnvironmentVariable(switchVariable) == "1" ? null : $"Set {switchVariable}=1 to run.";
+        return switchValue == "1" ? null : $"Set {switchVariable}=1 to run.";
     }
 }

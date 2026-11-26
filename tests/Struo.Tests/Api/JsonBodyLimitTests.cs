@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Serilog.Core;
 using Struo.Api.Auth;
 using Struo.Application.Configuration;
 using Struo.Tests.Support;
@@ -29,19 +30,12 @@ public class JsonBodyLimitTests(ApiFactory factory)
     private readonly CapturingLogSink _sink = new();
 
     private WebApplicationFactory<Program> Host(string limit = "1024") =>
-        _factory.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, c) =>
-            c.AddInMemoryCollection(new Dictionary<string, string?> { ["Api:MaxJsonBodyBytes"] = limit })))
-            .WithSink(_sink);
-
-    private async Task<HttpClient> AdminClientAsync(WebApplicationFactory<Program> host)
-    {
-        await _factory.EnsureAdminSeededAsync();
-        var client = host.CreateClient();
-        client.DefaultRequestHeaders.Add(CsrfProtectionMiddleware.HeaderName, "1");
-        (await client.PostAsJsonAsync("/api/auth/login",
-            new { email = ApiFactory.AdminEmail, password = ApiFactory.AdminPassword })).EnsureSuccessStatusCode();
-        return client;
-    }
+        _factory.WithWebHostBuilder(b =>
+        {
+            b.ConfigureAppConfiguration((_, c) =>
+                c.AddInMemoryCollection(new Dictionary<string, string?> { ["Api:MaxJsonBodyBytes"] = limit }));
+            b.ConfigureServices(s => s.AddSingleton<ILogEventSink>(_sink));
+        });
 
     private static StringContent Json(int approxBytes) =>
         new("{\"title\":\"" + new string('a', approxBytes) + "\"}", Encoding.UTF8, "application/json");
@@ -112,7 +106,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
     public async Task Items_create_under_the_limit_is_not_rejected()
     {
         using var host = Host();
-        var client = await AdminClientAsync(host);
+        var client = await host.AdminClientAsync(_factory);
         var resp = await client.PostAsync("/api/items/fxArticle", Json(Limit - 200));
         resp.StatusCode.Should().NotBe(HttpStatusCode.RequestEntityTooLarge);
     }
@@ -121,7 +115,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
     public async Task Items_create_over_the_limit_by_content_length_is_413()
     {
         using var host = Host();
-        var client = await AdminClientAsync(host);
+        var client = await host.AdminClientAsync(_factory);
         await AssertPayloadTooLargeEnvelopeAsync(await client.PostAsync("/api/items/fxArticle", Json(Limit + 200)));
     }
 
@@ -140,7 +134,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
     public async Task Chunked_body_without_content_length_over_the_limit_is_413()
     {
         using var host = Host();
-        var client = await AdminClientAsync(host);
+        var client = await host.AdminClientAsync(_factory);
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/items/fxArticle")
         {
             Content = UnknownLengthContent.Of(Limit * 3),
@@ -155,7 +149,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
     public async Task Chunked_body_under_the_limit_is_not_rejected()
     {
         using var host = Host();
-        var client = await AdminClientAsync(host);
+        var client = await host.AdminClientAsync(_factory);
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/items/fxArticle")
         {
             Content = UnknownLengthContent.Of(Limit / 2),
@@ -203,7 +197,7 @@ public class JsonBodyLimitTests(ApiFactory factory)
     public async Task Multipart_upload_above_the_json_limit_still_works()
     {
         using var host = Host();
-        var client = await AdminClientAsync(host);
+        var client = await host.AdminClientAsync(_factory);
         var file = new ByteArrayContent(Encoding.UTF8.GetBytes(new string('x', Limit * 4)));
         file.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         var content = new MultipartFormDataContent { { file, "file", "big.txt" } };

@@ -19,6 +19,5 @@ public sealed class QuerySpecDefaultsTests
     public void The_default_deleted_filter_excludes_trashed_rows()
     {
         default(DeletedFilter).Should().Be(DeletedFilter.Exclude);
-        ((int)DeletedFilter.Exclude).Should().Be(0);
     }
 }
