@@ -5,6 +5,7 @@ using Struo.Api.Auth;
 using Struo.Api.Http;
 using ErrorCodes = Struo.Api.Http.ErrorCodes; // disambiguates from the global `HotChocolate.ErrorCodes` using (GraphQl)
 using Struo.Application.Files;
+using Struo.Application.Security;
 using Struo.Domain.Query;
 // Alias to avoid importing the Struo.Infrastructure.Files namespace, whose `File` type would
 // clash with ControllerBase.File(...) used by the download action.
@@ -16,7 +17,7 @@ namespace Struo.Api.Controllers;
 [Route("api/files")]
 public sealed class FilesController(
     FileService files, IFileStorage storage, FileStorageOptions options, IFileAccessPolicy access,
-    ImageTransformServices images, ILogger<FilesController> logger)
+    ImageTransformServices images, IPermissionService permissions, ILogger<FilesController> logger)
     : ControllerBase
 {
     // The media library is the "file" collection. Mutations go through the dedicated file storage
@@ -42,7 +43,7 @@ public sealed class FilesController(
         if (!string.IsNullOrEmpty(folderRaw))
         {
             // The folder id links a mediaFolder row: it needs read on mediaFolder, decided before the id is parsed or looked up.
-            if (!access.CanReadFolders())
+            if (!permissions.CanRead(FileCollection.FolderName))
                 throw Struo.Application.Query.RelationTargetReadGuard.ReadDenied(FileCollection.FolderName);
             if (!Guid.TryParse(folderRaw, out var parsedFolder))
                 return ApiResults.Fail(StatusCodes.Status400BadRequest, ErrorCodes.BadUserInput, "Invalid 'folderId'.");

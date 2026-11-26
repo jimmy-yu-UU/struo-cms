@@ -15,6 +15,7 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
     private const string Article = "fxArticle";
     private const string Tags = "tags";
     private const string CategoryId = "categoryId";
+    private const string Junction = "fxArticleTag";
 
     private readonly NoPublicRelationsApiFactory factory;
     private readonly RelationWriteHarness h;
@@ -80,7 +81,7 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var history = await h.SeedHistoryAsync(admin);
-        var reader = await h.CallerAsync([Article, "fxCategory", "fxTag"], []);
+        var reader = await h.CallerAsync([Article, "fxCategory", "fxTag", Junction], []);
 
         var asReader = await h.SnapshotAsync(reader, channel, history.Article, RevisionOne);
         var asAdmin = await h.SnapshotAsync(admin, channel, history.Article, RevisionOne);
@@ -89,6 +90,35 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         AssertRelationsShown(asAdmin, history);
         AssertFileIdsKept(asReader, history);
         asReader.GetRawText().Should().Be(asAdmin.GetRawText());
+    }
+
+    [Theory]
+    [InlineData(Rest)]
+    [InlineData(Gql)]
+    public async Task A_caller_who_reads_the_target_but_not_the_junction_sees_the_ids_without_the_payload(string channel)
+    {
+        var admin = await factory.CreateAuthenticatedClientAsync();
+        var history = await h.SeedHistoryAsync(admin);
+        var client = await h.CallerAsync([Article, "fxCategory", "fxTag"], []);
+
+        var snapshot = await h.SnapshotAsync(client, channel, history.Article, RevisionOne);
+
+        var tags = snapshot.GetProperty(Tags).EnumerateArray().ToList();
+        tags.Should().OnlyContain(t => t.ValueKind == JsonValueKind.String);
+        tags.Select(t => t.GetGuid()).Should().Equal(history.Tag1);
+        snapshot.GetProperty(CategoryId).GetGuid().Should().Be(history.Category1);
+        AssertFileIdsKept(snapshot, history);
+    }
+
+    [Fact]
+    public async Task A_caller_who_reads_the_junction_but_not_the_target_sees_no_array()
+    {
+        var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
+        var client = await h.CallerAsync([Article, "fxCategory", Junction], []);
+
+        var snapshot = await h.SnapshotAsync(client, Rest, history.Article, RevisionOne);
+
+        snapshot.TryGetProperty(Tags, out _).Should().BeFalse();
     }
 
     [Fact]

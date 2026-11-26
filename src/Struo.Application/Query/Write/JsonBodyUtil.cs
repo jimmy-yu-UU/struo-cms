@@ -58,6 +58,39 @@ internal static class JsonBodyUtil
     }
 
     /// <summary>
+    /// Serialises <paramref name="source"/> with each top-level array in <paramref name="keys"/> reduced to the
+    /// <c>id</c> of its object elements (other elements are copied as they are).
+    /// </summary>
+    internal static byte[] WithBareIds(JsonElement source, IReadOnlySet<string> keys)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+        {
+            writer.WriteStartObject();
+            foreach (var prop in source.EnumerateObject())
+            {
+                if (!keys.Contains(prop.Name) || prop.Value.ValueKind != JsonValueKind.Array)
+                {
+                    prop.WriteTo(writer);
+                    continue;
+                }
+                writer.WritePropertyName(prop.Name);
+                writer.WriteStartArray();
+                foreach (var element in prop.Value.EnumerateArray())
+                {
+                    if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("id", out var id))
+                        id.WriteTo(writer);
+                    else
+                        element.WriteTo(writer);
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndObject();
+        }
+        return ms.ToArray();
+    }
+
+    /// <summary>
     /// Serialises <paramref name="source"/> with its top-level <c>version</c> key replaced by
     /// <paramref name="version"/>, or removed when <paramref name="version"/> is null.
     /// </summary>

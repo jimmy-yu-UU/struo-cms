@@ -355,7 +355,6 @@ public class UploadBodyLimitFilterTests
     {
         public bool CanWrite() => canWrite;
         public bool CanDelete() => canWrite;
-        public bool CanReadFolders() => canWrite;
         public bool CanReadUnpublished() => canWrite;
     }
 

@@ -64,6 +64,8 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
         if (body.ValueKind != JsonValueKind.Object || permissions.CanRead(FileCollection.Name)) return;
         var sent = SentFiles(meta, body).ToList();
         if (sent.Count == 0) return;
+        // A Hidden field is not returned by the item read, so no stored value may be matched against it.
+        if (sent.Any(file => file.Field.Hidden)) throw ReadDenied(FileCollection.Name);
         var stored = await loadStored();
         if (sent.Any(file => !stored.Holds(file))) throw ReadDenied(FileCollection.Name);
     }

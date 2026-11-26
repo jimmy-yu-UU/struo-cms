@@ -712,10 +712,17 @@ public sealed class ItemService(
                               && !fieldNames.Contains(fk) && !permissions.CanRead(rel.TargetCollection))
                 .Select(rel => rel.ForeignKey!))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (keys.Count == 0) return snapshot;
+        // The item read attaches a junction payload only for a caller who can read the junction collection.
+        var bareIds = descriptors
+            .Where(desc => desc.HasPayload && !keys.Contains(desc.RelationName)
+                           && (desc.JunctionCollection is null || !permissions.CanRead(desc.JunctionCollection)))
+            .Select(desc => desc.RelationName)
+            .ToHashSet(StringComparer.Ordinal);
+        if (keys.Count == 0 && bareIds.Count == 0) return snapshot;
         using var doc = JsonDocument.Parse(snapshot);
         if (doc.RootElement.ValueKind != JsonValueKind.Object) return snapshot;
-        return System.Text.Encoding.UTF8.GetString(JsonBodyUtil.StripKeys(doc.RootElement, keys));
+        using var stripped = JsonDocument.Parse(JsonBodyUtil.StripKeys(doc.RootElement, keys));
+        return System.Text.Encoding.UTF8.GetString(JsonBodyUtil.WithBareIds(stripped.RootElement, bareIds));
     }
 
     // U5b: post-commit change notification. CancellationToken.None on purpose — the write already
