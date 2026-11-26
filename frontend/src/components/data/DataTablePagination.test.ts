@@ -6,9 +6,9 @@ import DataTablePagination from './DataTablePagination.vue'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-function mountPager(props: { page: number; pageSize: number; total: number; pageSizeOptions?: number[]; showPageSizeSelector?: boolean }) {
+function mountPager(props: { page: number; pageSize: number; total: number; pageSizeOptions?: number[]; showPageSizeSelector?: boolean; ready?: boolean }) {
   return mount(DataTablePagination, {
-    props,
+    props: { ready: true, ...props },
     // reka-ui's Select portal is itself named "Teleport" -- see vitest.setup.ts for why this stub
     // configuration is required, and UiLanguageSwitcher.test.ts for the same pattern applied to
     // the same vendored Select.

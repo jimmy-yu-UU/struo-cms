@@ -40,7 +40,7 @@ const i18n = createI18n({
     menuOpen: 'Open', menuMove: 'Move to…', menuRename: 'Rename', menuDelete: 'Delete',
     menuNewFolder: 'New folder', menuUpload: 'Upload',
     selectionCount: '{n} selected', selectionClear: 'Clear selection',
-  }, collectionList: {
+  }, common: { loading: 'Loading…' }, collectionList: {
     range: 'Showing {from}–{to} of {total}', active: 'Active', trash: 'Trash',
     restore: 'Restore', purge: 'Delete permanently', trashNotice: 'You are viewing the trash.',
   } } },
@@ -99,6 +99,39 @@ describe('MediaLibraryView', () => {
     // grid/list).
     expect(w.findAll('[data-slot="select-trigger"]')).toHaveLength(3)
     expect(w.findAll('[data-slot="toggle-group"]')).toHaveLength(2)
+  })
+
+  it('marks the results busy and shows a loading text until the first list arrives', async () => {
+    seedUser({})
+    let resolveFiles: (v: { data: unknown; total: number }) => void = () => {}
+    vi.spyOn(itemsApi, 'list').mockImplementation((collection: string) => {
+      if (collection === 'mediafolder') return Promise.resolve({ data: [] as never, total: 0 })
+      return new Promise((r) => { resolveFiles = r as typeof resolveFiles }) as never
+    })
+    const w = mountView()
+    await flushPromises()
+    expect(w.get('.media-body').attributes('aria-busy')).toBe('true')
+    expect(w.get('.media-body').text()).toContain('Loading…')
+    expect(w.find('.empty').exists()).toBe(false)
+    resolveFiles({ data: rows, total: 1 })
+    await flushPromises()
+    expect(w.get('.media-body').attributes('aria-busy')).toBe('false')
+    expect(w.get('.media-body').text()).not.toContain('Loading…')
+  })
+
+  it('keeps the results while a refresh loads: busy, with no loading text', async () => {
+    seedUser({})
+    const list = makeListMock([{ data: rows, total: 1 }])
+    const w = mountView()
+    await flushPromises()
+    list.mockImplementation((collection: string) => {
+      if (collection === 'mediafolder') return Promise.resolve({ data: [] as never, total: 0 })
+      return new Promise(() => {}) as never
+    })
+    ;(w.vm as unknown as { reload: () => void }).reload()
+    await flushPromises()
+    expect(w.get('.media-body').attributes('aria-busy')).toBe('true')
+    expect(w.get('.media-body').text()).not.toContain('Loading…')
   })
 
   it('leaves the count caption empty until the first total arrives, then keeps the last total while refreshing', async () => {

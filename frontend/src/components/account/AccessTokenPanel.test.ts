@@ -330,4 +330,20 @@ describe('AccessTokenPanel', () => {
       expect(b!.attributes('title'), label).toBe('Not for you')
     }
   })
+
+  it('points the disabled actions at the note that explains them', async () => {
+    vi.mocked(usersApi.getAccessTokenInfo).mockResolvedValue(HAS_TOKEN)
+    const mountWith = (props: Record<string, unknown>) => mount(AccessTokenPanel, {
+      props: { userId: 'u1', disabledHint: 'Not for you', describedBy: 'why', ...props },
+      global: { plugins: [i18n], stubs: { teleport: true }, renderStubDefaultSlot: true },
+    })
+    const locked = mountWith({ manageable: false })
+    await flushPromises()
+    for (const label of ['Regenerate', 'Revoke']) {
+      expect(locked.findAll('button').find((x) => x.text() === label)!.attributes('aria-describedby'), label).toBe('why')
+    }
+    const open = mountWith({ manageable: true })
+    await flushPromises()
+    expect(open.findAll('button').find((x) => x.text() === 'Regenerate')!.attributes('aria-describedby')).toBeUndefined()
+  })
 })

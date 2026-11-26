@@ -10,7 +10,10 @@ import type { RelationMeta, CollectionMeta } from '../../types/schema'
 
 const i18n = createI18n({
   legacy: false, locale: 'en', fallbackLocale: 'en',
-  messages: { en: { fields: { noRelatedItems: 'No related items.' }, common: { loading: 'Loading…' } } },
+  messages: { en: {
+    fields: { noRelatedItems: 'No related items.' }, common: { loading: 'Loading…' },
+    collectionList: { range: 'Showing {from}–{to} of {total}' },
+  } },
 })
 
 const push = vi.fn()
@@ -165,6 +168,73 @@ describe('RelatedList', () => {
     expect(button.attributes('type')).toBe('button')
     await button.trigger('click')
     expect(push).toHaveBeenCalledWith({ name: 'collection-item', params: { name: 'article', id: 'a1' } })
+  })
+
+  it('shows no range text before the first total arrives, and the range after it', async () => {
+    setupStores()
+    let resolveList: (v: { data: never[]; total: number }) => void = () => {}
+    vi.spyOn(itemsApi, 'list').mockReturnValue(new Promise((r) => { resolveList = r }))
+    const w = mount(RelatedList, {
+      props: { relation, parentId: 'p1' },
+      global: { stubs: { DataTable: true }, plugins: [i18n] },
+    })
+    const pager = () => w.findComponent({ name: 'DataTablePagination' })
+    expect(pager().props('ready')).toBe(false)
+    expect(w.text()).not.toContain('Showing')
+    resolveList({ data: [], total: 7 })
+    await flushPromises()
+    expect(pager().props('ready')).toBe(true)
+    expect(w.text()).toContain('Showing 1–7 of 7')
+  })
+
+  it('stays not ready when the first load fails', async () => {
+    setupStores()
+    vi.spyOn(itemsApi, 'list').mockRejectedValue(new Error('boom'))
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTablePagination' }).props('ready')).toBe(false)
+  })
+
+  it('is not ready, and reloads, when the parent changes', async () => {
+    setupStores()
+    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 3 })
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTablePagination' }).props('ready')).toBe(true)
+    let resolveNext: (v: { data: never[]; total: number }) => void = () => {}
+    list.mockReturnValue(new Promise((r) => { resolveNext = r }))
+    await w.setProps({ parentId: 'p2' })
+    expect(w.findComponent({ name: 'DataTablePagination' }).props('ready')).toBe(false)
+    expect(list).toHaveBeenLastCalledWith('article', expect.objectContaining({
+      filter: { categoryId: { op: '_eq', value: 'p2' } }, page: 0,
+    }))
+    resolveNext({ data: [], total: 9 })
+    await flushPromises()
+    expect(w.findComponent({ name: 'DataTablePagination' }).props('ready')).toBe(true)
+  })
+
+  it('clears the previous parent rows and total when the parent changes', async () => {
+    setupStores()
+    const list = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [{ id: 'a1', title: 'One' }], total: 1 })
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await flushPromises()
+    expect((w.vm as unknown as { rows: unknown[] }).rows).toHaveLength(1)
+    list.mockReturnValue(new Promise(() => {}))
+    await w.setProps({ parentId: 'p2' })
+    expect((w.vm as unknown as { rows: unknown[] }).rows).toHaveLength(0)
+    expect((w.vm as unknown as { total: number }).total).toBe(0)
+  })
+
+  it('ignores a response for the previous parent after the parent changes, even to an empty parent', async () => {
+    setupStores()
+    let resolveOld: (v: { data: { id: string; title: string }[]; total: number }) => void = () => {}
+    vi.spyOn(itemsApi, 'list').mockReturnValue(new Promise((r) => { resolveOld = r }))
+    const w = mount(RelatedList, { props: { relation, parentId: 'p1' }, global: { stubs, plugins: [i18n] } })
+    await w.setProps({ parentId: undefined })
+    resolveOld({ data: [{ id: 'a1', title: 'Old' }], total: 1 })
+    await flushPromises()
+    expect((w.vm as unknown as { rows: unknown[] }).rows).toHaveLength(0)
+    expect((w.vm as unknown as { total: number }).total).toBe(0)
   })
 
   it('is loading from the first render, so the table never flashes its empty message', async () => {

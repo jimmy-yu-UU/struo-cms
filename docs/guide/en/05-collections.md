@@ -70,8 +70,10 @@ turns them into system fields automatically.
 `[CmsField]` either. The `version` key in an item response appears only for a collection that
 inherits `AuditableEntity` — a collection like `Language` or `ArticleTag` has none.
 
-A property with no `[CmsField]` and a name other than the four audit names is skipped by the
-scanner entirely, so you can keep ordinary properties of your own on the same entity. The framework
+`[CmsField]` goes on a public instance property; on a non-public or static property, startup fails
+with a message that names the property. A property with no `[CmsField]` and a name other than the
+four audit names is skipped by the scanner entirely, so you can keep ordinary properties of your
+own on the same entity. The framework
 assigns a new item's primary key itself, as a version-7 GUID — you never generate one yourself.
 Base table names follow one convention: lower-case, plural, snake_case, written explicitly on
 `[SugarTable]`; the framework's own tables additionally carry `Database:TablePrefix` (see

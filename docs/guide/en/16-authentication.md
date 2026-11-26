@@ -222,12 +222,13 @@ whether the owner or an administrator changes it, so an integration that authent
 needs a newly issued one afterwards.
 
 A caller with write on `user` editing a user in the admin UI can issue, regenerate or revoke the token
-in the "Access token" section, with the Generate button (Regenerate once a token exists) and the Revoke
-button; a caller with read only sees the state, and for a super-admin account the buttons are disabled
-unless the caller is a super-admin. The raw token is shown only once, in the dialog that opens after it
-is issued, with a copy button; closing the dialog discards it for good. Regenerating and revoking ask
-for confirmation first, because the old token stops working immediately. The section also lists when the
-token was issued and last used, and the same data is available from `GET /api/users/{id}/access-token`,
+in the "API access token" section, with the Generate button (Regenerate once a token exists) and the
+Revoke button; a caller with read only sees the state, and for a super-admin account the buttons are
+disabled unless the caller is a super-admin. The raw token is shown only once, in the dialog that
+opens after it is issued, with a copy button; closing the dialog discards it for good. Regenerating
+and revoking ask for confirmation first, because the old token stops working immediately. The
+section also lists when the token was issued and last used, and the same data is available from
+`GET /api/users/{id}/access-token`,
 which needs read on `user` and returns `{ hasToken, createdAt, lastUsedAt }`. Both times are UTC; with
 no token both are `null`, and a token that has not been used since it was issued has only `lastUsedAt`
 as `null`. The last-used time is written at most once a minute, so it can trail the latest request: it

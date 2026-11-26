@@ -62,8 +62,10 @@ public sealed class Announcement : AuditableEntity
 `AuditableEntity` 還有一個樂觀鎖定用的 `Version`，不用加 `[CmsField]`。項目回應裡的 `version`
 只有繼承 `AuditableEntity` 的集合才有，`Language`、`ArticleTag` 這類集合沒有。
 
-沒有 `[CmsField]`、也不叫那四個稽核名稱的屬性，掃描器直接略過。可以在同一個 entity 上放你自
-己要用的一般屬性。新項目的主鍵由框架自己指派，是 version 7 GUID，不用自己產生。資料表的基底名
+`[CmsField]` 要掛在 public 的 instance 屬性上；掛在非 public 或 static 的屬性上，啟動就失敗，訊息
+點名那個屬性。沒有 `[CmsField]`、也不叫那四個稽核名稱的屬性，掃描器直接略過。可以在同一個
+entity 上放你自己要用的一般屬性。新項目的主鍵由框架自己指派，是 version 7 GUID，不用自己產生。
+資料表的基底名
 統一是小寫、複數、snake_case，由 `[SugarTable]` 明寫；框架自帶的表另外套上 `Database:TablePrefix`
 （見[第 4 章：設定參考](04-configuration.md)），你自己的集合不加。欄位名稱則照 SqlSugar 對 CLR
 屬性名稱的小寫轉換。

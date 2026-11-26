@@ -24,11 +24,13 @@ namespace Struo.Tests.GraphQl;
 /// </summary>
 public class GraphQlExecutionTests
 {
-    private static async Task<IRequestExecutor> ExecutorAsync(FakeGraphQlDataSource ds)
+    internal static async Task<IRequestExecutor> ExecutorAsync(
+        FakeGraphQlDataSource ds, IMetadataProvider? provider = null, IEntityRegistry? registry = null,
+        bool classifyValidationErrors = false)
     {
         var services = new ServiceCollection()
-            .AddSingleton<IMetadataProvider>(FakeMetadataFixtures.Provider())
-            .AddSingleton<IEntityRegistry>(FakeMetadataFixtures.Registry())
+            .AddSingleton(provider ?? FakeMetadataFixtures.Provider())
+            .AddSingleton(registry ?? FakeMetadataFixtures.Registry())
             .AddSingleton<IM2MDescriptorSource>(FakeMetadataFixtures.M2MSource())
             .AddScoped<IGraphQlDataSource>(_ => ds)
             // FileByIdDataLoader's ctor takes StruoQueryOptions (it chunks the
@@ -47,8 +49,11 @@ public class GraphQlExecutionTests
             .AddLogging();
         services.AddErrorFilter<StruoErrorFilter>();
 
-        return await services
-            .AddGraphQLServer()
+        var builder = services.AddGraphQLServer();
+        // The production pipeline gives a literal that is not a valid Int, Long or Float its code here, as
+        // document-validation errors never reach the error filter.
+        if (classifyValidationErrors) builder.UseRequest(TraceIdResultMiddleware.Create).UseDefaultPipeline();
+        return await builder
             .AddQueryType(d => d.Name("Query").Field("_service").Type<StringType>().Resolve(_ => "x"))
             .AddMutationType(d => d.Name("Mutation").Field("_service").Type<StringType>().Resolve(_ => "x"))
             .AddType<LongType>().AddType<DateTimeType>().AddType<DateType>()

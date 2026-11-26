@@ -7,7 +7,9 @@ namespace Struo.Api.Http;
 
 /// <summary>
 /// Maps StruoCMS domain exceptions to the unified error envelope (mirrors the GraphQL
-/// <c>StruoErrorFilter</c> code mapping). Unmapped exceptions are masked (no internal detail leaked) and logged server-side.
+/// <c>StruoErrorFilter</c> code mapping); a request to <c>/graphql</c> or a path under it gets the same
+/// status, code and message as a GraphQL error, without <c>details</c>. Unmapped exceptions are masked
+/// (no internal detail leaked) and logged server-side.
 /// </summary>
 public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger) : IExceptionHandler
 {
@@ -16,6 +18,12 @@ public sealed class StruoExceptionHandler(ILogger<StruoExceptionHandler> logger)
         if (httpContext.Response.HasStarted) return false;
         var authenticated = httpContext.User.Identity?.IsAuthenticated == true;
         var (status, body) = Map(exception, authenticated, logger);
+        if (GraphQlTransportError.IsGraphQl(httpContext.Request))
+        {
+            await GraphQlTransportError.WriteAsync(httpContext, status, body.Code, body.Message);
+            return true;
+        }
+
         httpContext.Response.StatusCode = status;
         await httpContext.Response.WriteAsJsonAsync(Envelope.Error(body.Code, body.Message, body.Details, RequestTraceId.For(httpContext)), cancellationToken);
         return true;

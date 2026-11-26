@@ -33,6 +33,12 @@ describe('FileThumbnail', () => {
     expect(el.attributes('src')).toMatch(/\/files\/f1\/content$/)
   })
 
+  // Every consumer shows the file name beside the thumbnail, so the image is decoration.
+  it('renders the img as decorative, since the file name is always visible next to it', () => {
+    const w = mount(FileThumbnail, { props: { file: image } })
+    expect(w.get('img').attributes('alt')).toBe('')
+  })
+
   // Every browser makes an <img> draggable by default, and that native drag's `dragstart` bubbles
   // up into any ancestor tile/card wired for media drag-and-drop (MediaGrid) -- an explicit
   // draggable="false" stops the browser's own image-drag affordance so it can never fire, as

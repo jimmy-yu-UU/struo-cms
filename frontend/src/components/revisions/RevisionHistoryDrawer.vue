@@ -89,6 +89,10 @@ async function select(rev: RevisionInfo): Promise<void> {
   }
 }
 
+// The sheet returns focus to its trigger when it closes. After a revert conflict the page moves focus to its
+// conflict notice, so that return is cancelled for that one close.
+let closedByConflict = false
+
 async function onRevert(n: number): Promise<void> {
   if (reverting.value) return
   const accepted = await confirm.require({
@@ -104,6 +108,7 @@ async function onRevert(n: number): Promise<void> {
     toast.add({ severity: 'success', summary: t('revisions.reverted', { n }), life: 2500 })
   } catch (e) {
     if (e instanceof ApiError && e.status === 409 && e.code === 'VERSION_CONFLICT') {
+      closedByConflict = true
       emit('update:visible', false)
       emit('conflict')
     } else {
@@ -114,9 +119,19 @@ async function onRevert(n: number): Promise<void> {
   }
 }
 
+function onCloseAutoFocus(e: Event): void {
+  if (!closedByConflict) return
+  closedByConflict = false
+  e.preventDefault()
+}
+
 watch(
   () => props.visible,
-  (open) => { if (open) void load() },
+  (open) => {
+    if (!open) return
+    closedByConflict = false
+    void load()
+  },
   { immediate: true },
 )
 
@@ -132,7 +147,7 @@ defineExpose({ load, select, onRevert, revisions, selected, detail, listLoading,
       640px sm breakpoint, so the sm: override is 100vw rather than 46rem — otherwise the sheet
       overflows the viewport between 640px and 736px.
     -->
-    <SheetContent side="right" class="w-[46rem] max-w-[100vw] sm:max-w-[100vw]">
+    <SheetContent side="right" class="w-[46rem] max-w-[100vw] sm:max-w-[100vw]" @close-auto-focus="onCloseAutoFocus">
       <SheetHeader class="px-6">
         <SheetTitle>{{ t('revisions.title') }}</SheetTitle>
       </SheetHeader>

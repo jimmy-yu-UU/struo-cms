@@ -133,7 +133,7 @@ describe('LoginView', () => {
     await wrapper.find('input[type="password"]').setValue('bad')
     await wrapper.find('form').trigger('submit.prevent')
     await new Promise((r) => setTimeout(r, 0))
-    expect(wrapper.text()).toContain('登入失敗,請稍後再試。') // t('login.failed'), the generic fallback
+    expect(wrapper.text()).toContain('登入失敗，請稍後再試。') // t('login.failed'), the generic fallback
     expect(wrapper.text()).not.toContain('Invalid credentials.')
   })
 
@@ -159,7 +159,7 @@ describe('LoginView', () => {
     await wrapper.find('input[type="password"]').setValue('pw')
     await wrapper.find('form').trigger('submit.prevent')
     await new Promise((r) => setTimeout(r, 0))
-    expect(wrapper.text()).toContain('此帳號已停用,請聯絡管理者。') // t('login.accountInactive')
+    expect(wrapper.text()).toContain('此帳號已停用，請聯絡管理者。') // t('login.accountInactive')
     expect(wrapper.text()).not.toContain('Account is deactivated.')
   })
 
@@ -173,7 +173,7 @@ describe('LoginView', () => {
     await new Promise((r) => setTimeout(r, 0))
     // t('errors.tooManyRequestsWithWait', { seconds: 45 }) — proves retryAfterSeconds reached the
     // message, not just the generic (no-wait) tooManyRequests text.
-    expect(wrapper.text()).toContain('嘗試次數過多,請於 45 秒後再試。')
+    expect(wrapper.text()).toContain('嘗試次數過多，請於 45 秒後再試。')
   })
 
   it('falls back to login.failed for an unrecognised failure', async () => {
@@ -184,20 +184,20 @@ describe('LoginView', () => {
     await wrapper.find('input[type="password"]').setValue('pw')
     await wrapper.find('form').trigger('submit.prevent')
     await new Promise((r) => setTimeout(r, 0))
-    expect(wrapper.text()).toContain('登入失敗,請稍後再試。') // t('login.failed')
+    expect(wrapper.text()).toContain('登入失敗，請稍後再試。') // t('login.failed')
     expect(wrapper.text()).not.toContain('Something broke.')
   })
 
   // ---- external-login failure redirected here by the API as /login?error=<code> ----
 
   it.each([
-    ['external_login_failed', '外部登入失敗,請再試一次。'],
+    ['external_login_failed', '外部登入失敗，請再試一次。'],
     ['external_login_denied', '外部登入已取消或遭拒絕。'],
-    ['external_login_NoEmail', '外部帳號未提供電子郵件,無法登入。'],
-    ['external_login_EmailNotVerified', '外部帳號的電子郵件尚未驗證,無法登入。'],
+    ['external_login_NoEmail', '外部帳號未提供電子郵件，無法登入。'],
+    ['external_login_EmailNotVerified', '外部帳號的電子郵件尚未驗證，無法登入。'],
     ['external_login_DomainNotAllowed', '此電子郵件網域不在允許的範圍內。'],
     ['external_login_TenantNotAllowed', '此組織租用戶不在允許的範圍內。'],
-    ['external_login_Inactive', '此帳號已停用,請聯絡管理者。'],
+    ['external_login_Inactive', '此帳號已停用，請聯絡管理者。'],
   ])('shows the localized message for ?error=%s', async (code, message) => {
     route.query = { error: code }
     const wrapper = mountLogin()
@@ -217,7 +217,7 @@ describe('LoginView', () => {
     route.query = { error: 'constructor' }
     const wrapper = mountLogin()
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('[role="alert"]').text()).toBe('外部登入失敗,請再試一次。')
+    expect(wrapper.find('[role="alert"]').text()).toBe('外部登入失敗，請再試一次。')
     expect(wrapper.html()).not.toContain('constructor')
   })
 
@@ -438,7 +438,7 @@ describe('LoginView', () => {
     route.query = { reason: 'expired', redirect: '/collections/article/5' }
     const wrapper = mountLogin()
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('output.notice').text()).toBe('登入已逾時,請重新登入。')
+    expect(wrapper.find('output.notice').text()).toBe('登入已逾時，請重新登入。')
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(replace).toHaveBeenCalledWith({ name: 'login', query: { redirect: '/collections/article/5' } })
   })
