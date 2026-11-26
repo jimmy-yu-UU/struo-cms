@@ -36,8 +36,8 @@
   `[SugarColumn(IsIgnore = true)]`；不想要這個關聯的集合，不要繼承宣告它的基底類別
   （[第 8 章](08-relations.md)）。
 - 翻譯類別的欄位標 `[CmsField(ReadOnly = true)]`，主機在啟動時失敗。原本 `translations` 的 payload
-  在建立與更新時照樣把值寫進去，只有 GraphQL 的 input 型別不含它（在 SQLite 上、HTTP 層之下量到的）。
-  拿掉 `ReadOnly = true`；值由伺服器程式掌管時，把屬性宣告在上層 entity
+  在建立與更新時照樣把值寫進去，只有 GraphQL 的 input 型別不含它（在 SQLite 上、HTTP 層之下
+  量到的）。拿掉 `ReadOnly = true`；值由伺服器程式掌管時，把屬性宣告在上層 entity
   （[第 7 章](07-i18n.md)）。
 - 建立時，集合類別的 `ReadOnly` 欄位存的是類別給這個屬性的值：
   `public string Source { get; set; } = "import";` 存的是 `import`。原本只要型別可以是 `null`，

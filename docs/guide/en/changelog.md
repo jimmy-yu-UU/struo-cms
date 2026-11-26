@@ -53,8 +53,9 @@
   property: `public string Source { get; set; } = "import";` stores `import`. The value was replaced
   with `null` whenever the type can hold `null`, and a non-nullable `string` column then failed the
   create in the database (measured on SQLite below the HTTP layer). A value a write interceptor sets
-  still wins. An interceptor that tests such a field for `null` to decide whether to fill it sees the
-  initial value: test for that value, or remove the initializer ([Chapter 6](06-field-types.md)).
+  still wins. An interceptor that tests such a field for `null` to decide whether to fill it sees
+  the initial value: test for that value, or remove the initializer
+  ([Chapter 6](06-field-types.md)).
 :::
 
 ### Changed
