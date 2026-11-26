@@ -495,6 +495,7 @@ public static class MetadataScanner
         FieldDeclarationCheck.RequirePublicInstanceFields(type);
         ColumnOverrideCheck.Require(type, primaryKeyRuleReports: true);
         FieldInheritanceCheck.Require(type);
+        FieldSetterCheck.RequirePublicSetters(type);
         var groups = type.GetCustomAttributes<CmsFieldGroupAttribute>()
             .Select(g => new FieldGroupMetadata(g.Name, g.Label, g.Sort))
             .ToList();
@@ -573,6 +574,7 @@ public static class MetadataScanner
         FieldDeclarationCheck.RequirePublicInstanceFields(tType);
         ColumnOverrideCheck.Require(tType, primaryKeyRuleReports: false);
         FieldInheritanceCheck.Require(tType);
+        FieldSetterCheck.RequireSetters(tType);
         var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         var hasId = tProps.Any(p => string.Equals(p.Name, "Id", StringComparison.Ordinal));
@@ -776,6 +778,7 @@ public static class MetadataScanner
 
         FieldDeclarationCheck.RequirePublicInstanceFields(childType);
         FieldInheritanceCheck.Require(childType);
+        FieldSetterCheck.RequirePublicSetters(childType);
         var subProps = childType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null)
             .ToList();
