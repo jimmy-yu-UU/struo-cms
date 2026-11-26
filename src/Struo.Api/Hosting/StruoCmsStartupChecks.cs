@@ -15,10 +15,9 @@ internal static class StruoCmsStartupChecks
     {
         using var scope = app.Services.CreateScope();
         var sp = scope.ServiceProvider;
-        // Need only configuration and DI, so they run before anything touches the database. Reading the
-        // cookie options runs their validators: a bad session cookie name fails here.
-        sp.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>()
-            .Get(Struo.Api.Auth.AuthSchemes.Cookie);
+        // Need only configuration and DI, so they run before anything touches the database. The startup
+        // validator runs every ValidateOnStart() registration, so no invalid setting reaches the migration.
+        sp.GetRequiredService<IStartupValidator>().Validate();
         VerifyCustomFileStorage(sp);
         await StruoCmsGraphQlCheck.RunAsync(sp);
         var startupLogger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(StartupLoggerCategory);
