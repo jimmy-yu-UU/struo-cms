@@ -57,7 +57,8 @@ public sealed class ItemService(
     // the sibling `deserializer` field above (CS0236).
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
-    private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
+    private readonly RelationTargetReadGuard relationTargets = new(m2mSource, permissions);
+    private readonly ItemPurgePipeline purge =new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
     private readonly ItemProjector projector = new(registry, permissions, metadata);
@@ -180,6 +181,7 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
+        relationTargets.Require(meta, body);
         writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
         // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
         var entity = deserializer.DeserializeForCreate(collection, body, meta);
@@ -228,8 +230,13 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
-        // A revert re-applies a snapshot the system stored itself, so the link limit does not apply to it.
-        if (operation != RevertOperation) writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
+        // A revert re-applies a snapshot the system stored itself, so neither the target-read check nor the
+        // link limit applies to it.
+        if (operation != RevertOperation)
+        {
+            relationTargets.Require(meta, body);
+            writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
+        }
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);

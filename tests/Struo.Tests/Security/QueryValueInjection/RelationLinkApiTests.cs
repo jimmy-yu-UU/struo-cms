@@ -58,7 +58,7 @@ public sealed class RelationLinkApiTests(ApiFactory factory) : IDisposable
     public async Task A_mixed_array_is_a_400_and_the_stored_links_stay()
     {
         var (admin, article, tag) = await SeedAsync();
-        var (editor, _) = await factory.CreateEditorClientAsync(["fxArticle"], ["fxArticle"]);
+        var (editor, _) = await factory.CreateEditorClientAsync(["fxArticle", "fxTag"], ["fxArticle"]);
         const string marker = "struo_qv_marker_m2m";
 
         foreach (var (who, client) in new[] { ("admin", admin), ("editor", editor) })
