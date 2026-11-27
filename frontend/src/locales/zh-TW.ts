@@ -494,7 +494,7 @@ export default {
       file: {
         label: '檔案',
         fields: {
-          fileName: '檔案名稱',
+          fileName: '檔名',
           title: '標題',
           contentType: '內容類型',
           alt: '替代文字',

@@ -81,9 +81,10 @@ describe('localizeCoreSchema', () => {
     expect(out.fields).not.toBe(input[0].fields)
   })
 
-  it('does not treat prototype keys as entries', () => {
-    const [out] = toZh([role({ fields: [field('constructor', 'constructor')] })])
-    expect(out.fields[0].label).toBe('constructor')
+  it('returns a collection named like a prototype key as it came', () => {
+    const input: CollectionMeta[] = [{ name: 'constructor', label: 'constructor', fields: [field('toString', 'toString')], relations: [] }]
+    const [out] = toZh(input)
+    expect(out).toBe(input[0])
   })
 
   it('gives the other text when the target catalog changes', () => {

@@ -277,8 +277,10 @@ locale's catalog rather than breaking outright.
 The names of the core collections, the labels of their fields and relations, the option texts of
 `file.status` and the `System` group name live in the `core` namespace of a catalog. When a label
 the server sends equals the value in the `en` catalog, the admin UI shows the text of the current
-interface language; when it differs (the fork changed a core label) or the catalog has no key for
-it (the fork's own collections and fields), the label is shown as the server sends it. A group name
+interface language; when it differs (the fork changed a core label) or the catalog's `core` has no
+value for it (the fork's own collections and fields, including the audit fields they get from the
+base class, or a core key the catalog does not translate), the label is shown as the server sends
+it, with no fallback to the default locale's catalog. A group name
 is matched by its text, so a fork collection placed in the `System` group shows the translated
 group name too. `frontend/tests/coreLabels.test.ts` compares the catalogs with
 `schema/core-collections.json` key by key: the `en` value must equal the snapshot's English and

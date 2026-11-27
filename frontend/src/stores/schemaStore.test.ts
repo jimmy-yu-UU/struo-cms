@@ -87,6 +87,7 @@ describe('schemaStore localisation', () => {
     const store = useSchemaStore()
     await store.load()
     useUiLocaleStore().apply('zh-TW')
+    expect(store.get('role')?.label).toBe('角色')
     expect(store.raw).toEqual(server)
   })
 
