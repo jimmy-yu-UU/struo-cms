@@ -19,8 +19,8 @@ internal readonly record struct SentLink(string Target, string Key, bool InTrans
 /// links the <c>file</c> collection (a translated one is read from the <c>translations</c> object of any locale),
 /// and the two keys of a junction collection, which link the collection each one points at. A key the body
 /// omits needs nothing, and neither does a key whose field is system or <c>ReadOnly</c> (an audit key such as
-/// <c>createdBy</c>, a <c>ReadOnly</c> foreign key): the binder drops it, so it links nothing. The check runs before any id is parsed or looked up, so the answer is the same for an
-/// existing, a missing and a malformed id.
+/// <c>createdBy</c>, a <c>ReadOnly</c> foreign key): the binder drops it, so it links nothing. The check runs
+/// before any id is parsed or looked up, so the answer is the same for an existing, a missing and a malformed id.
 /// <para>
 /// An update whose file field carries the value the item already stores needs no read on <c>file</c>: the item
 /// read returns that id to every reader of the collection (<see cref="RequireFilesAsync"/>). The same holds

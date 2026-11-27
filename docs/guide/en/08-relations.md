@@ -335,7 +335,9 @@ write grant on the collection being written:
 Without it the write is refused with `403` and `Read not permitted on '{target}'.`, before any id
 is looked at, so an id that exists, one that does not, one in the trash and one that is not an id
 all get the same answer. A key the body does not carry is not checked and the stored link stays as
-it is. A super-admin reads every collection.
+it is. A key whose field is `ReadOnly` or an audit field is not checked either: the server does not
+write it from a request (see [Chapter 6](06-field-types.md)), so naming it links nothing. A
+super-admin reads every collection.
 
 On update, a `File`, `Image` or `Files` field sent with the value it already holds is let through,
 inside `translations` as well, and so is a key of a junction row: an item read returns those ids,

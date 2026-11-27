@@ -21,6 +21,10 @@ What is let through:
 - A revert leaves out the keys the guard would refuse the caller and applies the rest. It does not
   run the existence check for foreign keys, junction keys and file ids: it replays a snapshot the
   system stored.
+- A key whose field is `ReadOnly` or system (an audit key such as `createdBy`) is not a link write:
+  the binder drops it, so neither check looks at it and a revert does not list it. An item read
+  returns an audit field, and a client that sends the item back names it
+  (`RelationWriteServerOwnedKeyTests`).
 - An all-zero GUID is not checked for existence: a non-nullable key uses it for "none".
 - Removing a whole locale removes the file links it holds without read on `file`: nothing is linked.
 
