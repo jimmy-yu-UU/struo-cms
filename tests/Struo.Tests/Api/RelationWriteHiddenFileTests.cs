@@ -31,7 +31,7 @@ public sealed class RelationWriteHiddenFileTests : IClassFixture<NoPublicRelatio
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        var resp = await admin.PostAsJsonAsync($"/api/items/{Vault}", new
+        using var resp = await admin.PostAsJsonAsync($"/api/items/{Vault}", new
         {
             name = "vault",
             secretImageId = file,

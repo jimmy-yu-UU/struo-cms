@@ -119,7 +119,6 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
             await db.Insertable(Cases[Text].Keys.Select(k => new TextTargetRow { Id = k.GetValue<string>(), Name = "t" }).ToList()).ExecuteCommandAsync();
         }
 
-
         public async Task DisposeAsync() => await Host.DisposeAsync();
     }
 
@@ -168,7 +167,7 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
     {
         using var request = new HttpRequestMessage(method, url);
         if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-        var response = await Client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
         var text = await response.Content.ReadAsStringAsync();
         output.WriteLine($"{method} {url} -> {(int)response.StatusCode}: {text}");
         response.StatusCode.Should().Be(HttpStatusCode.OK, text);
@@ -181,7 +180,7 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
         {
             Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
         };
-        var response = await Client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
         var text = await response.Content.ReadAsStringAsync();
         output.WriteLine($"{method} {url} -> {(int)response.StatusCode}: {text}");
         return (response.StatusCode, text);
@@ -190,7 +189,8 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
     private async Task<string> GraphQlErrorAsync(string query)
     {
         var request = new JsonObject { ["query"] = query };
-        var response = await Client.PostAsync("/graphql", new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json"));
+        using var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await Client.PostAsync("/graphql", content);
         var text = await response.Content.ReadAsStringAsync();
         output.WriteLine(text);
         JsonNode.Parse(text)!["errors"].Should().NotBeNull(text);

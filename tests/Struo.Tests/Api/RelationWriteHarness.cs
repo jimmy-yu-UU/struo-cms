@@ -62,6 +62,10 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     public async Task<HttpClient> CallerAsync(string[] read, string[] write) =>
         (await factory.CreateEditorClientAsync(read, write)).client;
 
+    /// <summary>A caller with the given grants, and the id of its user.</summary>
+    public Task<(HttpClient client, Guid userId)> CallerWithIdAsync(string[] read, string[] write) =>
+        factory.CreateEditorClientAsync(read, write);
+
     private async Task<T> WithDbAsync<T>(Func<ISqlSugarClient, Task<T>> work)
     {
         using var scope = factory.Services.CreateScope();
@@ -135,7 +139,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     /// <summary>An article created through the API by a super-admin, optionally linked to tags.</summary>
     public static async Task<Guid> SeedArticleAsync(HttpClient admin, params Guid[] tags)
     {
-        var resp = await admin.PostAsJsonAsync("/api/items/fxArticle", new
+        using var resp = await admin.PostAsJsonAsync("/api/items/fxArticle", new
         {
             tags,
             translations = new { en = new { title = "seed" } },
@@ -213,7 +217,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         if (channel == Rest)
         {
             if (english is not null) body["translations"] = new Dictionary<string, object?> { ["en"] = english };
-            var resp = id is null
+            using var resp = id is null
                 ? await client.PostAsJsonAsync($"/api/items/{collection}", body)
                 : await client.PutAsJsonAsync($"/api/items/{collection}/{id}", body);
             return await OutcomeAsync(resp, restEnvelope: true);
@@ -224,7 +228,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         var query = id is null
             ? $"mutation($i: {type}!) {{ create{Pascal(collection)}(input: $i) {{ id }} }}"
             : $"mutation($i: {type}!) {{ update{Pascal(collection)}(id: \"{id}\", input: $i) {{ id }} }}";
-        var gql = await client.PostAsJsonAsync("/graphql", new { query, variables = new { i = body } });
+        using var gql = await client.PostAsJsonAsync("/graphql", new { query, variables = new { i = body } });
         return await OutcomeAsync(gql, restEnvelope: false);
     }
 
@@ -245,7 +249,8 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         using var content = new ByteArrayContent([1, 2, 3]);
         content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
         using var form = new MultipartFormDataContent { { content, "file", "upload.txt" } };
-        if (folderId is not null) form.Add(new StringContent(folderId), "folderId");
+        using var folder = folderId is null ? null : new StringContent(folderId);
+        if (folder is not null) form.Add(folder, "folderId");
         using var resp = await client.PostAsync("/api/files", form);
         return await OutcomeAsync(resp, restEnvelope: true);
     }

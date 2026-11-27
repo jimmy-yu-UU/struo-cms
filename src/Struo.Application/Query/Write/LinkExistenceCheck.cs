@@ -127,7 +127,7 @@ internal sealed class LinkExistenceCheck(
         if (sent.Count == 0) return [];
         var stored = translations is null ? [] : await StoredAsync(translations, ct);
         return sent
-            .Select(s => (s.Field, Ids: s.Ids.Where(id => !stored.Contains((s.Locale, s.Field.Name.ToLowerInvariant(), id))).ToList()))
+            .Select(s => (s.Field, Ids: s.Ids.Where(id => !stored.Contains((s.Locale, s.Field.Name.ToUpperInvariant(), id))).ToList()))
             .Where(s => s.Ids.Count > 0)
             .GroupBy(s => s.Field.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => new PendingLink(
@@ -166,7 +166,7 @@ internal sealed class LinkExistenceCheck(
             foreach (var field in tm.Fields)
             {
                 if (PropertyAccessorCache.Read(row, field) is Guid id)
-                    stored.Add((locale.ToUpperInvariant(), field.ToLowerInvariant(), id));
+                    stored.Add((locale.ToUpperInvariant(), field.ToUpperInvariant(), id));
             }
         }
         return stored;

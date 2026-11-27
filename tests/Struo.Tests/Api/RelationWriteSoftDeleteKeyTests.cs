@@ -65,7 +65,7 @@ public sealed class RelationWriteSoftDeleteKeyTests : IClassFixture<NoPublicRela
 
         // The GraphQL inputs do not list a soft-delete key, so the server rejects the variable itself.
         var query = $"mutation($i: FxTombstoneUpdateInput!) {{ updateFxTombstone(id: \"{tombstone}\", input: $i) {{ id }} }}";
-        var response = await client.PostAsJsonAsync("/graphql", new { query, variables = new { i = new { deletedBy = tag } } });
+        using var response = await client.PostAsJsonAsync("/graphql", new { query, variables = new { i = new { deletedBy = tag } } });
         var body = await response.Content.ReadAsStringAsync();
 
         body.Should().Contain("\"errors\"").And.NotContain("FORBIDDEN").And.Contain(DeletedBy);

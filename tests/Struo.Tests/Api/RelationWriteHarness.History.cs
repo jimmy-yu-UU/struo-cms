@@ -34,11 +34,11 @@ internal sealed partial class RelationWriteHarness
         var (file1, file2) = (await SeedFileAsync(), await SeedFileAsync());
         var history = new ArticleHistory(Guid.Empty, category1, category2, tag1, tag2, file1, file2);
 
-        var created = await admin.PostAsJsonAsync("/api/items/fxArticle", Body(history.First));
+        using var created = await admin.PostAsJsonAsync("/api/items/fxArticle", Body(history.First));
         created.EnsureSuccessStatusCode();
         var root = await created.Content.ReadFromJsonAsync<JsonElement>();
         var article = Guid.Parse(root.GetProperty("data").GetProperty("id").GetString()!);
-        var updated = await admin.PutAsJsonAsync($"/api/items/fxArticle/{article}", Body(history.Second));
+        using var updated = await admin.PutAsJsonAsync($"/api/items/fxArticle/{article}", Body(history.Second));
         updated.EnsureSuccessStatusCode();
         return history with { Article = article };
     }
@@ -136,11 +136,13 @@ internal sealed partial class RelationWriteHarness
     public static async Task<WriteOutcome> RevertAsync(HttpClient client, string channel, Guid article, string revision)
     {
         if (channel == Rest)
-            return await OutcomeAsync(
-                await client.PostAsync($"/api/items/fxArticle/{article}/revisions/{revision}/revert", null),
-                restEnvelope: true);
+        {
+            using var reverted = await client.PostAsync($"/api/items/fxArticle/{article}/revisions/{revision}/revert", null);
+            return await OutcomeAsync(reverted, restEnvelope: true);
+        }
         var query = $"mutation {{ revertFxArticle(id: \"{article}\", revisionNumber: {revision}) {{ id }} }}";
-        return await OutcomeAsync(await client.PostAsJsonAsync("/graphql", new { query }), restEnvelope: false);
+        using var gql = await client.PostAsJsonAsync("/graphql", new { query });
+        return await OutcomeAsync(gql, restEnvelope: false);
     }
 
     /// <summary>The snapshot of a revision as the channel returns it.</summary>
@@ -152,7 +154,7 @@ internal sealed partial class RelationWriteHarness
             return rest.GetProperty("data").GetProperty("snapshot");
         }
         var query = $"{{ fxArticleRevision(id: \"{article}\", revisionNumber: {revision}) {{ snapshot }} }}";
-        var resp = await client.PostAsJsonAsync("/graphql", new { query });
+        using var resp = await client.PostAsJsonAsync("/graphql", new { query });
         var root = await resp.Content.ReadFromJsonAsync<JsonElement>();
         return root.GetProperty("data").GetProperty("fxArticleRevision").GetProperty("snapshot");
     }

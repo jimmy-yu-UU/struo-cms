@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using AwesomeAssertions;
 using Struo.Tests.Support;
@@ -31,10 +32,10 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
     {
         public LedgerKeys Keys => new(Glossary, null, File, Tag);
 
-        public Guid TargetOf(string key) => key.ToLowerInvariant() switch
+        public Guid TargetOf(string key) => key.ToUpperInvariant() switch
         {
-            "ownerid" => Glossary,
-            "createdby" => Tag,
+            "OWNERID" => Glossary,
+            "CREATEDBY" => Tag,
             _ => File,
         };
     }
@@ -77,7 +78,7 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
     [MemberData(nameof(OwnedKeys))]
     public async Task A_create_that_names_a_server_owned_key_is_accepted_and_does_not_store_it(string key, bool readsTargets)
     {
-        var client = await CallerAsync(readsTargets);
+        var (client, caller) = await h.CallerWithIdAsync(readsTargets ? AllTargets : [Ledger], [Ledger]);
         var targets = await SeedTargetsAsync();
         var outcomes = new List<WriteOutcome>();
         foreach (var kind in IdKinds)
@@ -94,7 +95,7 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
         {
             var stored = await h.StoredLedgerAsync(CreatedLedger(outcome));
             (stored.Owner, stored.Partner, stored.Stamp).Should().Be((null, null, null));
-            stored.CreatedBy.Should().NotBe(targets.TargetOf(key));
+            stored.CreatedBy.Should().Be(caller, "the audit stamp is the caller, whatever the body names");
         }
     }
 
@@ -147,7 +148,7 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
 
         // The GraphQL inputs do not list a ReadOnly or audit key, so the server rejects the variable itself.
         var query = $"mutation($i: FxLedgerUpdateInput!) {{ updateFxLedger(id: \"{ledger}\", input: $i) {{ id }} }}";
-        var response = await client.PostAsJsonAsync(
+        using var response = await client.PostAsJsonAsync(
             "/graphql", new { query, variables = new { i = new { ownerId = IdOf(Missing, targets.Glossary) } } });
         var body = await response.Content.ReadAsStringAsync();
 
@@ -167,11 +168,14 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
         var targets = await SeedTargetsAsync();
         await h.SetLedgerKeysAsync(ledger, targets.Keys);
         var client = await CallerAsync(readsTargets);
+        var before = await h.StoredLedgerAsync(ledger);
 
         var outcome = await RevertLedgerAsync(client, channel, ledger, RevisionOne);
 
-        AssertWritten(outcome);
-        (await h.StoredLedgerAsync(ledger)).Should().Be(targets.Keys);
+        outcome.Code.Should().BeNull("a revert never names a key the server does not write, so it needs no read on its target: " + outcome.Body);
+        if (channel == Rest) outcome.Status.Should().Be(HttpStatusCode.OK);
+        before.Should().Be(targets.Keys);
+        (await h.StoredLedgerAsync(ledger)).Should().Be(before);
     }
 
     [Theory]
@@ -210,10 +214,11 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
         Guid? id = op == Put ? ledger : null;
         var linked = new Dictionary<string, object?> { [PartnerId] = glossary.ToString() };
         var missing = new Dictionary<string, object?> { [PartnerId] = IdOf(Missing, glossary) };
+        var name = $"l-{Guid.NewGuid():N}";
         if (op == Post)
         {
-            linked["name"] = "L";
-            missing["name"] = "L";
+            linked["name"] = name;
+            missing["name"] = $"m-{Guid.NewGuid():N}";
         }
 
         var refused = await SendAsync(client, channel, Ledger, id, missing);
@@ -223,5 +228,6 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
         refused.Message.Should().Be("The id in 'partnerId' does not exist in 'fxGlossary'.");
         AssertWritten(written);
         if (op == Put) (await h.StoredLedgerAsync(ledger)).Partner.Should().Be(glossary);
+        else (await h.StoredLedgerByNameAsync(name)).Partner.Should().Be(glossary);
     }
 }

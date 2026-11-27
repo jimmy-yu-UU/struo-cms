@@ -14,6 +14,7 @@ internal sealed class LedgerRow
     public Guid? PartnerId { get; set; }
     public Guid? StampId { get; set; }
     public Guid? CreatedBy { get; set; }
+    public string? Name { get; set; }
 }
 
 /// <summary>The keys a ledger stores.</summary>
@@ -39,7 +40,7 @@ internal sealed partial class RelationWriteHarness
     /// <summary>A ledger created through the API by a super-admin, so that it has a first revision.</summary>
     public static async Task<Guid> CreateLedgerAsync(HttpClient admin)
     {
-        var resp = await admin.PostAsJsonAsync("/api/items/fxLedger", new { name = $"ledger-{Guid.NewGuid():N}" });
+        using var resp = await admin.PostAsJsonAsync("/api/items/fxLedger", new { name = $"ledger-{Guid.NewGuid():N}" });
         resp.EnsureSuccessStatusCode();
         var root = await resp.Content.ReadFromJsonAsync<JsonElement>();
         return Guid.Parse(root.GetProperty("data").GetProperty("id").GetString()!);
@@ -49,6 +50,13 @@ internal sealed partial class RelationWriteHarness
     public Task<LedgerKeys> StoredLedgerAsync(Guid id) => WithDbAsync(async db =>
     {
         var row = await db.Queryable<LedgerRow>().Where(r => r.Id == id).FirstAsync();
+        return new LedgerKeys(row.OwnerId, row.PartnerId, row.StampId, row.CreatedBy);
+    });
+
+    /// <summary>The keys of the ledger with this (unique) name.</summary>
+    public Task<LedgerKeys> StoredLedgerByNameAsync(string name) => WithDbAsync(async db =>
+    {
+        var row = await db.Queryable<LedgerRow>().Where(r => r.Name == name).FirstAsync();
         return new LedgerKeys(row.OwnerId, row.PartnerId, row.StampId, row.CreatedBy);
     });
 
@@ -73,9 +81,12 @@ internal sealed partial class RelationWriteHarness
     public static async Task<WriteOutcome> RevertLedgerAsync(HttpClient client, string channel, Guid id, string revision)
     {
         if (channel == Rest)
-            return await OutcomeAsync(
-                await client.PostAsync($"/api/items/fxLedger/{id}/revisions/{revision}/revert", null), restEnvelope: true);
+        {
+            using var reverted = await client.PostAsync($"/api/items/fxLedger/{id}/revisions/{revision}/revert", null);
+            return await OutcomeAsync(reverted, restEnvelope: true);
+        }
         var query = $"mutation {{ revertFxLedger(id: \"{id}\", revisionNumber: {revision}) {{ id }} }}";
-        return await OutcomeAsync(await client.PostAsJsonAsync("/graphql", new { query }), restEnvelope: false);
+        using var gql = await client.PostAsJsonAsync("/graphql", new { query });
+        return await OutcomeAsync(gql, restEnvelope: false);
     }
 }
