@@ -27,11 +27,11 @@ public class RelationWriteJunctionUnchangedKeyTests(ApiFactory factory)
     public async Task Both_keys_sent_back_unchanged_store_the_payload_without_any_target_read(string channel)
     {
         var client = await h.CallerAsync([], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, tag);
 
-        var outcome = await h.SendAsync(client, channel, ArticleTag, link, Keys(article, tag, "edited"));
+        var outcome = await SendAsync(client, channel, ArticleTag, link, Keys(article, tag, "edited"));
 
         AssertWritten(outcome);
         var stored = await h.LinkAsync(link);
@@ -42,11 +42,11 @@ public class RelationWriteJunctionUnchangedKeyTests(ApiFactory factory)
     public async Task Keys_are_matched_ignoring_the_case_of_the_name_and_of_the_id_text()
     {
         var client = await h.CallerAsync([], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, tag);
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, Rest, ArticleTag, link,
             new() { ["TagId"] = tag.ToString().ToUpperInvariant(), ["ArticleId"] = article.ToString().ToUpperInvariant(), ["note"] = "n" });
 
@@ -60,12 +60,12 @@ public class RelationWriteJunctionUnchangedKeyTests(ApiFactory factory)
     public async Task One_key_changed_to_a_row_the_caller_cannot_read_is_refused(string channel)
     {
         var client = await h.CallerAsync([], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var other = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, tag);
 
-        var outcome = await h.SendAsync(client, channel, ArticleTag, link, Keys(article, other, "edited"));
+        var outcome = await SendAsync(client, channel, ArticleTag, link, Keys(article, other, "edited"));
 
         AssertRefusedAlike([outcome], channel, Tag);
         var stored = await h.LinkAsync(link);
@@ -79,11 +79,11 @@ public class RelationWriteJunctionUnchangedKeyTests(ApiFactory factory)
     public async Task One_key_changed_to_a_readable_missing_id_is_a_bad_request(string channel)
     {
         var client = await h.CallerAsync([Tag], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, tag);
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, channel, ArticleTag, link, Keys(article, Guid.Parse(IdOf(Missing, tag)), "edited"));
 
         outcome.Code.Should().Be("BAD_USER_INPUT", outcome.Body);
@@ -97,11 +97,11 @@ public class RelationWriteJunctionUnchangedKeyTests(ApiFactory factory)
     public async Task A_create_with_both_keys_still_needs_read_on_the_targets(string channel)
     {
         var client = await h.CallerAsync([], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var rows = await h.LinkRowCountAsync();
 
-        var outcome = await h.SendAsync(client, channel, ArticleTag, null, Keys(article, tag, "n"));
+        var outcome = await SendAsync(client, channel, ArticleTag, null, Keys(article, tag, "n"));
 
         AssertRefusedAlike([outcome], channel, Tag);
         (await h.LinkRowCountAsync()).Should().Be(rows);
@@ -113,13 +113,13 @@ public class RelationWriteJunctionUnchangedKeyTests(ApiFactory factory)
     public async Task A_caller_who_reads_the_targets_is_unaffected(string channel)
     {
         var client = await h.CallerAsync([Article, Tag], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var other = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, tag);
 
-        AssertWritten(await h.SendAsync(client, channel, ArticleTag, link, Keys(article, tag, "same")));
-        AssertWritten(await h.SendAsync(client, channel, ArticleTag, link, Keys(article, other, "moved")));
+        AssertWritten(await SendAsync(client, channel, ArticleTag, link, Keys(article, tag, "same")));
+        AssertWritten(await SendAsync(client, channel, ArticleTag, link, Keys(article, other, "moved")));
 
         var stored = await h.LinkAsync(link);
         (stored.Note, stored.TagId).Should().Be(("moved", other));

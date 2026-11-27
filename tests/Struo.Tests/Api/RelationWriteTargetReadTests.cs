@@ -41,10 +41,10 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
             Guid? id = null;
             if (op == Put)
             {
-                id = await h.SeedArticleAsync(admin);
+                id = await SeedArticleAsync(admin);
                 seeded++;
             }
-            outcomes.Add(await h.SendAsync(
+            outcomes.Add(await SendAsync(
                 client, channel, Article, id, new() { [TagsKey] = new[] { IdOf(kind, tag) } }, translated: true));
         }
 
@@ -60,9 +60,9 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (client, tag) = await TagCallerAsync(readsTag: false);
-        var article = await h.SeedArticleAsync(admin, tag);
+        var article = await SeedArticleAsync(admin, tag);
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new() { [TagsKey] = Array.Empty<string>() });
+        var outcome = await SendAsync(client, channel, Article, article, new() { [TagsKey] = Array.Empty<string>() });
 
         AssertRefusedAlike([outcome], channel, "fxTag");
         (await h.LinkCountAsync(article)).Should().Be(1);
@@ -76,9 +76,9 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var admin = await factory.CreateAuthenticatedClientAsync();
         var client = await h.CallerAsync([Article], [Article, "fxArticleTag"]);
         var tag = await h.SeedTagAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, channel, Article, article, new() { [key] = new object[] { new { id = tag, note = "n" } } });
 
         AssertRefusedAlike([outcome], channel, "fxTag");
@@ -94,10 +94,10 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (client, tag) = await TagCallerAsync(readsTag: true);
-        Guid? id = op == Put ? await h.SeedArticleAsync(admin) : null;
+        Guid? id = op == Put ? await SeedArticleAsync(admin) : null;
 
-        var linked = await h.SendAsync(client, channel, Article, id, new() { [TagsKey] = new[] { tag.ToString() } }, translated: true);
-        var missing = await h.SendAsync(
+        var linked = await SendAsync(client, channel, Article, id, new() { [TagsKey] = new[] { tag.ToString() } }, translated: true);
+        var missing = await SendAsync(
             client, channel, Article, id, new() { [TagsKey] = new[] { IdOf(Missing, tag) } }, translated: true);
 
         AssertWritten(linked);
@@ -113,9 +113,9 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (client, tag) = await TagCallerAsync(readsTag: false);
-        var article = await h.SeedArticleAsync(admin, tag);
+        var article = await SeedArticleAsync(admin, tag);
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new() { ["status"] = "published" });
+        var outcome = await SendAsync(client, channel, Article, article, new() { ["status"] = "published" });
 
         AssertWritten(outcome);
         (await h.LinkCountAsync(article)).Should().Be(1);
@@ -128,10 +128,10 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var tag = await h.SeedTagAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
 
-        var linked = await h.SendAsync(admin, channel, Article, article, new() { [TagsKey] = new[] { tag.ToString() } });
-        var missing = await h.SendAsync(
+        var linked = await SendAsync(admin, channel, Article, article, new() { [TagsKey] = new[] { tag.ToString() } });
+        var missing = await SendAsync(
             admin, channel, Article, article, new() { [TagsKey] = new[] { IdOf(Missing, tag) } });
 
         AssertWritten(linked);
@@ -161,7 +161,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
             var value = kind == "null" ? null : IdOf(kind, glossary);
             var fields = new Dictionary<string, object?> { [GlossaryKey] = value };
             if (op == Post) fields["name"] = "L";
-            outcomes.Add(await h.SendAsync(client, channel, Lexicon, id, fields));
+            outcomes.Add(await SendAsync(client, channel, Lexicon, id, fields));
         }
 
         AssertRefusedAlike(outcomes, channel, "fxGlossary");
@@ -176,7 +176,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var lexicon = await h.SeedLexiconAsync();
         var glossary = await h.SeedGlossaryAsync();
 
-        var outcome = await h.SendAsync(client, Rest, Lexicon, lexicon, new() { ["GlossaryId"] = glossary.ToString() });
+        var outcome = await SendAsync(client, Rest, Lexicon, lexicon, new() { ["GlossaryId"] = glossary.ToString() });
 
         AssertRefusedAlike([outcome], Rest, "fxGlossary");
         (await h.LexiconAsync(lexicon)).GlossaryId.Should().BeNull();
@@ -195,7 +195,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var fields = new Dictionary<string, object?> { [GlossaryKey] = glossary.ToString() };
         if (op == Post) fields["name"] = "L";
 
-        var outcome = await h.SendAsync(client, channel, Lexicon, id, fields);
+        var outcome = await SendAsync(client, channel, Lexicon, id, fields);
 
         AssertWritten(outcome);
         if (id is { } stored) (await h.LexiconAsync(stored)).GlossaryId.Should().Be(glossary);
@@ -210,7 +210,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var glossary = await h.SeedGlossaryAsync();
         var lexicon = await h.SeedLexiconAsync(glossary);
 
-        var outcome = await h.SendAsync(client, channel, Lexicon, lexicon, new() { ["name"] = "renamed" });
+        var outcome = await SendAsync(client, channel, Lexicon, lexicon, new() { ["name"] = "renamed" });
 
         AssertWritten(outcome);
         (await h.LexiconAsync(lexicon)).GlossaryId.Should().Be(glossary);
@@ -223,7 +223,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var glossary = await h.SeedGlossaryAsync();
         var lexicon = await h.SeedLexiconAsync();
 
-        var outcome = await h.SendAsync(admin, Rest, Lexicon, lexicon, new() { [GlossaryKey] = glossary.ToString() });
+        var outcome = await SendAsync(admin, Rest, Lexicon, lexicon, new() { [GlossaryKey] = glossary.ToString() });
 
         AssertWritten(outcome);
         (await h.LexiconAsync(lexicon)).GlossaryId.Should().Be(glossary);
@@ -238,7 +238,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var user = await h.SeedPlainUserAsync();
         var role = await h.SeedPlainRoleAsync();
 
-        var outcome = await h.SendAsync(client, channel, "user", user, new() { ["roles"] = new[] { role.ToString() } });
+        var outcome = await SendAsync(client, channel, "user", user, new() { ["roles"] = new[] { role.ToString() } });
 
         AssertRefusedAlike([outcome], channel, "role");
         (await h.RoleLinkCountAsync(user)).Should().Be(0);
@@ -251,7 +251,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var user = await h.SeedPlainUserAsync();
         var role = await h.SeedPlainRoleAsync();
 
-        var outcome = await h.SendAsync(client, Rest, "user", user, new() { ["roles"] = new[] { role.ToString() } });
+        var outcome = await SendAsync(client, Rest, "user", user, new() { ["roles"] = new[] { role.ToString() } });
 
         AssertWritten(outcome);
         (await h.RoleLinkCountAsync(user)).Should().Be(1);
@@ -264,7 +264,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var folder = await h.SeedFolderAsync();
         var file = await h.SeedFileAsync();
 
-        var outcome = await h.SendAsync(client, Rest, "file", file, new() { ["folderId"] = folder.ToString() });
+        var outcome = await SendAsync(client, Rest, "file", file, new() { ["folderId"] = folder.ToString() });
 
         AssertRefusedAlike([outcome], Rest, "mediaFolder");
         (await h.FileAsync(file)).FolderId.Should().BeNull();
@@ -277,7 +277,7 @@ public class RelationWriteTargetReadTests(ApiFactory factory)
         var folder = await h.SeedFolderAsync();
         var file = await h.SeedFileAsync();
 
-        var outcome = await h.SendAsync(client, Rest, "file", file, new() { ["folderId"] = folder.ToString() });
+        var outcome = await SendAsync(client, Rest, "file", file, new() { ["folderId"] = folder.ToString() });
 
         AssertWritten(outcome);
         (await h.FileAsync(file)).FolderId.Should().Be(folder);

@@ -19,7 +19,7 @@ public class LocaleRemovalWithoutFileReadTests(ApiFactory factory)
 
     private async Task<Guid> SeedWithLocaleAsync(HttpClient admin, Guid file)
     {
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
         var resp = await admin.PutAsJsonAsync($"/api/items/{Article}/{article}", new
         {
             translations = new Dictionary<string, object>
@@ -58,7 +58,7 @@ public class LocaleRemovalWithoutFileReadTests(ApiFactory factory)
         var article = await SeedWithLocaleAsync(admin, file);
         var client = await h.CallerAsync([Article], [Article]);
 
-        AssertWritten(await h.RevertAsync(client, channel, article, RevisionOne));
+        AssertWritten(await RevertAsync(client, channel, article, RevisionOne));
 
         (await h.TranslationRowsAsync(article, Locale)).Should().Be(0);
         (await h.OgImageLinksToAsync(file)).Should().Be(0);

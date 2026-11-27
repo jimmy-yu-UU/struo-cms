@@ -126,14 +126,14 @@ internal sealed partial class RelationWriteHarness
     });
 
     /// <summary>The <c>data</c> of an item read over REST.</summary>
-    public async Task<JsonElement> ReadItemAsync(HttpClient client, string collection, Guid id)
+    public static async Task<JsonElement> ReadItemAsync(HttpClient client, string collection, Guid id)
     {
         var root = await client.GetFromJsonAsync<JsonElement>($"/api/items/{collection}/{id}");
         return root.GetProperty("data");
     }
 
     /// <summary>Reverts the article to <paramref name="revision"/>.</summary>
-    public async Task<WriteOutcome> RevertAsync(HttpClient client, string channel, Guid article, string revision)
+    public static async Task<WriteOutcome> RevertAsync(HttpClient client, string channel, Guid article, string revision)
     {
         if (channel == Rest)
             return await OutcomeAsync(
@@ -144,7 +144,7 @@ internal sealed partial class RelationWriteHarness
     }
 
     /// <summary>The snapshot of a revision as the channel returns it.</summary>
-    public async Task<JsonElement> SnapshotAsync(HttpClient client, string channel, Guid article, string revision)
+    public static async Task<JsonElement> SnapshotAsync(HttpClient client, string channel, Guid article, string revision)
     {
         if (channel == Rest)
         {

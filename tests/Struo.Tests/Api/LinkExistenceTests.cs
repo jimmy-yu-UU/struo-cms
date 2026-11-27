@@ -40,7 +40,7 @@ public class LinkExistenceTests(ApiFactory factory)
         var fields = new Dictionary<string, object?> { [GlossaryKey] = MissingId };
         if (op == Post) fields["name"] = "L";
 
-        var outcome = await h.SendAsync(admin, channel, Lexicon, id, fields);
+        var outcome = await SendAsync(admin, channel, Lexicon, id, fields);
 
         AssertRefused(outcome, GlossaryMissing);
         if (id is { } stored) (await h.LexiconAsync(stored)).GlossaryId.Should().BeNull();
@@ -60,7 +60,7 @@ public class LinkExistenceTests(ApiFactory factory)
         var fields = new Dictionary<string, object?> { [GlossaryKey] = glossary.ToString() };
         if (op == Post) fields["name"] = "L";
 
-        AssertWritten(await h.SendAsync(admin, channel, Lexicon, id, fields));
+        AssertWritten(await SendAsync(admin, channel, Lexicon, id, fields));
 
         if (id is { } stored) (await h.LexiconAsync(stored)).GlossaryId.Should().Be(glossary);
     }
@@ -73,7 +73,7 @@ public class LinkExistenceTests(ApiFactory factory)
         var admin = await factory.CreateAuthenticatedClientAsync();
         var lexicon = await h.SeedLexiconAsync(Guid.Parse(MissingId));
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = MissingId, ["name"] = "renamed" });
 
         AssertWritten(outcome);
@@ -92,9 +92,9 @@ public class LinkExistenceTests(ApiFactory factory)
         var lexicon = await h.SeedLexiconAsync(Guid.Parse(MissingId));
         var other = IdOf(Missing, Guid.Empty).Replace("11111111", "99999999");
 
-        var refused = await h.SendAsync(admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = other });
-        var replaced = await h.SendAsync(admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = glossary.ToString() });
-        var cleared = await h.SendAsync(admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = null });
+        var refused = await SendAsync(admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = other });
+        var replaced = await SendAsync(admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = glossary.ToString() });
+        var cleared = await SendAsync(admin, channel, Lexicon, lexicon, new() { [GlossaryKey] = null });
 
         AssertRefused(refused, GlossaryMissing);
         AssertWritten(replaced);
@@ -113,8 +113,8 @@ public class LinkExistenceTests(ApiFactory factory)
         var other = await h.SeedCategoryAsync();
         await TrashAsync(admin, Category, parent);
 
-        var assigned = await h.SendAsync(admin, channel, Category, other, new() { ["parentId"] = parent.ToString() });
-        var unchanged = await h.SendAsync(
+        var assigned = await SendAsync(admin, channel, Category, other, new() { ["parentId"] = parent.ToString() });
+        var unchanged = await SendAsync(
             admin, channel, Category, child, new() { ["parentId"] = parent.ToString(), ["name"] = "renamed" });
 
         AssertRefused(assigned, ParentMissing);
@@ -136,7 +136,7 @@ public class LinkExistenceTests(ApiFactory factory)
         var fields = new Dictionary<string, object?> { ["parentId"] = MissingId };
         if (op == Post) fields["name"] = "C";
 
-        var outcome = await h.SendAsync(admin, channel, Category, id, fields);
+        var outcome = await SendAsync(admin, channel, Category, id, fields);
 
         AssertRefused(outcome, ParentMissing);
         if (id is { } stored) (await h.CategoryAsync(stored)).ParentId.Should().BeNull();
@@ -154,7 +154,7 @@ public class LinkExistenceTests(ApiFactory factory)
         var fields = new Dictionary<string, object?> { ["parentId"] = MissingId };
         if (op == Post) fields["name"] = "F";
 
-        var outcome = await h.SendAsync(admin, Rest, "mediaFolder", id, fields);
+        var outcome = await SendAsync(admin, Rest, "mediaFolder", id, fields);
 
         AssertRefused(outcome, "The id in 'parentId' does not exist in 'mediaFolder'.");
         if (id is { } stored) (await h.FolderAsync(stored)).ParentId.Should().BeNull();
@@ -168,8 +168,8 @@ public class LinkExistenceTests(ApiFactory factory)
         var folder = await h.SeedFolderAsync();
         var file = await h.SeedFileAsync();
 
-        var missing = await h.SendAsync(admin, Rest, "file", file, new() { ["folderId"] = MissingId });
-        var existing = await h.SendAsync(admin, Rest, "file", file, new() { ["folderId"] = folder.ToString() });
+        var missing = await SendAsync(admin, Rest, "file", file, new() { ["folderId"] = MissingId });
+        var existing = await SendAsync(admin, Rest, "file", file, new() { ["folderId"] = folder.ToString() });
 
         AssertRefused(missing, "The id in 'folderId' does not exist in 'mediaFolder'.");
         AssertWritten(existing);
@@ -186,15 +186,15 @@ public class LinkExistenceTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var tag = await h.SeedTagAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
         var link = await h.SeedLinkAsync(article, tag);
         var rows = await h.LinkRowCountAsync();
         var keys = new Dictionary<string, object?> { ["articleId"] = article.ToString(), ["tagId"] = tag.ToString() };
         var message = $"The id in '{key}' does not exist in '{target}'.";
 
         keys[key] = MissingId;
-        var created = await h.SendAsync(admin, channel, "fxArticleTag", null, new(keys));
-        var updated = await h.SendAsync(admin, channel, "fxArticleTag", link, new() { [key] = MissingId });
+        var created = await SendAsync(admin, channel, "fxArticleTag", null, new(keys));
+        var updated = await SendAsync(admin, channel, "fxArticleTag", link, new() { [key] = MissingId });
 
         AssertRefused(created, message);
         AssertRefused(updated, message);
@@ -209,9 +209,9 @@ public class LinkExistenceTests(ApiFactory factory)
     public async Task A_junction_row_with_existing_keys_is_stored(string channel)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var (tag, article) = (await h.SeedTagAsync(), await h.SeedArticleAsync(admin));
+        var (tag, article) = (await h.SeedTagAsync(), await SeedArticleAsync(admin));
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, channel, "fxArticleTag", null, new() { ["articleId"] = article.ToString(), ["tagId"] = tag.ToString() });
 
         AssertWritten(outcome);
@@ -222,11 +222,11 @@ public class LinkExistenceTests(ApiFactory factory)
     public async Task An_unchanged_dangling_junction_key_is_accepted_when_another_field_changes()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
         var missing = Guid.Parse(MissingId);
         var link = await h.SeedLinkAsync(article, missing);
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, Rest, "fxArticleTag", link, new() { ["tagId"] = MissingId, ["note"] = "kept" });
 
         AssertWritten(outcome);
@@ -244,7 +244,7 @@ public class LinkExistenceTests(ApiFactory factory)
         var keys = new Dictionary<string, object?> { ["userId"] = user.ToString(), ["roleId"] = role.ToString() };
         keys[key] = MissingId;
 
-        var outcome = await h.SendAsync(admin, Rest, "userRole", null, keys);
+        var outcome = await SendAsync(admin, Rest, "userRole", null, keys);
 
         AssertRefused(outcome, $"The id in '{key}' does not exist in '{target}'.");
         (await h.UserRoleRowCountAsync()).Should().Be(rows);
@@ -258,9 +258,9 @@ public class LinkExistenceTests(ApiFactory factory)
         var lexicon = await h.SeedLexiconAsync();
         var outcomes = new List<WriteOutcome>();
         foreach (var kind in IdKinds)
-            outcomes.Add(await h.SendAsync(blind, Rest, Lexicon, lexicon, new() { [GlossaryKey] = IdOf(kind, Guid.NewGuid()) }));
+            outcomes.Add(await SendAsync(blind, Rest, Lexicon, lexicon, new() { [GlossaryKey] = IdOf(kind, Guid.NewGuid()) }));
 
-        var seen = await h.SendAsync(reader, Rest, Lexicon, lexicon, new() { [GlossaryKey] = MissingId });
+        var seen = await SendAsync(reader, Rest, Lexicon, lexicon, new() { [GlossaryKey] = MissingId });
 
         AssertRefusedAlike(outcomes, Rest, "fxGlossary");
         AssertRefused(seen, GlossaryMissing);

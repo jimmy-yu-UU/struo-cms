@@ -34,8 +34,8 @@ public sealed class LinkExistencePinnedTests : IClassFixture<NoPublicRelationsFi
 
         var outcomes = new List<WriteOutcome>
         {
-            await h.SendAsync(withoutRead, Gql, Article, missing, new() { [Hero] = file }),
-            await h.SendAsync(withRead, Gql, Article, missing, new() { [Hero] = file }),
+            await SendAsync(withoutRead, Gql, Article, missing, new() { [Hero] = file }),
+            await SendAsync(withRead, Gql, Article, missing, new() { [Hero] = file }),
         };
 
         foreach (var outcome in outcomes)
@@ -54,10 +54,10 @@ public sealed class LinkExistencePinnedTests : IClassFixture<NoPublicRelationsFi
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var client = await h.CallerAsync([Article, "fxCategory", "file"], [Article]);
-        var id = op == Put ? await h.SeedArticleAsync(admin) : (Guid?)null;
+        var id = op == Put ? await SeedArticleAsync(admin) : (Guid?)null;
         var fields = new Dictionary<string, object?> { [Category] = Guid.Empty.ToString(), [Hero] = Guid.Empty.ToString() };
 
-        var outcome = await h.SendAsync(client, Rest, Article, id, fields, translated: true);
+        var outcome = await SendAsync(client, Rest, Article, id, fields, translated: true);
 
         AssertWritten(outcome);
         var written = id ?? Guid.Parse(JsonDocument.Parse(outcome.Body).RootElement.GetProperty("data").GetProperty("id").GetString()!);

@@ -39,7 +39,7 @@ public class RevertPurgedLinkTests(ApiFactory factory)
         else await h.PurgeAsync(file: history.File1);
         var client = await RevertingCallerAsync(caller);
 
-        AssertWritten(await h.RevertAsync(client, channel, history.Article, RevisionOne));
+        AssertWritten(await RevertAsync(client, channel, history.Article, RevisionOne));
 
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(history.First);
     }
@@ -58,8 +58,8 @@ public class RevertPurgedLinkTests(ApiFactory factory)
         object value = field == "gallery" ? new[] { gone.ToString() } : gone.ToString();
 
         var outcome = field == "seoOgImageId"
-            ? await h.SendAsync(admin, Rest, Article, history.Article, [], translation: new() { [field] = value })
-            : await h.SendAsync(admin, Rest, Article, history.Article, new() { [field] = value });
+            ? await SendAsync(admin, Rest, Article, history.Article, [], translation: new() { [field] = value })
+            : await SendAsync(admin, Rest, Article, history.Article, new() { [field] = value });
 
         outcome.Code.Should().Be("BAD_USER_INPUT", outcome.Body);
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(history.Second);
@@ -76,7 +76,7 @@ public class RevertPurgedLinkTests(ApiFactory factory)
         await h.PurgeAsync(tag: history.Tag1);
         var client = await RevertingCallerAsync(caller);
 
-        var outcome = await h.RevertAsync(client, channel, history.Article, RevisionOne);
+        var outcome = await RevertAsync(client, channel, history.Article, RevisionOne);
 
         outcome.Code.Should().Be("BAD_USER_INPUT", outcome.Body);
         outcome.Message.Should().Be("One or more ids in 'tags' do not exist in 'fxTag'.");

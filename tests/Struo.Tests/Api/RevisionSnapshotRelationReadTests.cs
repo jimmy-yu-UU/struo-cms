@@ -49,7 +49,7 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
         var client = await h.CallerAsync([Article], []);
 
-        var snapshot = await h.SnapshotAsync(client, channel, history.Article, RevisionOne);
+        var snapshot = await SnapshotAsync(client, channel, history.Article, RevisionOne);
 
         snapshot.TryGetProperty(Tags, out _).Should().BeFalse();
         snapshot.TryGetProperty(CategoryId, out _).Should().BeFalse();
@@ -66,7 +66,7 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
         var client = await h.CallerAsync([Article, unreadable == Tags ? "fxCategory" : "fxTag"], []);
 
-        var snapshot = await h.SnapshotAsync(client, channel, history.Article, RevisionOne);
+        var snapshot = await SnapshotAsync(client, channel, history.Article, RevisionOne);
 
         snapshot.TryGetProperty(unreadable, out _).Should().BeFalse();
         var shown = unreadable == Tags ? CategoryId : Tags;
@@ -83,8 +83,8 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         var history = await h.SeedHistoryAsync(admin);
         var reader = await h.CallerAsync([Article, "fxCategory", "fxTag", Junction], []);
 
-        var asReader = await h.SnapshotAsync(reader, channel, history.Article, RevisionOne);
-        var asAdmin = await h.SnapshotAsync(admin, channel, history.Article, RevisionOne);
+        var asReader = await SnapshotAsync(reader, channel, history.Article, RevisionOne);
+        var asAdmin = await SnapshotAsync(admin, channel, history.Article, RevisionOne);
 
         AssertRelationsShown(asReader, history);
         AssertRelationsShown(asAdmin, history);
@@ -101,7 +101,7 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         var history = await h.SeedHistoryAsync(admin);
         var client = await h.CallerAsync([Article, "fxCategory", "fxTag"], []);
 
-        var snapshot = await h.SnapshotAsync(client, channel, history.Article, RevisionOne);
+        var snapshot = await SnapshotAsync(client, channel, history.Article, RevisionOne);
 
         var tags = snapshot.GetProperty(Tags).EnumerateArray().ToList();
         tags.Should().OnlyContain(t => t.ValueKind == JsonValueKind.String);
@@ -116,7 +116,7 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
         var client = await h.CallerAsync([Article, "fxCategory", Junction], []);
 
-        var snapshot = await h.SnapshotAsync(client, Rest, history.Article, RevisionOne);
+        var snapshot = await SnapshotAsync(client, Rest, history.Article, RevisionOne);
 
         snapshot.TryGetProperty(Tags, out _).Should().BeFalse();
     }
@@ -127,9 +127,9 @@ public sealed class RevisionSnapshotRelationReadTests : IClassFixture<NoPublicRe
         var admin = await factory.CreateAuthenticatedClientAsync();
         var history = await h.SeedHistoryAsync(admin);
         var client = await h.CallerAsync([Article], []);
-        await h.SnapshotAsync(client, Rest, history.Article, RevisionOne);
+        await SnapshotAsync(client, Rest, history.Article, RevisionOne);
 
-        var asAdmin = await h.SnapshotAsync(admin, Rest, history.Article, RevisionOne);
+        var asAdmin = await SnapshotAsync(admin, Rest, history.Article, RevisionOne);
 
         AssertRelationsShown(asAdmin, history);
     }

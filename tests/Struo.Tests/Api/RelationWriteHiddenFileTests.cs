@@ -59,7 +59,7 @@ public sealed class RelationWriteHiddenFileTests : IClassFixture<NoPublicRelatio
             : (storedValue ? file.ToString() : null);
         var translated = field == SecretCover;
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, Rest, Vault, vault, translated ? new() : new() { [field] = value },
             translation: translated ? new() { [field] = value } : null);
 
@@ -72,7 +72,7 @@ public sealed class RelationWriteHiddenFileTests : IClassFixture<NoPublicRelatio
         var (vault, file) = await SeedVaultAsync();
         var client = await h.CallerAsync([Vault, "file"], [Vault]);
 
-        var outcome = await h.SendAsync(client, Rest, Vault, vault, new() { [SecretImage] = file.ToString() });
+        var outcome = await SendAsync(client, Rest, Vault, vault, new() { [SecretImage] = file.ToString() });
 
         AssertWritten(outcome);
     }

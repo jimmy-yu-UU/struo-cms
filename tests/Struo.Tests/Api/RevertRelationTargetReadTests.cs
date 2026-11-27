@@ -53,7 +53,7 @@ public sealed class RevertRelationTargetReadTests : IClassFixture<NoPublicRelati
         var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
         var client = await h.CallerAsync(ReadsAllBut(unreadable), [Article, "fxArticleTag"]);
 
-        var outcome = await h.RevertAsync(client, channel, history.Article, RevisionOne);
+        var outcome = await RevertAsync(client, channel, history.Article, RevisionOne);
 
         AssertWritten(outcome);
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(Expected(history, unreadable));
@@ -67,7 +67,7 @@ public sealed class RevertRelationTargetReadTests : IClassFixture<NoPublicRelati
         var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
         var client = await h.CallerAsync([Article], [Article]);
 
-        var outcome = await h.RevertAsync(client, channel, history.Article, RevisionOne);
+        var outcome = await RevertAsync(client, channel, history.Article, RevisionOne);
 
         AssertWritten(outcome);
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(history.Second with { Status = "draft", Title = "v1" });
@@ -81,7 +81,7 @@ public sealed class RevertRelationTargetReadTests : IClassFixture<NoPublicRelati
         var history = await h.SeedHistoryAsync(await factory.CreateAuthenticatedClientAsync());
         var client = await h.CallerAsync(ReadsAllBut(string.Empty), [Article, "fxArticleTag"]);
 
-        AssertWritten(await h.RevertAsync(client, channel, history.Article, RevisionOne));
+        AssertWritten(await RevertAsync(client, channel, history.Article, RevisionOne));
 
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(history.First);
     }
@@ -94,7 +94,7 @@ public sealed class RevertRelationTargetReadTests : IClassFixture<NoPublicRelati
         var admin = await factory.CreateAuthenticatedClientAsync();
         var history = await h.SeedHistoryAsync(admin);
 
-        AssertWritten(await h.RevertAsync(admin, channel, history.Article, RevisionOne));
+        AssertWritten(await RevertAsync(admin, channel, history.Article, RevisionOne));
 
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(history.First);
     }
@@ -106,9 +106,9 @@ public sealed class RevertRelationTargetReadTests : IClassFixture<NoPublicRelati
         var history = await h.SeedHistoryAsync(admin);
         var client = await h.CallerAsync([Article], [Article]);
 
-        AssertWritten(await h.RevertAsync(client, Rest, history.Article, RevisionOne));
+        AssertWritten(await RevertAsync(client, Rest, history.Article, RevisionOne));
 
-        var snapshot = await h.SnapshotAsync(admin, Rest, history.Article, "3");
+        var snapshot = await SnapshotAsync(admin, Rest, history.Article, "3");
         snapshot.GetProperty("categoryId").GetGuid().Should().Be(history.Category2);
         snapshot.GetProperty("tags").EnumerateArray().Select(t => t.GetProperty("id").GetGuid())
             .Should().Equal(history.Tag2);

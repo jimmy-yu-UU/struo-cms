@@ -11,7 +11,7 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 // The existence check compares the ids a database returns with the ids sent. A string key is matched by the
-// database's collation, which can ignore case, so the comparison ignores case for string keys only.
+// database's collation, which can ignore case, so the comparison of returned ids ignores case for string keys only; a key sent back is unchanged only when it matches the stored one exactly.
 public sealed class LinkExistenceStringKeyTests
 {
     private sealed class Coded
@@ -62,7 +62,9 @@ public sealed class LinkExistenceStringKeyTests
     [Fact]
     public async Task A_string_id_the_database_matched_by_case_is_found()
     {
-        await Ensure(typeof(Coded), new Coded { Id = "ABC" }, "abc");
+        var act = () => Ensure(typeof(Coded), new Coded { Id = "ABC" }, "abc");
+
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]
@@ -76,7 +78,8 @@ public sealed class LinkExistenceStringKeyTests
     [Fact]
     public async Task A_numeric_id_is_compared_as_it_is()
     {
-        await Ensure(typeof(Numbered), new Numbered { Id = 7 }, 7L);
+        var found = () => Ensure(typeof(Numbered), new Numbered { Id = 7 }, 7L);
+        await found.Should().NotThrowAsync();
         var act = () => Ensure(typeof(Numbered), new Numbered { Id = 7 }, 8L);
 
         await Assert.ThrowsAsync<QueryException>(act);
@@ -108,9 +111,10 @@ public sealed class LinkExistenceStringKeyTests
     }
 
     [Fact]
-    public void A_string_key_sent_back_in_another_case_assigns_nothing_new()
+    public void A_string_key_differing_only_in_case_is_a_new_assignment()
     {
-        Assigned("ABC", "abc").Should().BeEmpty();
+        Assigned("ABC", "ABC").Should().BeEmpty();
+        Assigned("ABC", "abc").Should().ContainSingle();
         Assigned("ABC", "xyz").Should().ContainSingle();
     }
 }

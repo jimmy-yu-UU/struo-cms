@@ -77,12 +77,12 @@ internal sealed class LinkExistenceCheck(
     }
 
     // The keys that link another collection, each once (a key can be both a relation and a junction field).
-    private IEnumerable<Slot> Slots(CollectionMetadata meta, EntityDescriptor d)
+    private List<Slot> Slots(CollectionMetadata meta, EntityDescriptor d)
     {
         var slots = new Dictionary<string, Slot>(StringComparer.OrdinalIgnoreCase);
         foreach (var slot in ManyToOneSlots(meta).Concat(JunctionSlots(meta, d)).Concat(FileSlots(meta, d)))
             slots.TryAdd(slot.Key, slot);
-        return slots.Values;
+        return [.. slots.Values];
     }
 
     private static IEnumerable<Slot> ManyToOneSlots(CollectionMetadata meta) =>
@@ -108,7 +108,7 @@ internal sealed class LinkExistenceCheck(
             .Select(f => new Slot(f.Name, FileCollection.Name, d.FieldToProperty[f.Name], f.Interface == FieldInterface.Files));
 
     // The ids a translated file field newly assigns, per locale object of the body.
-    private async Task<IReadOnlyList<PendingLink>> TranslatedLinksAsync(
+    private static async Task<IReadOnlyList<PendingLink>> TranslatedLinksAsync(
         CollectionMetadata meta, JsonElement body, StoredTranslations? translations, CancellationToken ct)
     {
         var fields = FileFields.Translated(meta)
@@ -166,10 +166,8 @@ internal sealed class LinkExistenceCheck(
         return stored;
     }
 
-    // The database matched a string key by its own collation, which can ignore case.
-    private static bool SameId(object stored, object sent) => stored is string text
-        ? sent is string other && string.Equals(text, other, StringComparison.OrdinalIgnoreCase)
-        : stored.Equals(sent);
+    // An id sent back is unchanged only when it equals the stored one exactly.
+    private static bool SameId(object stored, object sent) => stored.Equals(sent);
 
     private static object? Read(EntityDescriptor d, string property, object row) =>
         d.Properties.GetValueOrDefault(property)?.GetValue(row);

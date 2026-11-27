@@ -68,20 +68,18 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
     internal void RequireJunctionKeys(CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         if (body.ValueKind != JsonValueKind.Object) return;
-        foreach (var link in JunctionLinks(meta, ItemDeserializer.PresentNames(body)))
-        {
-            if (permissions.CanRead(link.Target) || HoldsStoredKey(meta, d, body, existing, link.Key)) continue;
-            throw ReadDenied(link.Target);
-        }
+        var refused = JunctionLinks(meta, ItemDeserializer.PresentNames(body))
+            .Where(link => !permissions.CanRead(link.Target) && !HoldsStoredKey(meta, d, body, existing, link.Key))
+            .Select(link => link.Target)
+            .FirstOrDefault();
+        if (refused is not null) throw ReadDenied(refused);
     }
 
     private void RequireReadable(IEnumerable<SentLink> links, JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object) return;
-        foreach (var link in links)
-        {
-            if (!permissions.CanRead(link.Target)) throw ReadDenied(link.Target);
-        }
+        var refused = links.Where(link => !permissions.CanRead(link.Target)).Select(link => link.Target).FirstOrDefault();
+        if (refused is not null) throw ReadDenied(refused);
     }
 
     private static bool HoldsStoredKey(
@@ -90,17 +88,22 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
         var name = LinkExistenceCheck.FieldNameOf(d, property);
         if (meta.Fields.Any(f => f.Hidden && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
             return false;
-        var sent = body.EnumerateObject().First(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).Value;
-        return SameKey(d.Properties.GetValueOrDefault(property)?.GetValue(existing), sent);
+        // The binder takes any spelling of the name and the last one wins, so every spelling must hold the stored value.
+        var spellings = body.EnumerateObject()
+            .Where(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Value)
+            .ToList();
+        var stored = d.Properties.GetValueOrDefault(property)?.GetValue(existing);
+        return spellings.Count > 0 && spellings.All(sent => SameKey(stored, sent));
     }
 
-    // Equal the way the database matched the key: a Guid by value, a string ignoring case, a number as written.
+    // Equal as stored: a Guid by value, a string exactly, a number as written.
     private static bool SameKey(object? stored, JsonElement sent) => stored switch
     {
         null => sent.ValueKind == JsonValueKind.Null,
         Guid id => sent.ValueKind == JsonValueKind.String && Guid.TryParse(sent.GetString(), out var parsed) && parsed == id,
         string text => sent.ValueKind == JsonValueKind.String
-                       && string.Equals(text, sent.GetString(), StringComparison.OrdinalIgnoreCase),
+                       && string.Equals(text, sent.GetString(), StringComparison.Ordinal),
         _ => sent.ValueKind == JsonValueKind.Number
              && sent.GetRawText() == Convert.ToString(stored, System.Globalization.CultureInfo.InvariantCulture),
     };

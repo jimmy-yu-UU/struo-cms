@@ -31,8 +31,8 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (first, second) = (await h.SeedFileAsync(), await h.SeedFileAsync());
-        var article = await h.SeedArticleAsync(admin);
-        var stored = await h.SendAsync(
+        var article = await SeedArticleAsync(admin);
+        var stored = await SendAsync(
             admin, Rest, Article, article,
             new() { [Hero] = first.ToString(), [Gallery] = new[] { first, second } },
             translation: new() { [OgImage] = first.ToString() });
@@ -42,12 +42,12 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
 
     private static Dictionary<string, object?> Fields(string field, object? value) => new() { [field] = value };
 
-    private Task<WriteOutcome> SendFieldAsync(
+    private static Task<WriteOutcome> SendFieldAsync(
         HttpClient client, string channel, Guid article, string field, object? value, string? status = null)
     {
         var fields = field == OgImage ? new Dictionary<string, object?>() : Fields(field, value);
         if (status is not null) fields["status"] = status;
-        return h.SendAsync(
+        return SendAsync(
             client, channel, Article, article, fields,
             translation: field == OgImage ? Fields(OgImage, value) : null);
     }
@@ -87,7 +87,7 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
         var client = await h.CallerAsync(["fxVault"], ["fxVault"]);
         object? value = emptyList ? Array.Empty<string>() : null;
 
-        var outcome = await h.SendAsync(client, channel, "fxVault", vault, new() { ["shelf"] = value, ["name"] = "renamed" });
+        var outcome = await SendAsync(client, channel, "fxVault", vault, new() { ["shelf"] = value, ["name"] = "renamed" });
 
         AssertWritten(outcome);
     }
@@ -100,7 +100,7 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
     public async Task A_cleared_file_field_sent_back_unchanged_is_accepted(string channel, string field)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
         var client = await h.CallerAsync([Article], [Article]);
 
         var outcome = await SendFieldAsync(client, channel, article, field, null, status: "published");
@@ -159,7 +159,7 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
         var client = await h.CallerAsync([Article], [Article]);
         var fields = new Dictionary<string, object?> { [Hero] = first.ToString(), [Gallery] = new[] { first.ToString() }, ["status"] = "published" };
 
-        var outcome = await h.SendAsync(client, channel, Article, article, fields);
+        var outcome = await SendAsync(client, channel, Article, article, fields);
 
         AssertRefusedAlike([outcome], channel, "file");
         (await h.ArticleAsync(article)).Status.Should().NotBe("published");
@@ -177,7 +177,7 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
         var value = field == Gallery ? Array.Empty<string>() : (object?)null;
         var before = await h.ArticleCountAsync();
 
-        var outcome = await h.SendAsync(client, channel, Article, null, Fields(field, value), translated: true);
+        var outcome = await SendAsync(client, channel, Article, null, Fields(field, value), translated: true);
 
         AssertRefusedAlike([outcome], channel, "file");
         (await h.ArticleCountAsync()).Should().Be(before);
@@ -188,7 +188,7 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
     {
         var client = await h.CallerAsync([Article], [Article]);
 
-        var outcome = await h.SendAsync(client, Rest, Article, Guid.NewGuid(), Fields(Hero, Guid.NewGuid().ToString()));
+        var outcome = await SendAsync(client, Rest, Article, Guid.NewGuid(), Fields(Hero, Guid.NewGuid().ToString()));
 
         outcome.Status.Should().Be(HttpStatusCode.NotFound);
     }
@@ -213,10 +213,10 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var tag = await h.SeedTagAsync();
-        var article = await h.SeedArticleAsync(admin, tag);
+        var article = await SeedArticleAsync(admin, tag);
         var client = await h.CallerAsync([Article], [Article]);
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new() { ["tags"] = new[] { tag.ToString() } });
+        var outcome = await SendAsync(client, channel, Article, article, new() { ["tags"] = new[] { tag.ToString() } });
 
         AssertRefusedAlike([outcome], channel, "fxTag");
     }
@@ -228,11 +228,11 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var category = await h.SeedCategoryAsync();
-        var article = await h.SeedArticleAsync(admin);
-        AssertWritten(await h.SendAsync(admin, Rest, Article, article, new() { ["categoryId"] = category.ToString() }));
+        var article = await SeedArticleAsync(admin);
+        AssertWritten(await SendAsync(admin, Rest, Article, article, new() { ["categoryId"] = category.ToString() }));
         var client = await h.CallerAsync([Article], [Article]);
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new() { ["categoryId"] = category.ToString() });
+        var outcome = await SendAsync(client, channel, Article, article, new() { ["categoryId"] = category.ToString() });
 
         AssertRefusedAlike([outcome], channel, "fxCategory");
     }
@@ -243,10 +243,10 @@ public sealed class RelationWriteUnchangedFileTests : IClassFixture<NoPublicRela
         var (article, first, second) = await SeedLinkedAsync();
         var admin = await factory.CreateAuthenticatedClientAsync();
         var category = await h.SeedCategoryAsync();
-        AssertWritten(await h.SendAsync(admin, Rest, Article, article, new() { ["categoryId"] = category.ToString() }));
+        AssertWritten(await SendAsync(admin, Rest, Article, article, new() { ["categoryId"] = category.ToString() }));
         var client = await h.CallerAsync([Article], [Article]);
 
-        var read = await h.ReadItemAsync(client, Article, article);
+        var read = await ReadItemAsync(client, Article, article);
 
         read.GetProperty(Hero).GetGuid().Should().Be(first);
         read.GetProperty(Gallery).EnumerateArray().Select(e => e.GetGuid()).Should().Equal(first, second);

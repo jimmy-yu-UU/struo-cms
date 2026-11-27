@@ -32,12 +32,12 @@ public class LinkExistenceFileTests(ApiFactory factory)
 
     private static object Value(string field, string id) => field == Gallery ? new[] { id } : id;
 
-    private Task<WriteOutcome> SendFieldAsync(
+    private static Task<WriteOutcome> SendFieldAsync(
         HttpClient client, string channel, Guid? article, string field, object? value, string? status = null)
     {
         var fields = field == OgImage ? new Dictionary<string, object?>() : new Dictionary<string, object?> { [field] = value };
         if (status is not null) fields["status"] = status;
-        return h.SendAsync(
+        return SendAsync(
             client, channel, Article, article, fields, translated: article is null,
             translation: field == OgImage ? new() { [OgImage] = value } : null);
     }
@@ -58,7 +58,7 @@ public class LinkExistenceFileTests(ApiFactory factory)
     public async Task A_file_field_naming_a_missing_file_is_refused_and_nothing_is_stored(string channel, string op, string field)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        Guid? article = op == Put ? await h.SeedArticleAsync(admin) : null;
+        Guid? article = op == Put ? await SeedArticleAsync(admin) : null;
         var before = await h.ArticleCountAsync();
 
         var outcome = await SendFieldAsync(admin, channel, article, field, Value(field, MissingId));
@@ -75,9 +75,9 @@ public class LinkExistenceFileTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, channel, Article, article, new() { [Gallery] = new[] { file.ToString(), MissingId } });
 
         AssertRefused(outcome, ListMissing);
@@ -93,10 +93,10 @@ public class LinkExistenceFileTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        Guid? article = op == Put ? await h.SeedArticleAsync(admin) : null;
+        Guid? article = op == Put ? await SeedArticleAsync(admin) : null;
         var fields = new Dictionary<string, object?> { [Hero] = file.ToString(), [Gallery] = new[] { file.ToString() } };
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, channel, Article, article, fields, translated: true, translation: new() { [OgImage] = file.ToString() });
 
         AssertWritten(outcome);
@@ -113,7 +113,7 @@ public class LinkExistenceFileTests(ApiFactory factory)
         var missing = Guid.Parse(MissingId);
         var article = await h.SeedDanglingArticleAsync(missing);
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, channel, Article, article,
             new() { [Hero] = MissingId, [Gallery] = new[] { MissingId }, ["status"] = "published" },
             translation: new() { [OgImage] = MissingId });
@@ -132,10 +132,10 @@ public class LinkExistenceFileTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        var article = await h.SeedArticleAsync(admin);
-        AssertWritten(await h.SendAsync(admin, Rest, Article, article, new() { [Hero] = file.ToString() }));
+        var article = await SeedArticleAsync(admin);
+        AssertWritten(await SendAsync(admin, Rest, Article, article, new() { [Hero] = file.ToString() }));
         await TrashAsync(admin, "file", file);
-        var other = await h.SeedArticleAsync(admin);
+        var other = await SeedArticleAsync(admin);
 
         var assigned = await SendFieldAsync(admin, channel, other, Hero, file.ToString());
         var unchanged = await SendFieldAsync(admin, channel, article, Hero, file.ToString(), status: "published");
@@ -152,12 +152,12 @@ public class LinkExistenceFileTests(ApiFactory factory)
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        var article = await h.SeedArticleAsync(admin);
-        AssertWritten(await h.SendAsync(
+        var article = await SeedArticleAsync(admin);
+        AssertWritten(await SendAsync(
             admin, Rest, Article, article, new() { [Hero] = file.ToString(), [Gallery] = new[] { file.ToString() } },
             translation: new() { [OgImage] = file.ToString() }));
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             admin, channel, Article, article, new() { [Hero] = null, [Gallery] = Array.Empty<string>() },
             translation: new() { [OgImage] = null });
 
@@ -175,7 +175,7 @@ public class LinkExistenceFileTests(ApiFactory factory)
         await TrashAsync(admin, "file", history.File1);
         await TrashAsync(admin, "fxCategory", history.Category1);
 
-        AssertWritten(await h.RevertAsync(admin, channel, history.Article, RevisionOne));
+        AssertWritten(await RevertAsync(admin, channel, history.Article, RevisionOne));
 
         (await h.StoredLinksAsync(history.Article)).Should().BeEquivalentTo(history.First);
     }

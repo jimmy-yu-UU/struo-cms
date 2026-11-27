@@ -133,7 +133,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     });
 
     /// <summary>An article created through the API by a super-admin, optionally linked to tags.</summary>
-    public async Task<Guid> SeedArticleAsync(HttpClient admin, params Guid[] tags)
+    public static async Task<Guid> SeedArticleAsync(HttpClient admin, params Guid[] tags)
     {
         var resp = await admin.PostAsJsonAsync("/api/items/fxArticle", new
         {
@@ -204,7 +204,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     /// Sends one create (<c>id</c> null) or update. A create of a translated collection carries a default-locale
     /// translation. <paramref name="fields"/> are the item's body keys, spelled as REST and GraphQL both take them.
     /// </summary>
-    public async Task<WriteOutcome> SendAsync(
+    public static async Task<WriteOutcome> SendAsync(
         HttpClient client, string channel, string collection, Guid? id, Dictionary<string, object?> fields,
         bool translated = false, Dictionary<string, object?>? translation = null)
     {
@@ -240,7 +240,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     }
 
     /// <summary>One multipart upload of a small text file; <paramref name="folderId"/> is sent as a form field when not null.</summary>
-    public async Task<WriteOutcome> UploadAsync(HttpClient client, string? folderId)
+    public static async Task<WriteOutcome> UploadAsync(HttpClient client, string? folderId)
     {
         using var content = new ByteArrayContent([1, 2, 3]);
         content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");

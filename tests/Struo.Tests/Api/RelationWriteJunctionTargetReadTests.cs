@@ -39,7 +39,7 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
         var client = await h.CallerAsync([Article], [ArticleTag]);
         var tag = await h.SeedTagAsync();
         var kept = await h.SeedTagAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
         var rowsBefore = await h.LinkRowCountAsync();
         var outcomes = new List<WriteOutcome>();
         var links = new List<Guid>();
@@ -52,7 +52,7 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
                 links.Add(id.Value);
             }
             var fields = op == Post ? TagLink(article, IdOf(kind, tag)) : new() { ["tagId"] = IdOf(kind, tag) };
-            outcomes.Add(await h.SendAsync(client, channel, ArticleTag, id, fields));
+            outcomes.Add(await SendAsync(client, channel, ArticleTag, id, fields));
         }
 
         AssertRefusedAlike(outcomes, channel, Tag);
@@ -84,7 +84,7 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
                 links.Add(id.Value);
             }
             var fields = op == Post ? RoleLink(user, IdOf(kind, role)) : new() { ["roleId"] = IdOf(kind, role) };
-            outcomes.Add(await h.SendAsync(client, channel, UserRoleCollection, id, fields));
+            outcomes.Add(await SendAsync(client, channel, UserRoleCollection, id, fields));
         }
 
         AssertRefusedAlike(outcomes, channel, Role);
@@ -101,7 +101,7 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
         var user = await h.SeedPlainUserAsync();
         var role = await h.SeedPlainRoleAsync();
 
-        var outcome = await h.SendAsync(client, channel, UserRoleCollection, null, RoleLink(user, role.ToString()));
+        var outcome = await SendAsync(client, channel, UserRoleCollection, null, RoleLink(user, role.ToString()));
 
         AssertRefusedAlike([outcome], channel, User);
         (await h.RoleLinkCountAsync(user)).Should().Be(0);
@@ -111,11 +111,11 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
     public async Task Article_tag_key_is_matched_ignoring_case()
     {
         var client = await h.CallerAsync([Article], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, await h.SeedTagAsync());
 
-        var outcome = await h.SendAsync(client, Rest, ArticleTag, link, new() { ["TagId"] = tag.ToString() });
+        var outcome = await SendAsync(client, Rest, ArticleTag, link, new() { ["TagId"] = tag.ToString() });
 
         AssertRefusedAlike([outcome], Rest, Tag);
         (await h.LinksToTagAsync(tag)).Should().Be(0);
@@ -129,11 +129,11 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
     public async Task Article_tag_write_with_both_reads_stores_the_link(string channel, string op)
     {
         var client = await h.CallerAsync([Article, Tag], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         Guid? id = op == Put ? await h.SeedLinkAsync(article, await h.SeedTagAsync()) : null;
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, channel, ArticleTag, id, op == Post ? TagLink(article, tag.ToString()) : new() { ["tagId"] = tag.ToString() });
 
         AssertWritten(outcome);
@@ -152,7 +152,7 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
         var role = await h.SeedPlainRoleAsync();
         Guid? id = op == Put ? await h.SeedUserRoleAsync(user, await h.SeedPlainRoleAsync()) : null;
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, channel, UserRoleCollection, id, op == Post ? RoleLink(user, role.ToString()) : new() { ["roleId"] = role.ToString() });
 
         AssertWritten(outcome);
@@ -166,11 +166,11 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
     public async Task Article_tag_write_without_a_key_needs_no_target_read(string channel)
     {
         var client = await h.CallerAsync([Article], [ArticleTag]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
         var link = await h.SeedLinkAsync(article, tag);
 
-        var outcome = await h.SendAsync(client, channel, ArticleTag, link, new() { ["note"] = "n" });
+        var outcome = await SendAsync(client, channel, ArticleTag, link, new() { ["note"] = "n" });
 
         AssertWritten(outcome);
         (await h.LinkAsync(link)).TagId.Should().Be(tag);
@@ -182,10 +182,10 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
     public async Task Article_tag_write_without_junction_write_is_refused_on_write_first(string channel)
     {
         var client = await h.CallerAsync([Article], []);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
         var tag = await h.SeedTagAsync();
 
-        var outcome = await h.SendAsync(client, channel, ArticleTag, null, TagLink(article, tag.ToString()));
+        var outcome = await SendAsync(client, channel, ArticleTag, null, TagLink(article, tag.ToString()));
 
         outcome.Code.Should().Be("FORBIDDEN");
         outcome.Message.Should().Be(WriteRefusal);
@@ -201,7 +201,7 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
         var user = await h.SeedPlainUserAsync();
         var role = await h.SeedPlainRoleAsync();
 
-        var outcome = await h.SendAsync(client, channel, UserRoleCollection, null, RoleLink(user, role.ToString()));
+        var outcome = await SendAsync(client, channel, UserRoleCollection, null, RoleLink(user, role.ToString()));
 
         outcome.Code.Should().Be("FORBIDDEN");
         outcome.Message.Should().Be(WriteRefusal);
@@ -212,10 +212,10 @@ public class RelationWriteJunctionTargetReadTests(ApiFactory factory)
     public async Task Super_admin_writes_a_junction_without_a_role_grant()
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
         var tag = await h.SeedTagAsync();
 
-        var outcome = await h.SendAsync(admin, Rest, ArticleTag, null, TagLink(article, tag.ToString()));
+        var outcome = await SendAsync(admin, Rest, ArticleTag, null, TagLink(article, tag.ToString()));
 
         AssertWritten(outcome);
         (await h.LinksToTagAsync(tag)).Should().Be(1);

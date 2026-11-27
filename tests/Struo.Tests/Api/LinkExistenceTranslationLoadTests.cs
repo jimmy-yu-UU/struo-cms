@@ -63,7 +63,7 @@ public sealed class LinkExistenceTranslationLoadTests : IClassFixture<NoPublicRe
         client.DefaultRequestHeaders.Add("X-Struo-CSRF", "1");
         (await client.PostAsJsonAsync("/api/auth/login", new { email, password })).EnsureSuccessStatusCode();
 
-        var outcome = await h.SendAsync(client, Rest, Article, article, fields, translation: translation);
+        var outcome = await SendAsync(client, Rest, Article, article, fields, translation: translation);
 
         AssertWritten(outcome);
         return counter!.Loads;
@@ -74,8 +74,8 @@ public sealed class LinkExistenceTranslationLoadTests : IClassFixture<NoPublicRe
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var (stored, other) = (await h.SeedFileAsync(), await h.SeedFileAsync());
-        var article = await h.SeedArticleAsync(admin);
-        AssertWritten(await h.SendAsync(admin, Rest, Article, article, new(), translation: new() { [OgImage] = stored.ToString() }));
+        var article = await SeedArticleAsync(admin);
+        AssertWritten(await SendAsync(admin, Rest, Article, article, new(), translation: new() { [OgImage] = stored.ToString() }));
 
         var baseline = await LoadsOfUpdateAsync([Article, "file"], new() { ["status"] = "published" }, new() { ["title"] = "again" }, article);
         var unchangedWithoutRead = await LoadsOfUpdateAsync([Article], new(), new() { [OgImage] = stored.ToString() }, article);

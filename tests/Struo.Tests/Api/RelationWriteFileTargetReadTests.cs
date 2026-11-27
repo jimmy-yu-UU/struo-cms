@@ -93,10 +93,10 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
             Guid? id = null;
             if (op == Put)
             {
-                id = await h.SeedArticleAsync(admin);
+                id = await SeedArticleAsync(admin);
                 seeded.Add(id.Value);
             }
-            outcomes.Add(await h.SendAsync(
+            outcomes.Add(await SendAsync(
                 client, channel, Article, id, new() { [field] = Value(field, IdOf(kind, file)) }, translated: true));
         }
 
@@ -117,10 +117,10 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var client = await h.CallerAsync([Article], [Article]);
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var article = await h.SeedArticleAsync(admin);
-        AssertWritten(await h.SendAsync(admin, Rest, Article, article, new() { [Hero] = (await h.SeedFileAsync()).ToString() }));
+        var article = await SeedArticleAsync(admin);
+        AssertWritten(await SendAsync(admin, Rest, Article, article, new() { [Hero] = (await h.SeedFileAsync()).ToString() }));
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new() { [Hero] = null });
+        var outcome = await SendAsync(client, channel, Article, article, new() { [Hero] = null });
 
         outcome.Code.Should().Be("FORBIDDEN");
         outcome.Message.Should().Be(FileRefusal);
@@ -135,9 +135,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var client = await h.CallerAsync([Article, "file"], [Article]);
         var file = await h.SeedFileAsync();
-        Guid? id = op == Put ? await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync()) : null;
+        Guid? id = op == Put ? await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync()) : null;
 
-        var outcome = await h.SendAsync(client, channel, Article, id, new() { [Hero] = file.ToString() }, translated: true);
+        var outcome = await SendAsync(client, channel, Article, id, new() { [Hero] = file.ToString() }, translated: true);
 
         AssertWritten(outcome);
         if (id is { } stored) (await h.ArticleAsync(stored)).HeroImageId.Should().Be(file);
@@ -149,9 +149,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     public async Task Update_without_a_file_key_needs_no_file_read(string channel)
     {
         var client = await h.CallerAsync([Article], [Article]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new() { ["status"] = "published" });
+        var outcome = await SendAsync(client, channel, Article, article, new() { ["status"] = "published" });
 
         AssertWritten(outcome);
     }
@@ -161,9 +161,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
 
-        var outcome = await h.SendAsync(admin, Rest, Article, article, new() { [Hero] = file.ToString() });
+        var outcome = await SendAsync(admin, Rest, Article, article, new() { [Hero] = file.ToString() });
 
         AssertWritten(outcome);
         (await h.ArticleAsync(article)).HeroImageId.Should().Be(file);
@@ -187,10 +187,10 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
             Guid? id = null;
             if (op == Put)
             {
-                id = await h.SeedArticleAsync(admin);
+                id = await SeedArticleAsync(admin);
                 seeded++;
             }
-            outcomes.Add(await h.SendAsync(
+            outcomes.Add(await SendAsync(
                 client, channel, Article, id, new(), translation: new() { [OgImage] = IdOf(kind, file) }));
         }
 
@@ -204,9 +204,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var client = await h.CallerAsync([Article], [Article]);
         var file = await h.SeedFileAsync();
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
 
-        var outcome = await h.SendAsync(
+        var outcome = await SendAsync(
             client, Rest, Article, article, new(), translation: new() { ["SeoOgImageId"] = file.ToString() });
 
         AssertRefusedAlike([outcome], Rest, "file");
@@ -220,11 +220,11 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var client = await h.CallerAsync([Article], [Article]);
         var admin = await factory.CreateAuthenticatedClientAsync();
-        var article = await h.SeedArticleAsync(admin);
-        AssertWritten(await h.SendAsync(
+        var article = await SeedArticleAsync(admin);
+        AssertWritten(await SendAsync(
             admin, Rest, Article, article, new(), translation: new() { [OgImage] = (await h.SeedFileAsync()).ToString() }));
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new(), translation: new() { [OgImage] = null });
+        var outcome = await SendAsync(client, channel, Article, article, new(), translation: new() { [OgImage] = null });
 
         AssertRefusedAlike([outcome], channel, "file");
     }
@@ -238,9 +238,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var client = await h.CallerAsync([Article, "file"], [Article]);
         var file = await h.SeedFileAsync();
-        Guid? id = op == Put ? await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync()) : null;
+        Guid? id = op == Put ? await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync()) : null;
 
-        var outcome = await h.SendAsync(client, channel, Article, id, new(), translation: new() { [OgImage] = file.ToString() });
+        var outcome = await SendAsync(client, channel, Article, id, new(), translation: new() { [OgImage] = file.ToString() });
 
         AssertWritten(outcome);
         (await h.OgImageLinksToAsync(file)).Should().Be(1);
@@ -252,9 +252,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     public async Task Translated_update_without_an_image_key_needs_no_file_read(string channel)
     {
         var client = await h.CallerAsync([Article], [Article]);
-        var article = await h.SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
+        var article = await SeedArticleAsync(await factory.CreateAuthenticatedClientAsync());
 
-        var outcome = await h.SendAsync(client, channel, Article, article, new(), translation: new() { ["title"] = "renamed" });
+        var outcome = await SendAsync(client, channel, Article, article, new(), translation: new() { ["title"] = "renamed" });
 
         AssertWritten(outcome);
     }
@@ -264,9 +264,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var admin = await factory.CreateAuthenticatedClientAsync();
         var file = await h.SeedFileAsync();
-        var article = await h.SeedArticleAsync(admin);
+        var article = await SeedArticleAsync(admin);
 
-        var outcome = await h.SendAsync(admin, Rest, Article, article, new(), translation: new() { [OgImage] = file.ToString() });
+        var outcome = await SendAsync(admin, Rest, Article, article, new(), translation: new() { [OgImage] = file.ToString() });
 
         AssertWritten(outcome);
         (await h.OgImageLinksToAsync(file)).Should().Be(1);
@@ -279,7 +279,7 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
         var folder = await h.SeedFolderAsync();
         var filesBefore = await h.FileCountAsync();
         var outcomes = new List<WriteOutcome>();
-        foreach (var kind in IdKinds) outcomes.Add(await h.UploadAsync(client, IdOf(kind, folder)));
+        foreach (var kind in IdKinds) outcomes.Add(await UploadAsync(client, IdOf(kind, folder)));
 
         AssertRefusedAlike(outcomes, Rest, "mediaFolder");
         (await h.FileCountAsync()).Should().Be(filesBefore);
@@ -292,9 +292,9 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
         var client = await h.CallerAsync(["mediaFolder"], ["file"]);
         var folder = await h.SeedFolderAsync();
 
-        var existing = await h.UploadAsync(client, IdOf(Existing, folder));
-        var missing = await h.UploadAsync(client, IdOf(Missing, folder));
-        var malformed = await h.UploadAsync(client, IdOf(Malformed, folder));
+        var existing = await UploadAsync(client, IdOf(Existing, folder));
+        var missing = await UploadAsync(client, IdOf(Missing, folder));
+        var malformed = await UploadAsync(client, IdOf(Malformed, folder));
 
         AssertWritten(existing);
         (await h.FilesInFolderAsync(folder)).Should().Be(1);
@@ -309,7 +309,7 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
     {
         var client = await h.CallerAsync([], ["file"]);
 
-        AssertWritten(await h.UploadAsync(client, folderId));
+        AssertWritten(await UploadAsync(client, folderId));
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
         var client = await h.CallerAsync([], []);
         var folder = await h.SeedFolderAsync();
 
-        var outcome = await h.UploadAsync(client, folder.ToString());
+        var outcome = await UploadAsync(client, folder.ToString());
 
         outcome.Status.Should().Be(HttpStatusCode.Forbidden);
         outcome.Message.Should().Be("Write not permitted.");
@@ -330,7 +330,7 @@ public sealed class RelationWriteFileTargetReadTests : IClassFixture<NoPublicFil
         var admin = await factory.CreateAuthenticatedClientAsync();
         var folder = await h.SeedFolderAsync();
 
-        AssertWritten(await h.UploadAsync(admin, folder.ToString()));
+        AssertWritten(await UploadAsync(admin, folder.ToString()));
         (await h.FilesInFolderAsync(folder)).Should().BeGreaterThan(0);
     }
 }
