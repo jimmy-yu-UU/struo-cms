@@ -34,6 +34,14 @@ public sealed class ItemServiceFilesFieldTests : IDisposable
         public List<Guid> RequiredGallery { get; set; } = new();
     }
 
+    // The file collection the Files field links; the ids the tests send name its rows.
+    [SugarTable("files_stub")]
+    [CmsCollection("File")]
+    public sealed class File : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+    }
+
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
     private readonly ItemService _svc;
 
@@ -43,17 +51,20 @@ public sealed class ItemServiceFilesFieldTests : IDisposable
             _file.Options(),
             new TestCurrentUserAccessor(Guid.Empty));
         db.CodeFirst.InitTables<FilesThing>();
+        db.CodeFirst.InitTables<File>();
+        db.Insertable(new[] { A, B, C }.Select(id => new File { Id = Guid.Parse(id) }).ToList()).ExecuteCommand();
         db.CodeFirst.InitTables<Language>();
         db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(db, TestLocalization.Default).GetAwaiter().GetResult();
 
-        var types = new[] { typeof(FilesThing) };
+        var types = new[] { typeof(FilesThing), typeof(File) };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var collectionTypes = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["filesthing"] = typeof(FilesThing),
+            ["file"] = typeof(File),
         };
         var graph = new RelationshipGraph(collections, collectionTypes);
         var repo = new SqlSugarItemRepository(db, registry, graph, provider, new StruoQueryOptions());

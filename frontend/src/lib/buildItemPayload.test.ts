@@ -324,3 +324,71 @@ describe('buildItemPayload non-default locale left with only blank collection el
     expect((p.translations as any)['zh-TW']).toBeUndefined()
   })
 })
+
+describe('buildItemPayload with an unreadable target collection', () => {
+  const langs: LanguageInfo[] = [{ code: 'en', name: 'English', isDefault: true }]
+  const rel = (over: Partial<RelationMeta>): RelationMeta => ({
+    name: 'x', label: 'X', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown',
+    foreignKey: 'CategoryId', displayTemplate: '{Name}', editable: true, selfReferencing: false, ...over,
+  })
+  const m: CollectionMeta = {
+    name: 'article', label: 'Article', defaultDisplayField: null,
+    fields: [
+      field('status'),
+      field('hero', { interface: 'image' }),
+      field('gallery', { interface: 'files' }),
+      field('attachment', { interface: 'file' }),
+      field('cover', { interface: 'image', translatable: true }),
+    ],
+    relations: [
+      rel({ name: 'category', targetCollection: 'category' }),
+      rel({ name: 'parent', targetCollection: 'article', foreignKey: 'ParentId', interface: 'treeSelect', selfReferencing: true }),
+      rel({ name: 'tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect', foreignKey: null }),
+    ],
+  }
+  const model: FormModel = {
+    shared: { status: 'draft', hero: 'f1', gallery: ['f2'], attachment: null },
+    translations: { en: { cover: 'f3' } },
+    relations: { category: 'c1', parent: null, tags: [] },
+  }
+  const denying = (...names: string[]) => ({ canReadCollection: (n: string) => !names.includes(n) })
+
+  for (const mode of ['create', 'update'] as const) {
+    it(`omits a many-to-one foreign key and a many-to-many array on ${mode}`, () => {
+      const p = buildItemPayload(m, model, langs, mode, denying('category', 'tag', 'article'))
+      expect(p).not.toHaveProperty('categoryId')
+      expect(p).not.toHaveProperty('parentId')
+      expect(p).not.toHaveProperty('tags')
+      expect(p.status).toBe('draft')
+    })
+    it(`omits shared file, image and files fields on ${mode}`, () => {
+      const p = buildItemPayload(m, model, langs, mode, denying('file'))
+      expect(p).not.toHaveProperty('hero')
+      expect(p).not.toHaveProperty('gallery')
+      expect(p).not.toHaveProperty('attachment')
+      expect(p.status).toBe('draft')
+      expect(p.categoryId).toBe('c1')
+      expect(p.tags).toEqual([])
+    })
+    it(`leaves a translatable file field out of every locale entry on ${mode}`, () => {
+      const p = buildItemPayload(m, model, langs, mode, denying('file'))
+      expect(p.translations).toEqual({ en: {} })
+    })
+    it(`is identical to the payload without the option when every collection is readable on ${mode}`, () => {
+      const without = buildItemPayload(m, model, langs, mode)
+      expect(buildItemPayload(m, model, langs, mode, { canReadCollection: () => true })).toEqual(without)
+    })
+  }
+  it('still counts the loaded value of an unreadable translatable file field as locale content', () => {
+    const two: LanguageInfo[] = [...langs, { code: 'fr', name: 'French', isDefault: false }]
+    const imageOnly: FormModel = { ...model, translations: { en: { cover: 'f3' }, fr: { cover: 'f4' } } }
+    const p = buildItemPayload(m, imageOnly, two, 'update', {
+      ...denying('file'), baselineTranslations: { en: { cover: 'f3' }, fr: { cover: 'f4' } },
+    })
+    expect(p.translations).toEqual({ en: {}, fr: {} })
+  })
+  it('sends the file keys and relation keys on update when the option is absent', () => {
+    const p = buildItemPayload(m, model, langs, 'update')
+    expect(p).toMatchObject({ hero: 'f1', gallery: ['f2'], attachment: null, categoryId: 'c1', parentId: null, tags: [] })
+  })
+})

@@ -109,8 +109,9 @@ public static class MetadataScanner
 
     /// <summary>
     /// Fail-fast: a M2M junction that is itself a [CmsCollection] must expose both of its foreign keys
-    /// as writable [CmsField]s (or as the FK of a many-to-one relation), or items created through the
-    /// generic-CRUD API would store empty junction keys. Runs for both <see cref="ScanTypes"/> and the
+    /// as keys a request body sets (<see cref="CollectionMetadata.ServerOwnedKeyNames()"/> lists the ones it
+    /// never sets: <c>ReadOnly</c> and audit fields, soft-delete columns), as [CmsField]s or as the FK of a
+    /// many-to-one relation, or items created through the generic-CRUD API would store empty junction keys. Runs for both <see cref="ScanTypes"/> and the
     /// assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
     private static void ValidateJunctionCollections(List<CollectionMetadata> collections, IEnumerable<Type> types)
@@ -128,8 +129,7 @@ public static class MetadataScanner
         }
     }
 
-    // Per-relation body of ValidateJunctionCollections, extracted verbatim (same conditions, order,
-    // and exception message) to keep the caller's cognitive complexity in check.
+    // Per-relation body of ValidateJunctionCollections.
     private static void ValidateOneJunctionCollection(
         CollectionMetadata owner, PropertyInfo prop, NavigateShape nav,
         Dictionary<string, CollectionMetadata> byName)
@@ -138,17 +138,30 @@ public static class MetadataScanner
         var junction = byName.GetValueOrDefault(CollectionNameOf(junctionType));
         if (junction is null) return; // plain junction: nothing to validate
 
-        var writable = junction.Fields.Where(f => !f.IsSystem && !f.ReadOnly).Select(f => f.Name)
+        var serverOwned = junction.ServerOwnedKeyNames();
+        var writable = junction.Fields.Select(f => f.Name)
             .Concat(junction.Relations.Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null).Select(r => r.ForeignKey!))
+            .Where(name => !serverOwned.Contains(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var fkA = nav.ParentKey;
         var fkB = nav.TargetKey;
         if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB))) return;
 
+        var owned = new[] { fkA, fkB }.Where(key => serverOwned.Contains(Camel(key))).ToList();
         throw new MetadataException(
             $"Junction collection '{junction.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare its foreign keys " +
             $"'{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created " +
-            "through the API store empty keys.");
+            "through the API store empty keys." + ServerOwnedKeyReason(junctionType, owned));
+    }
+
+    // Names the junction keys a request body never sets; empty when the keys are only undeclared.
+    private static string ServerOwnedKeyReason(Type junctionType, List<string> owned)
+    {
+        if (owned.Count == 0) return "";
+        var names = string.Join(" and ", owned.Select(key => $"'{junctionType.Name}.{key}'"));
+        var verb = owned.Count == 1 ? "is" : "are";
+        return $" {names} {verb} ReadOnly, an audit field or a soft-delete column, which a request body never sets; " +
+               "use a property a body can set as the key.";
     }
 
     /// <summary>
@@ -498,6 +511,7 @@ public static class MetadataScanner
         ColumnOverrideCheck.Require(type, primaryKeyRuleReports: true);
         FieldInheritanceCheck.Require(type);
         FieldSetterCheck.RequirePublicSetters(type);
+        SoftDeleteFieldCheck.Require(type);
         var groups = type.GetCustomAttributes<CmsFieldGroupAttribute>()
             .Select(g => new FieldGroupMetadata(g.Name, g.Label, g.Sort))
             .ToList();
@@ -539,6 +553,7 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Collection '{name}' DefaultDisplayField '{attr.DefaultDisplayField}' is not a known field.");
 
+        var softDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type);
         return new CollectionMetadata
         {
             Name = name,
@@ -550,21 +565,20 @@ public static class MetadataScanner
             Hidden = attr.Hidden,
             Creatable = attr.Creatable,
             Revisions = attr.Revisions,
-            SoftDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type),
+            SoftDelete = softDelete,
             FieldGroups = groups,
             Fields = ordered,
-            Relations = WithServerOwnedKeysLocked(ScanRelations(type), ordered),
+            Relations = WithServerOwnedKeysLocked(ScanRelations(type), ordered, softDelete),
             Translation = translation
         };
     }
 
-    // A ManyToOne relation whose foreign key is a ReadOnly or audit field is never written by the server,
-    // so it is reported as not editable.
+    // A ManyToOne relation whose foreign key is a ReadOnly or audit field, or a soft-delete column, is never
+    // written by the server, so it is reported as not editable.
     private static List<RelationMetadata> WithServerOwnedKeysLocked(
-        IReadOnlyList<RelationMetadata> relations, IReadOnlyList<FieldMetadata> fields)
+        IReadOnlyList<RelationMetadata> relations, IReadOnlyList<FieldMetadata> fields, bool softDelete)
     {
-        var serverOwned = fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var serverOwned = CollectionMetadata.ServerOwnedKeyNames(fields, softDelete);
         return relations
             .Select(r => r is { Kind: RelationKind.ManyToOne, ForeignKey: { } fk } && serverOwned.Contains(fk)
                 ? r with { Editable = false }

@@ -16,6 +16,7 @@ const i18n = createI18n({
   messages: { en: { itemForm: {
     translatableBadge: 'Per language',
     translatableBadgeHint: 'One value per language.',
+    targetUnreadable: 'No read on {target}',
     localeComplete: 'Has content', localeIncomplete: 'No content yet', tabHasErrors: 'has errors',
   } } },
 })
@@ -336,5 +337,40 @@ describe('ItemForm per-locale errors', () => {
     const badge = w.get('.tr-badge')
     expect(badge.text()).toBe('Per language')
     expect(badge.attributes('title')).toBe('One value per language.')
+  })
+
+  describe('a translatable file field the caller cannot read', () => {
+    const fileMeta: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+      field('cover', { interface: 'image', translatable: true, sort: 1 }),
+      field('title', { translatable: true, sort: 2 }),
+    ] }
+    const fileModel: FormModel = { shared: {}, translations: { en: { cover: 'f1', title: '' }, 'zh-TW': { cover: null, title: '' } }, relations: {} }
+    const props = { meta: fileMeta, model: fileModel, locales, errors: {}, canReadCollection: (n: string) => n !== 'file', collectionLabel: () => 'Files' }
+
+    it('shows a disabled input and the note instead of the field input, wired with aria-describedby', () => {
+      const w = mountForm(props)
+
+      expect(w.findAll('.field-input')).toHaveLength(1) // title only
+      const input = w.get('input[disabled]')
+      const note = w.get(`#${input.attributes('aria-describedby')}`)
+      expect(note.text()).toBe('No read on Files')
+    })
+    it('gives the note an id of its own in each locale', async () => {
+      const w = mountForm(props)
+      const first = w.get('input[disabled]').attributes('aria-describedby')
+
+      await w.findAll('[role="tab"]')[1].trigger('mousedown')
+      await flushPromises()
+
+      const second = w.get('input[disabled]').attributes('aria-describedby')
+      expect(second).not.toBe(first)
+      expect(w.get(`[id="${second}"]`).text()).toBe('No read on Files')
+    })
+    it('renders the field input when the caller can read files', () => {
+      const w = mountForm({ ...props, canReadCollection: () => true })
+
+      expect(w.findAll('.field-input')).toHaveLength(2)
+      expect(w.find('input[disabled]').exists()).toBe(false)
+    })
   })
 })

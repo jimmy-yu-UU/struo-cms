@@ -26,6 +26,9 @@ a `Repeater` row type, and the base classes of each.
   (`FieldSetterCheck`): one with a public setter, `[JsonInclude]`, or a matching parameter on the
   constructor the binder uses (the one carrying `[JsonConstructor]`, public or not, else the one
   public constructor). A sub-field no body can set keeps the flag.
+- **`[CmsField]` on `DeletedAt` or `DeletedBy` of a soft-deletable class** (`SoftDeleteFieldCheck`).
+  The delete and restore operations own those columns and a request body never sets them, so the
+  field could only be read while the schema offered it as editable.
 
 ## Why
 
@@ -178,4 +181,5 @@ The GraphQL item input leaves a `ReadOnly` sub-field out in every row.
 - `src/Struo.Infrastructure/Metadata/FieldInheritanceCheck.cs`
 - `src/Struo.Infrastructure/Metadata/FieldSetterCheck.cs`
 - `src/Struo.Infrastructure/Metadata/TranslationReadOnlyCheck.cs`
+- `src/Struo.Infrastructure/Metadata/SoftDeleteFieldCheck.cs`
 - `docs/ai/conventions.md`

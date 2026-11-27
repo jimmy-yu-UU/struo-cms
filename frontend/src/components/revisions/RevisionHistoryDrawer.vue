@@ -19,6 +19,8 @@ const props = defineProps<{
   canRevert: boolean
   // The item version the edit form loaded; the server rejects the revert when the item has moved on.
   version?: number
+  // Labels of the fields a revert leaves as they are for this user; listed in the confirmation.
+  keptFields?: string[]
 }>()
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
@@ -98,6 +100,7 @@ async function onRevert(n: number): Promise<void> {
   const accepted = await confirm.require({
     header: t('revisions.revertConfirmHeader'),
     message: t('revisions.revertConfirmMessage', { n }),
+    ...(props.keptFields?.length ? { itemsHeading: t('revisions.revertKeptHeading'), items: props.keptFields } : {}),
   })
   if (!accepted) return
   reverting.value = true

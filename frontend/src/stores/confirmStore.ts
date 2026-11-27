@@ -2,6 +2,9 @@ import { defineStore } from 'pinia'
 
 export type ConfirmRequest = {
   message: string
+  // Rendered as a list under the message, introduced by itemsHeading; no list for an empty array.
+  items?: string[]
+  itemsHeading?: string
   header?: string
   acceptLabel?: string
   rejectLabel?: string

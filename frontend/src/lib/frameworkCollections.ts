@@ -5,6 +5,9 @@ export const LANGUAGE_COLLECTION = 'language'
 export const ROLE_COLLECTION = 'role'
 export const USER_COLLECTION = 'user'
 
+// The collection every file, image and files field points at.
+export const FILE_COLLECTION = 'file'
+
 // Name of the seeded role every caller holds as a permission floor (the API resolves it by this name).
 export const PUBLIC_ROLE_NAME = 'public'
 

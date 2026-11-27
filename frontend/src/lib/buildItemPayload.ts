@@ -6,6 +6,7 @@ import { getFieldType } from './fieldTypes/registry'
 import { localeIsSent } from './translationErrors'
 import { anyHasContent } from './hasContent'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
+import { isFileFieldUnreadable, isRelationTargetUnreadable, type CanReadCollection } from './unreadableTargets'
 
 // Create omits a value that is unset or '' only; a whitespace-only value is still the user's input.
 function isUnset(v: unknown): boolean {
@@ -19,6 +20,9 @@ function camel(s: string): string {
 export type BuildItemPayloadOptions = {
   resolveCollection?: ResolveCollection
   canWriteJunction?: (rel: RelationMeta) => boolean
+  // A relation or file field (shared or in a locale) whose target collection this denies is left out of the payload
+  // (the server refuses a write to it). Without it every target counts as readable.
+  canReadCollection?: CanReadCollection
   // Translations as of the form's baseline (see formDirty.baselineTranslations). On update, a
   // non-default locale with content there and none now is sent as null so the server deletes it; the
   // default locale in that state is sent as an entry of its serialized field values, since the server
@@ -60,6 +64,7 @@ export function buildItemPayload(
   const payload: Record<string, unknown> = {}
 
   for (const f of shared) {
+    if (isFileFieldUnreadable(f, options.canReadCollection)) continue
     // The registry's serialize owns per-type coercion — e.g. file/image '' -> null so a
     // nullable Guid FK never serialises "" (Postgres 22P02 -> 500). See fieldTypes/registry.ts.
     let v = getFieldType(f.interface).serialize(model.shared[f.name], f)
@@ -88,6 +93,7 @@ export function buildItemPayload(
     const entry: Record<string, unknown> = {}
     const nulls = mode === 'update' ? model.loadedNulls?.translations[loc.code] : undefined
     for (const f of translatable) {
+      if (isFileFieldUnreadable(f, options.canReadCollection)) continue
       entry[f.name] = nullIfLoadedNull(getFieldType(f.interface).serialize(values[f.name], f), nulls, f.name)
     }
     translations[loc.code] = entry
@@ -95,6 +101,7 @@ export function buildItemPayload(
   const relations = model.relations ?? {}
   for (const rel of meta.relations ?? []) {
     if (!(rel.name in relations)) continue // untouched -> partial update
+    if (isRelationTargetUnreadable(rel, options.canReadCollection)) continue
     const kind = relationInputKind(rel.interface)
     if (kind === 'dropdown' || kind === 'treeSelect') {
       if (rel.foreignKey) payload[camel(rel.foreignKey)] = relations[rel.name] ?? null

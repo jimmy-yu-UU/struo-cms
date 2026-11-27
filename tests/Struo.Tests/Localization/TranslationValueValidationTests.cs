@@ -66,7 +66,7 @@ public class TranslationValueValidationTests(ApiFactory factory)
     public async Task Valid_values_null_and_rich_text_keep_their_behavior()
     {
         var c = await _factory.CreateAuthenticatedClientAsync();
-        var og = Guid.NewGuid().ToString();
+        var og = (await new Struo.Tests.Api.RelationWriteHarness(_factory).SeedFileAsync()).ToString();
         var resp = await c.PostAsJsonAsync("/api/items/fxArticle", Body(new
         {
             en = new { title = "T", body = "<p>ok</p><script>alert(1)</script>", seoOgImageId = og, seoTitle = (string?)null },

@@ -494,6 +494,10 @@ a problem. An object element sent to a relation that does declare payload, but w
 gets a different message instead: `Each object in '<relation>' must carry an 'id'.` That check,
 too, runs before any payload value is bound.
 
+Naming a relation in a write needs a read grant on its target collection, checked before any id is
+looked at; [Chapter 8](08-relations.md#what-a-link-write-requires) has the rule for every kind of
+link.
+
 Every target id must genuinely exist; one that doesn't produces
 `One or more ids in '<relation>' do not exist in '<target>'.`. A revert is the one exception — it
 accepts even a target already sitting in the trash, because the target may not yet have been

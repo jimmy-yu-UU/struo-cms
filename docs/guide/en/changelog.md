@@ -77,7 +77,50 @@
   input left the sub-field out (measured on SQLite below the HTTP layer). Remove `ReadOnly = true`,
   or make the property get-only when the type computes the value
   ([Chapter 6](06-field-types.md)).
+- A junction collection whose key is `ReadOnly`, an audit field or a soft-delete column stops the
+  host at start. Such a key passed the startup check when a many-to-one relation of the junction
+  named it, although a request body never sets it. Use properties a body can set as the two keys,
+  declared as writable `[CmsField]`s ([Chapter 8](08-relations.md)).
+- A `[CmsField]` on `DeletedAt` or `DeletedBy` of a soft-deletable class stops the host at start:
+  the delete and restore operations own those columns. Remove `[CmsField]`
+  ([Chapter 9](09-revisions-and-trash.md)).
+- A create or an update that names a link needs a read grant on the collection the link points at:
+  a many-to-many relation (an empty `[]` included), a many-to-one foreign key (`null` included),
+  either key of a junction row, a `File`, `Image` or `Files` field (inside `translations` too), and
+  `folderId` on an upload. Without it the write is refused with `403` and
+  `Read not permitted on '{target}'.`, before any id is looked at. A link write needed the write
+  grant only, so a caller could link and unlink rows of a collection they could not read. On update,
+  a file field, a junction key or a foreign key that is also a declared field and not `Hidden`,
+  sent with the value it already holds, is let through; a key the server does not write (a
+  `ReadOnly` or system field, a soft-delete column) is not checked. A revert
+  leaves out the links the caller could not write and applies the rest; the admin's confirmation
+  lists the fields that are left out. Give read on the target to a
+  role that writes such links; assigning roles to a user needs read on `role`
+  ([Chapter 8](08-relations.md#what-a-link-write-requires)).
+- A many-to-one foreign key, a junction key or a file id that names no row, or a row in the trash,
+  is refused with `400` `BAD_USER_INPUT`: `The id in '{key}' does not exist in '{target}'.` Such an
+  id was stored. On update only an id the stored value does not already hold is checked, and a
+  revert is not checked. An all-zero GUID, an empty string and `0` in a key that cannot hold `null`
+  mean "no link" and are not checked. A client that writes the id of a row it creates afterwards
+  creates that row first ([Chapter 8](08-relations.md#what-a-link-write-requires)).
+- `GET /api/items/{collection}/{id}/revisions/{n}` and the GraphQL revision query show no more links
+  than an item read shows the caller: a many-to-many relation, and a many-to-one foreign key that is
+  not a declared field, are left out when the caller cannot read the target, and a payload-carrying
+  relation is reduced to ids when the caller cannot read the junction collection. The snapshot was
+  returned whole. Give read on the target to a role that reviews revisions
+  ([Chapter 9](09-revisions-and-trash.md)).
 :::
+
+### Added
+
+- `CollectionMetadata.ServerOwnedKeyNames()`: the names a request body never sets, which are the
+  system and `ReadOnly` fields, and `deletedAt` and `deletedBy` on a soft-deletable collection.
+- `IM2MDescriptorSource.JunctionKeyLinks(junctionCollection)` and the record `JunctionKeyLink`: the
+  two keys of a junction collection and the collection each one points at. The interface member has
+  a default implementation that returns no keys.
+- `RelationTargetReadGuard` (`Require`, `ReadDenied`), the read check a link write goes through
+  ([Chapter 8](08-relations.md#what-a-link-write-requires)), and the constant
+  `FileCollection.FolderName`.
 
 ### Changed
 
@@ -95,9 +138,16 @@
   sends. A label the fork changed and the other labels of the fork's own collections are shown as
   the server sends them. API responses are unchanged
   ([Chapter 19](19-admin-customization.md#ui-language)).
+- The item form shows a relation or file field whose target the signed-in user cannot read as a
+  disabled input with a note, and leaves it out of what it saves.
 
 ### Fixed
 
+- `deletedAt` and `deletedBy` of a soft-deletable collection are never set from a request body. A
+  collection that declared a many-to-one relation on `DeletedBy` let a create or an update store
+  the value sent for it (measured on SQLite through the HTTP pipeline). Such a relation is reported
+  as not editable, and the GraphQL inputs do not list the key
+  ([Chapter 9](09-revisions-and-trash.md)).
 - A many-to-one foreign key that also carries a writable `[CmsField]` is listed once in the GraphQL
   create, update and filter inputs, with the type the field gives it. The key was declared twice and
   the host failed to start with `The following field ... is declared multiple times`; measured for
