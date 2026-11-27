@@ -107,7 +107,26 @@ the value the class gives the property.
 | `string` with an initializer, on a `NOT NULL` column | the insert failed | initial |
 | `int`, `bool` with an initializer | initial | initial |
 
-A key sent for a `ReadOnly` field reached the property in no spelling, on create or on update.
+A key sent for a `ReadOnly` field that is not a foreign key reached the property in no spelling, on
+create or on update.
+
+`ReadOnly = true` on a collection field that is also the foreign key of a ManyToOne relation, with
+the key in the body. The stored value was the class initial value.
+
+| Operation | Property | Stored before the rule | Stored with the rule |
+|---|---|---|---|
+| update | `Guid?` | `NULL` | unchanged |
+| update | `Guid` | the value sent | unchanged |
+| revert to an earlier revision | `Guid?` | `NULL` | unchanged |
+
+The stored values are read through a row type without initializers: a `NULL` column read through
+the entity type comes back as the initial value of the property, so an assertion on the entity
+cannot see it (`The_stored_row_reader_shows_a_database_null_as_null`).
+
+`ReadOnly = true` on a Repeater sub-field with a setter does not stop a REST write: a create and an
+update store the value sent:
+`A_create_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater` and
+`An_update_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater`.
 
 `FieldDeclarationCheckTests`, `FieldInheritanceCheckTests`, `FieldSetterCheckTests` and
 `TranslationReadOnlyCheckTests` pin the refusals and the accepted shapes;

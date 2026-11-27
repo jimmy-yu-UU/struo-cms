@@ -126,11 +126,12 @@ An override or a `new` member of a base class navigation property that carries `
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
-- A property hidden with `new` under another type, and a key declared on an interface, were not
+- A relation property hidden by a `new` member of another type, or by a `static new` member, passes
+  the scan and the base declaration is the relation served. A key declared on an interface was not
   measured.
 - `short` and `ushort` sort properties overflow past 32,768 and 65,536 links; a relation write is
   bounded by `Query:MaxRelationLinks`.
-- An override that does not repeat a base declaration's `[SugarColumn]` is refused before these
+- An override that does not repeat a base declaration's `[SugarColumn]` is refused before the key
   checks run, so the row above for a key with `IsIgnore` on a base class does not start:
   `docs/ai/decisions/an-override-repeats-sugarcolumn.md`.
 - `[CmsRelation]` on a class that is not a collection is never scanned, and one on an interface
