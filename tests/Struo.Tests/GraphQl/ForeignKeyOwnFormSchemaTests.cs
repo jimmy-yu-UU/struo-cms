@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SqlSugar;
 using Struo.Api.GraphQl;
 using Struo.Application.Metadata;
+using Struo.Domain.Auditing;
 using Struo.Domain.Metadata.Attributes;
 using Struo.Domain.Metadata.Enums;
 using Struo.Infrastructure.Metadata;
@@ -188,6 +189,53 @@ public sealed partial class ForeignKeyOwnFormSchemaTests
         public GuidTarget? Owner { get; set; }
     }
 
+    [SugarTable("fk_schema_audit_owner")]
+    [CmsCollection("FkSchemaAuditOwner", Name = "fkSchemaAuditOwner")]
+    public sealed class AuditOwner : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [Navigate(NavigateType.ManyToOne, nameof(CreatedBy))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)]
+        public GuidTarget? Creator { get; set; }
+    }
+
+    [SugarTable("fk_schema_read_only_int_owner")]
+    [CmsCollection("FkSchemaReadOnlyIntOwner", Name = "fkSchemaReadOnlyIntOwner")]
+    public sealed class ReadOnlyIntOwner
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "OwnerId", Interface = FieldInterface.Number, ReadOnly = true)]
+        public int? OwnerId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(OwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)]
+        public IntTarget? Owner { get; set; }
+    }
+
+    [SugarTable("fk_schema_read_only_text_owner")]
+    [CmsCollection("FkSchemaReadOnlyTextOwner", Name = "fkSchemaReadOnlyTextOwner")]
+    public sealed class ReadOnlyTextOwner
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "OwnerId", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string? OwnerId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(OwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)]
+        public StringTarget? Owner { get; set; }
+    }
+
     private static readonly Lazy<Task<string>> Sdl = new(BuildSdlAsync);
 
     private static async Task<string> BuildSdlAsync()
@@ -197,6 +245,7 @@ public sealed partial class ForeignKeyOwnFormSchemaTests
             typeof(GuidTarget), typeof(IntTarget), typeof(LongTarget), typeof(StringTarget),
             typeof(UuidOwner), typeof(IntOwner), typeof(LongOwner), typeof(TextOwner),
             typeof(PlainOwner), typeof(HiddenOwner), typeof(FlagHiddenOwner), typeof(ReadOnlyOwner),
+            typeof(AuditOwner), typeof(ReadOnlyIntOwner), typeof(ReadOnlyTextOwner),
         ];
         var collections = MetadataScanner.ScanTypes(types);
 
@@ -270,5 +319,24 @@ public sealed partial class ForeignKeyOwnFormSchemaTests
         (await InputAsync("FkSchemaReadOnlyOwnerCreateInput")).Should().NotContainKey("ownerId");
         (await InputAsync("FkSchemaReadOnlyOwnerUpdateInput")).Should().NotContainKey("ownerId");
         (await InputAsync("FkSchemaReadOnlyOwnerFilterInput")).Should().Contain("ownerId", "IdFilter");
+    }
+
+    [Fact]
+    public async Task An_audit_key_relation_is_in_the_filter_input_once_and_in_neither_write_input()
+    {
+        (await InputAsync("FkSchemaAuditOwnerFilterInput")).Should().Contain("createdBy", "StringFilter");
+        (await InputAsync("FkSchemaAuditOwnerCreateInput")).Should().NotContainKey("createdBy");
+        (await InputAsync("FkSchemaAuditOwnerUpdateInput")).Should().NotContainKey("createdBy");
+    }
+
+    [Theory]
+    [InlineData("FkSchemaReadOnlyOwner", "IdFilter")]
+    [InlineData("FkSchemaReadOnlyIntOwner", "IntFilter")]
+    [InlineData("FkSchemaReadOnlyTextOwner", "StringFilter")]
+    public async Task A_read_only_key_is_filterable_in_the_form_its_field_declares_and_not_writable(string owner, string filter)
+    {
+        (await InputAsync($"{owner}FilterInput")).Should().Contain("ownerId", filter);
+        (await InputAsync($"{owner}CreateInput")).Should().NotContainKey("ownerId");
+        (await InputAsync($"{owner}UpdateInput")).Should().NotContainKey("ownerId");
     }
 }
