@@ -50,7 +50,8 @@ false；檔案端點的 `purge` 是繫結的布林值，拼錯直接是 `VALIDAT
 授權，碰到超級管理員帳號或角色、或 `public` 角色的寫入，則不讓不是超級管理員的呼叫端做
 （[第 17 章](17-roles-and-permissions.md)）。
 JSON body 的頂層屬性出現同一個名稱兩次，建立與更新都回 `400` `BAD_USER_INPUT`；只有大小寫不同的名稱
-是不同的屬性。
+是不同的屬性。同一個欄位用兩種大小寫各寫一次時，只讀最後一個；連到其他集合的鍵，每一種拼法都要通過
+[第 8 章](08-relations.md#連結的寫入要求)的讀取檢查。
 
 有兩個集合完全不能用 `POST api/items/{collection}` 建立：`file` 與 `user`。兩者都回 `400`
 `BAD_USER_INPUT`，訊息是點出集合名稱的通用句子。輸入通過 schema 時，GraphQL 的 `createFile`、

@@ -84,6 +84,9 @@ The same ids sent in an ordinary update are refused with `400`.
 - The answer of `origin/main` for a revert that names a purged many-to-many target was read from the
   code, not run.
 - `permission.roleId` is a text field, not a relation, and is not covered by either check.
+- The existence check matches the rows the database returned ignoring case for a string key. A
+  write that names two ids of one string-keyed target differing only in case, of which one exists,
+  passes for both on a database that compares strings exactly.
 
 ## Referenced from
 

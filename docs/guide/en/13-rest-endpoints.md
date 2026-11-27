@@ -60,7 +60,9 @@ super-admin — a delegated collection grant doesn't count. The built-in `user`,
 a write that touches a super-admin account or role, or the `public` role, is refused to a caller who is
 not a super-admin ([Chapter 17](17-roles-and-permissions.md)). A JSON body that names the same top-level
 property twice is a `400` `BAD_USER_INPUT` on create and update; names that differ only in casing are
-different properties.
+different properties. A field named in two such spellings is read once, from the last one, and for a
+key that links another collection every spelling must pass the read check of
+[Chapter 8](08-relations.md#what-a-link-write-requires).
 
 Two collections cannot be created through `POST api/items/{collection}` at all: `file` and `user`.
 Both return `400` `BAD_USER_INPUT` with a generic message that names the collection. When their

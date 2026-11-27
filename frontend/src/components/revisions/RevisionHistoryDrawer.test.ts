@@ -18,7 +18,7 @@ const i18n = createI18n({
     opCreate: 'Created', opUpdate: 'Updated', opRevert: 'Reverted', opRevertFrom: 'Reverted (from #{n})',
     opUnknown: 'Changed', system: 'System',
     revert: 'Revert to this revision', revertConfirmHeader: 'Confirm revert',
-    revertConfirmMessage: 'Revert to {n}?', revertKeptHeading: 'These fields stay as they are:', reverted: 'Reverted to {n}', revertFailed: 'Revert failed',
+    revertConfirmMessage: 'Revert to {n}?', revertKeptHeading: 'These fields are left out:', reverted: 'Reverted to {n}', revertFailed: 'Revert failed',
     detailError: 'Failed to load this revision', selectHint: 'Select a revision', reverting: 'Reverting…',
   } } },
 })
@@ -217,7 +217,7 @@ describe('RevisionHistoryDrawer', () => {
     expect(confirmRequire.mock.calls[0][0]).toEqual({ header: 'Confirm revert', message: 'Revert to 2?' })
   })
 
-  it('lists the fields that stay as they are in the confirmation', async () => {
+  it('lists the fields the revert leaves out in the confirmation', async () => {
     vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
     vi.spyOn(itemsApi, 'revert').mockResolvedValue({ id: '5' } as never)
     const w = mountDrawer({ keptFields: ['Category', 'Hero image'] })
@@ -226,7 +226,7 @@ describe('RevisionHistoryDrawer', () => {
     expect(confirmRequire.mock.calls[0][0]).toEqual({
       header: 'Confirm revert',
       message: 'Revert to 2?',
-      itemsHeading: 'These fields stay as they are:',
+      itemsHeading: 'These fields are left out:',
       items: ['Category', 'Hero image'],
     })
   })

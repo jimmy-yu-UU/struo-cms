@@ -321,7 +321,7 @@ export default {
     reverting: '還原中…',
     revertConfirmHeader: '確認還原',
     revertConfirmMessage: '將把此項目還原至版本 {n}，並覆蓋目前尚未儲存的編輯。此動作會新增一筆還原紀錄。',
-    revertKeptHeading: '以下欄位會維持現狀，因為你沒有它們所指向資料的讀取權：',
+    revertKeptHeading: '以下欄位不會被還原，因為你沒有它們所指向資料的讀取權：',
     reverted: '已還原至版本 {n}',
     revertFailed: '還原失敗',
     revertConflict: '還原失敗：此項目已被他人變更。請重新載入最新版本後，再決定是否還原。',

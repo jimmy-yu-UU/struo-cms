@@ -45,7 +45,7 @@
   grant only, so a caller could link and unlink rows of a collection they could not read. On update,
   a file field or a junction key sent with the value it already holds is let through. A revert
   leaves out the links the caller could not write and applies the rest; the admin's confirmation
-  lists the fields that stay as they are. Give read on the target to a
+  lists the fields that are left out. Give read on the target to a
   role that writes such links; assigning roles to a user needs read on `role`
   ([Chapter 8](08-relations.md#what-a-link-write-requires)).
 - A many-to-one foreign key, a junction key or a file id that names no row, or a row in the trash,

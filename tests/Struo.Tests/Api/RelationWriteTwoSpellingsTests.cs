@@ -35,6 +35,12 @@ public class RelationWriteTwoSpellingsTests(ApiFactory factory)
         _ => IdOf(Missing, stored),
     };
 
+    private static string TagName(Guid actual, Guid original, Guid other)
+    {
+        if (actual == original) return "original";
+        return actual == other ? "other" : "?";
+    }
+
     [Theory]
     [MemberData(nameof(Orders))]
     public async Task A_junction_key_in_two_spellings_is_unchanged_only_when_every_spelling_is(
@@ -55,7 +61,7 @@ public class RelationWriteTwoSpellingsTests(ApiFactory factory)
         });
 
         var stored = await h.LinkAsync(link);
-        var seen = $"{(int)outcome.Status} {outcome.Code}; tag {(stored.TagId == tag ? "original" : stored.TagId == other ? "other" : "?")}; note {stored.Note ?? "null"}";
+        var seen = $"{(int)outcome.Status} {outcome.Code}; tag {TagName(stored.TagId, tag, other)}; note {stored.Note ?? "null"}";
         seen.Should().Be("403 FORBIDDEN; tag original; note null");
         AssertRefusedAlike([outcome], Rest, Tag);
     }
