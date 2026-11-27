@@ -645,8 +645,8 @@ public sealed class ItemService(
         return await UpdateCoreAsync(collection, id, doc.RootElement, RevertOperation, revisionNumber, legacyJsonStrings, ct: ct);
     }
 
-    // The body without the keys the write guard would refuse this caller (see RelationTargetReadGuard), so a
-    // revert neither links nor unlinks a row the caller cannot read.
+    // The body without the keys the write guard would refuse this caller (see RelationTargetReadGuard). A locale
+    // the snapshot lacks is still removed, with the file links it holds.
     private byte[] WithoutUnreadableLinks(CollectionMetadata meta, JsonElement body)
     {
         var unreadable = relationTargets.UnreadableKeys(meta, body);

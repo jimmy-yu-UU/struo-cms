@@ -102,6 +102,10 @@ internal sealed partial class RelationWriteHarness
         return 0;
     });
 
+    /// <summary>How many translation rows of the article hold <paramref name="locale"/>.</summary>
+    public Task<int> TranslationRowsAsync(Guid article, string locale) => WithDbAsync(db =>
+        db.Queryable<FxArticleTranslation>().Where(t => t.FxArticleId == article && t.Locale == locale).CountAsync());
+
     /// <summary>Moves a row of a soft-deletable collection to the trash.</summary>
     public static async Task TrashAsync(HttpClient admin, string collection, Guid id) =>
         (await admin.DeleteAsync($"/api/items/{collection}/{id}")).EnsureSuccessStatusCode();
