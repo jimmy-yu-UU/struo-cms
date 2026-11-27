@@ -4,6 +4,7 @@ import { isEmpty } from './fieldTypes/types'
 import { splitFields } from './splitFields'
 import { localeIsSent, translationErrorKey } from './translationErrors'
 import { isRelationLinks, visiblePayloadFields, type ResolveCollection } from './junctionLinks'
+import { isFileFieldUnreadable, isRelationTargetUnreadable, type CanReadCollection } from './unreadableTargets'
 import en from '../locales/en'
 
 // Message translator injected by the caller (the UI passes vue-i18n's `t`), so this module stays a
@@ -60,17 +61,21 @@ function validateFields(
 
 // The default locale is always validated; every other locale only when it carries content, i.e. when
 // buildItemPayload would send it.
+// A file field the caller cannot read is not sent in any locale, so it cannot be required there; it still
+// counts as content when a locale is judged, as it does in buildItemPayload.
 function validateTranslations(
   translatable: FieldMeta[],
   model: FormModel,
   defaultCode: string,
   errors: Record<string, string>,
   t: Translate,
+  canReadCollection?: CanReadCollection,
 ): void {
-  validateFields(translatable, model.translations[defaultCode] ?? {}, errors, t)
+  const sendable = translatable.filter((f) => !isFileFieldUnreadable(f, canReadCollection))
+  validateFields(sendable, model.translations[defaultCode] ?? {}, errors, t)
   for (const [code, values] of Object.entries(model.translations)) {
     if (code === defaultCode || !localeIsSent(translatable, values)) continue
-    validateFields(translatable, values, errors, t, (name) => translationErrorKey(code, name, defaultCode))
+    validateFields(sendable, values, errors, t, (name) => translationErrorKey(code, name, defaultCode))
   }
 }
 
@@ -81,10 +86,13 @@ function validateLinks(
   canWriteJunction: ((rel: RelationMeta) => boolean) | undefined,
   errors: Record<string, string>,
   t: Translate,
+  canReadCollection?: CanReadCollection,
 ): void {
   for (const rel of meta.relations ?? []) {
     const v = model.relations[rel.name]
     if (!isRelationLinks(v)) continue
+    // Links to a target the caller cannot read are not sent, so their rows are not validated.
+    if (isRelationTargetUnreadable(rel, canReadCollection)) continue
     // A relation whose junction the caller cannot write sends bare ids regardless of what the
     // (possibly disabled/hidden) payload inputs currently hold — validating that unsent payload
     // would block a save the user has no way to fix. Without `canWriteJunction`, behaviour is
@@ -102,11 +110,13 @@ export function validateItem(
   resolveCollection?: ResolveCollection,
   canWriteJunction?: (rel: RelationMeta) => boolean,
   t: Translate = englishTranslate,
+  canReadCollection?: CanReadCollection,
 ): Record<string, string> {
   const { shared, translatable } = splitFields(meta)
   const errors: Record<string, string> = {}
-  validateFields(shared, model.shared, errors, t)
-  validateTranslations(translatable, model, defaultCode, errors, t)
-  if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors, t)
+  // A file field the caller cannot read is not sent, so it cannot be required.
+  validateFields(shared.filter((f) => !isFileFieldUnreadable(f, canReadCollection)), model.shared, errors, t)
+  validateTranslations(translatable, model, defaultCode, errors, t, canReadCollection)
+  if (resolveCollection) validateLinks(meta, model, resolveCollection, canWriteJunction, errors, t, canReadCollection)
   return errors
 }

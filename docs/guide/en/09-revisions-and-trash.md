@@ -100,6 +100,11 @@ removed:
 - Any hidden payload key inside a payload-carrying many-to-many relation's `{ id, ...payload }`
   elements — a bare-id element has no payload to redact in the first place.
 
+The copy also shows no more of the item's links than an item read shows the caller. A many-to-many
+relation, and a many-to-one foreign key that is not a declared field, are left out when the caller
+cannot read the relation's target. A payload-carrying relation is reduced to bare ids when the
+caller cannot read the junction collection.
+
 Everything else passes through unchanged.
 
 This redaction applies only to the external single-revision read path; a revert reads the raw,
@@ -179,6 +184,14 @@ write: it also needs the junction collection's own write grant, as
 a many-to-many target trashed after the snapshot was captured, restoring the reference rather than
 rejecting it as every other write path does.
 
+A revert does not write a link whose target collection the caller cannot read. Such a relation or
+file field is left out and the item keeps the link it has, unless the revert removes the locale
+that holds it (below); the rest of the snapshot is applied
+([Chapter 8](08-relations.md#what-a-link-write-requires)). The admin's revert confirmation lists
+the fields that are left out. A many-to-one foreign key, a junction key or a file id is stored as
+the snapshot holds it, also when the row it names has been purged since; a many-to-many id whose
+target has been purged refuses the revert with `400`.
+
 A revert restores only what the snapshot captured at the time — its own fields, relation state,
 and every locale's full translation. System-managed fields and the item's soft-delete state are
 not part of the snapshot, so a revert never touches them. A read-only field keeps the value it has,
@@ -187,11 +200,12 @@ whatever the snapshot holds. A revert never changes any other item.
 A locale the item has now but the snapshot lacks did not exist at that version, so the revert
 deletes it. This covers the enabled non-default locales; the default locale and a disabled
 locale's translation are left as they are. The delete goes through the `null` locale value that
-[Chapter 7](07-i18n.md) describes.
+[Chapter 7](07-i18n.md) describes, and removes the file links the locale holds without a read grant
+on `file`.
 
-Because a revert goes through exactly the same path as an ordinary update, reverting an item that
-is currently in the trash gets a plain 404 — the update path's read of the current row already
-excludes trashed data. The right order is restore first, then revert; the reverse does not work.
+A revert reads the current row the way an ordinary update does, so reverting an item that is
+currently in the trash gets a plain 404 — that read already excludes trashed data. The right order
+is restore first, then revert; the reverse does not work.
 
 ## Soft delete: `ISoftDeletable`
 
@@ -205,7 +219,8 @@ implement it too, and neither member carries a `[SugarColumn]` of its own — bo
 framework's inference for nullable types.
 
 Neither member carries a `[CmsField]`, so soft-delete state is not part of field metadata at all —
-it never appears in the item projection, and it cannot be written through the generic item API.
+it never appears in the item projection, and it cannot be written through the generic item API. A
+`[CmsField]` on either member of a soft-deletable class is refused at startup.
 
 Underneath sits one globally registered query filter, condition "deleted-at is null", applied
 once for every database connection scope. It covers every query over a soft-deletable entity with

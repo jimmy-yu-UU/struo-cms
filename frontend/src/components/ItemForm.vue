@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import FieldInput from './fields/FieldInput.vue'
 import RelationInput from './fields/RelationInput.vue'
 import { splitFields } from '../lib/splitFields'
@@ -11,6 +12,8 @@ import { hasLocaleContent } from '../lib/localeCompleteness'
 import { localeHasErrors, translationErrorKey } from '../lib/translationErrors'
 import type { CollectionMeta, LanguageInfo } from '../types/schema'
 import type { FormModel } from '../types/itemForm'
+import { isFileFieldUnreadable, isRelationTargetUnreadable, type CanReadCollection } from '../lib/unreadableTargets'
+import { FILE_COLLECTION } from '../lib/frameworkCollections'
 import { fieldDraftErrors, relationsWithDrafts, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 
 const props = defineProps<{
@@ -24,6 +27,11 @@ const props = defineProps<{
   drafts?: FieldDrafts
   // Returns a reason when an option of the named relation cannot be chosen.
   relationOptionHint?: (relation: string, raw: Record<string, unknown>) => string | null
+  // A relation or file field whose target collection this denies is shown disabled, with the reason, and
+  // loads nothing. Without it every target counts as readable.
+  canReadCollection?: CanReadCollection
+  // The label of a collection for the unreadable-target note; the collection name when absent.
+  collectionLabel?: (collection: string) => string | undefined
 }>()
 // The form edits the parent's draft object in place; declaring it as a model makes that
 // two-way contract explicit to consumers.
@@ -66,6 +74,11 @@ function relationFieldId(name: string): string { return `${uid}-relation-${name}
 // One error element per error key (`name`, or `locale:name` for a non-default locale), the target of
 // the control's aria-describedby.
 function errorId(key: string): string { return `${uid}-error-${key}` }
+// The note under a field whose target the caller cannot read, the target of the disabled control's aria-describedby.
+function unreadableNoteId(key: string): string { return `${uid}-unreadable-${key}` }
+function unreadableNote(collection: string): string {
+  return t('itemForm.targetUnreadable', { target: props.collectionLabel?.(collection) ?? collection })
+}
 // The errors a field shows: those the form reports, with the live parse error of a field that parses its
 // own text in place of any other on that field, so the message always describes the text in the box.
 const shownErrors = computed<Record<string, string>>(() => ({
@@ -188,7 +201,16 @@ defineExpose({ activeLocale, focusBanner, revealErrors })
               <FieldLabel :for="translatableFieldId(f.name, loc.code)">{{ f.label }}<span v-if="f.required && (loc.isDefault || localeFilled(loc.code))" class="text-destructive ml-0.5">*</span></FieldLabel>
               <Badge variant="secondary" class="tr-badge" :title="t('itemForm.translatableBadgeHint')">{{ t('itemForm.translatableBadge') }}</Badge>
             </div>
+            <template v-if="isFileFieldUnreadable(f, canReadCollection)">
+              <Input
+                :id="translatableFieldId(f.name, loc.code)"
+                disabled
+                :aria-describedby="unreadableNoteId(translationErrorKey(loc.code, f.name, defaultCode))"
+              />
+              <FieldDescription :id="unreadableNoteId(translationErrorKey(loc.code, f.name, defaultCode))">{{ unreadableNote(FILE_COLLECTION) }}</FieldDescription>
+            </template>
             <FieldInput
+              v-else
               :id="translatableFieldId(f.name, loc.code)"
               :field="f"
               v-model="model.translations[loc.code][f.name]"
@@ -210,7 +232,12 @@ defineExpose({ activeLocale, focusBanner, revealErrors })
 
     <Field v-for="f in fields.shared" :key="f.name" class="field" :data-field-key="f.name">
       <FieldLabel :for="sharedFieldId(f.name)">{{ f.label }}<span v-if="f.required" class="text-destructive ml-0.5">*</span></FieldLabel>
+      <template v-if="isFileFieldUnreadable(f, canReadCollection)">
+        <Input :id="sharedFieldId(f.name)" disabled :aria-describedby="unreadableNoteId(f.name)" />
+        <FieldDescription :id="unreadableNoteId(f.name)">{{ unreadableNote(FILE_COLLECTION) }}</FieldDescription>
+      </template>
       <FieldInput
+        v-else
         :id="sharedFieldId(f.name)"
         :field="f"
         v-model="model.shared[f.name]"
@@ -227,7 +254,12 @@ defineExpose({ activeLocale, focusBanner, revealErrors })
     <section v-if="meta.relations && meta.relations.length" class="relations grid gap-3.5">
       <Field v-for="rel in meta.relations" :key="rel.name" class="field" :data-field-key="rel.name">
         <FieldLabel :for="relationFieldId(rel.name)">{{ rel.label }}</FieldLabel>
+        <template v-if="isRelationTargetUnreadable(rel, canReadCollection)">
+          <Input :id="relationFieldId(rel.name)" disabled :aria-describedby="unreadableNoteId(rel.name)" />
+          <FieldDescription :id="unreadableNoteId(rel.name)">{{ unreadableNote(rel.targetCollection) }}</FieldDescription>
+        </template>
         <RelationInput
+          v-else
           :id="relationFieldId(rel.name)"
           :relation="rel"
           v-model="model.relations[rel.name]"

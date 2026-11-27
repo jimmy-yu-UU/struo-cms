@@ -92,7 +92,8 @@ super-admin. Reads are unaffected and follow the ordinary `canRead` check.
 Every write point runs the ordinary collection permission check first, with the super-admin check
 right after it. Create, update, and revert check the write grant and fail with
 `Write not permitted.`; delete and restore check the delete grant and fail with
-`Delete not permitted.`.
+`Delete not permitted.`. A create or an update that names a link also needs a read grant on the
+link's target ([Chapter 8](08-relations.md#what-a-link-write-requires)).
 
 A caller with no grant at all on the collection sees one of those two ordinary messages. Only a
 caller that already holds the relevant grant, but isn't a super-admin, sees the dedicated message
@@ -109,7 +110,7 @@ following read, and write and delete both following write. A grant stored for ei
 That makes two grants govern the whole area:
 
 - Assigning roles to a user, through the Roles field on the user form or through `userRole` rows, is a
-  write on `user`.
+  write on `user`, and needs read on `role`.
 - Changing a role's permission grants, through `PUT /api/roles/{id}/permissions` or `permission` rows,
   is a write on `role`.
 
@@ -169,9 +170,10 @@ A body that names the same top-level property twice is refused on item create an
 
 ### What a grant on `user` or `role` delegates
 
-The holder of write on `user` can assign any ordinary role to any ordinary account, and the holder of
-write on `role` can give any ordinary role any grant, including write on `user` and `role`. Hand these
-grants only to people trusted to that extent; a super-admin role and its members stay out of reach.
+The holder of write on `user` and read on `role` can assign any ordinary role to any ordinary
+account, and the holder of write on `role` can give any ordinary role any grant, including write on
+`user` and `role`. Hand these grants only to people trusted to that extent; a super-admin role and
+its members stay out of reach.
 
 ## Public read
 

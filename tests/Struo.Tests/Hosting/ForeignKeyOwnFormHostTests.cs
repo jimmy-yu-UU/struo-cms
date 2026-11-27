@@ -59,6 +59,27 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
     [SugarTable("fkTextOwner")]
     public sealed class TextRow { [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; } public string? OwnerId { get; set; } }
 
+    // The target rows the keys of the cases name, and one id of each target that has no row.
+    [SugarTable("fkUuidTarget")]
+    public sealed class UuidTargetRow { [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; } public string Name { get; set; } = ""; }
+
+    [SugarTable("fkIntTarget")]
+    public sealed class IntTargetRow { [SugarColumn(IsPrimaryKey = true)] public int Id { get; set; } public string Name { get; set; } = ""; }
+
+    [SugarTable("fkLongTarget")]
+    public sealed class LongTargetRow { [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; } public string Name { get; set; } = ""; }
+
+    [SugarTable("fkTextTarget")]
+    public sealed class TextTargetRow { [SugarColumn(IsPrimaryKey = true)] public string Id { get; set; } = ""; public string Name { get; set; } = ""; }
+
+    private static readonly Dictionary<string, (string Target, JsonNode Missing)> MissingKeys = new()
+    {
+        [Uuid] = ("fkUuidTarget", Id(9)),
+        [Int] = ("fkIntTarget", 999),
+        [Long] = ("fkLongTarget", 9_000_000_000L),
+        [Text] = ("fkTextTarget", "no-such-row"),
+    };
+
     private static readonly EmittedProperty Name = new("Name", typeof(string), FieldInterface.Text);
 
     private static EmittedEntity Target(string name, Type? idType) => new(name, [Name], IdType: idType);
@@ -84,6 +105,18 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
                     Owner("FkTextOwner", "FkTextTarget", typeof(string), FieldInterface.Text),
                 ],
                 "fkownform");
+            await SeedTargetsAsync();
+        }
+
+        // Each key a test stores names a row of its target collection.
+        private async Task SeedTargetsAsync()
+        {
+            using var scope = Host.App.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+            await db.Insertable(Cases[Uuid].Keys.Select(k => new UuidTargetRow { Id = Guid.Parse(k.GetValue<string>()), Name = "t" }).ToList()).ExecuteCommandAsync();
+            await db.Insertable(Cases[Int].Keys.Select(k => new IntTargetRow { Id = k.GetValue<int>(), Name = "t" }).ToList()).ExecuteCommandAsync();
+            await db.Insertable(Cases[Long].Keys.Select(k => new LongTargetRow { Id = k.GetValue<long>(), Name = "t" }).ToList()).ExecuteCommandAsync();
+            await db.Insertable(Cases[Text].Keys.Select(k => new TextTargetRow { Id = k.GetValue<string>(), Name = "t" }).ToList()).ExecuteCommandAsync();
         }
 
         public async Task DisposeAsync() => await Host.DisposeAsync();
@@ -134,11 +167,34 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
     {
         using var request = new HttpRequestMessage(method, url);
         if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
-        var response = await Client.SendAsync(request);
+        using var response = await Client.SendAsync(request);
         var text = await response.Content.ReadAsStringAsync();
         output.WriteLine($"{method} {url} -> {(int)response.StatusCode}: {text}");
         response.StatusCode.Should().Be(HttpStatusCode.OK, text);
         return JsonNode.Parse(text)!;
+    }
+
+    private async Task<(HttpStatusCode Status, string Text)> SendAsync(HttpMethod method, string url, JsonObject body)
+    {
+        using var request = new HttpRequestMessage(method, url)
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        using var response = await Client.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+        output.WriteLine($"{method} {url} -> {(int)response.StatusCode}: {text}");
+        return (response.StatusCode, text);
+    }
+
+    private async Task<string> GraphQlErrorAsync(string query)
+    {
+        var request = new JsonObject { ["query"] = query };
+        using var content = new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json");
+        using var response = await Client.PostAsync("/graphql", content);
+        var text = await response.Content.ReadAsStringAsync();
+        output.WriteLine(text);
+        JsonNode.Parse(text)!["errors"].Should().NotBeNull(text);
+        return text;
     }
 
     private static List<string> Ids(JsonNode data) => data["data"]!.AsArray().Select(n => n!["id"]!.GetValue<string>()).ToList();
@@ -236,6 +292,44 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
 
         var found = json["data"]![$"{c.Collection}s"]!["items"]!.AsArray().Select(n => n!["id"]!.GetValue<string>());
         found.Should().BeEquivalentTo(c.FilterHits.Select(i => ids[i]));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllKinds))]
+    public async Task A_REST_write_of_a_key_that_names_no_row_is_refused_and_stores_nothing(string kind)
+    {
+        var c = Cases[kind];
+        var (target, missing) = MissingKeys[kind];
+        var id = await RestCreateAsync(c, Tag(), c.Keys[0]);
+        var message = $"The id in 'ownerId' does not exist in '{target}'.";
+
+        var created = await SendAsync(HttpMethod.Post, $"/api/items/{c.Collection}", new JsonObject { ["name"] = Tag(), ["ownerId"] = missing.DeepClone() });
+        var updated = await SendAsync(HttpMethod.Put, $"/api/items/{c.Collection}/{id}", new JsonObject { ["ownerId"] = missing.DeepClone() });
+
+        created.Status.Should().Be(HttpStatusCode.BadRequest, created.Text);
+        updated.Status.Should().Be(HttpStatusCode.BadRequest, updated.Text);
+        created.Text.Should().Contain(message);
+        updated.Text.Should().Contain(message);
+        (await StoredAsync(kind, id)).Should().Be(Expected(kind, c.Keys[0]));
+    }
+
+    [Theory]
+    [MemberData(nameof(AllKinds))]
+    public async Task A_GraphQL_write_of_a_key_that_names_no_row_is_refused(string kind)
+    {
+        var c = Cases[kind];
+        var (target, missing) = MissingKeys[kind];
+        var pascal = Pascal(c.Collection);
+        var id = await RestCreateAsync(c, Tag(), c.Keys[0]);
+
+        var created = await GraphQlErrorAsync(
+            $$"""mutation { create{{pascal}}(input: { name: "{{Tag()}}", ownerId: {{missing.ToJsonString()}} }) { id } }""");
+        var updated = await GraphQlErrorAsync(
+            $$"""mutation { update{{pascal}}(id: "{{id}}", input: { ownerId: {{missing.ToJsonString()}} }) { id } }""");
+
+        created.Should().Contain($"The id in 'ownerId' does not exist in '{target}'.");
+        updated.Should().Contain($"The id in 'ownerId' does not exist in '{target}'.");
+        (await StoredAsync(kind, id)).Should().Be(Expected(kind, c.Keys[0]));
     }
 
     [Fact]

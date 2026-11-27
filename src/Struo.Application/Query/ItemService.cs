@@ -57,6 +57,8 @@ public sealed class ItemService(
     // the sibling `deserializer` field above (CS0236).
     private readonly ItemWriteSideSync writeSync =
         new(repository, m2mSource, languages, new(sanitizer), new(registry, m2mSource, new(sanitizer)), metadata, permissions);
+    private readonly RelationTargetReadGuard relationTargets = new(m2mSource, permissions);
+    private readonly LinkExistenceCheck linkExistence = new(repository, registry, m2mSource);
     private readonly ItemPurgePipeline purge = new(repository, metadata, registry, graph, m2mSource, revisions);
     private readonly ItemWriteInterceptors writeInterceptors = new(interceptors, deleteHandlers);
     private readonly SelfReferenceCycleGuard cycleGuard = new(repository, registry);
@@ -180,10 +182,13 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
+        relationTargets.Require(meta, body);
         writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
         // No Required check yet: BeforeWrite may fill a Required field (a generated slug).
         var entity = deserializer.DeserializeForCreate(collection, body, meta);
         var d = registry.Get(collection)!;
+        // The links the body sent, read before an interceptor can assign any: server code is not policed by this check.
+        var links = linkExistence.RootLinks(meta, d, ItemDeserializer.PresentNames(body), stored: null, entity);
         var hooks = writeInterceptors.Begin(
             ItemWriteOperation.Create, meta, entity, id: null, ItemDeserializer.PresentNames(body), body);
         await hooks.BeforeWriteAsync(ct);
@@ -197,8 +202,9 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
+            await linkExistence.EnsureAsync(meta, body, links, translations: null, ct);
             created = await repository.CreateAsync(collection, entity, ct);
-            createdId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(created)!;
+            createdId = IdOf(d, created);
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
             await writeSync.SyncTranslationsAsync(meta, body, createdId, isCreate: true, ct: ct);
             hooks.Stored(created, createdId);
@@ -228,15 +234,23 @@ public sealed class ItemService(
         if (body.ValueKind != JsonValueKind.Object)
             throw new QueryException("Request body must be a JSON object.");
         JsonBodyUtil.RequireUniqueProperties(body);
-        // A revert re-applies a snapshot the system stored itself, so the link limit does not apply to it.
-        if (operation != RevertOperation) writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
+        relationTargets.RequireRelationLinks(meta, body);
+        // A revert replays a snapshot the system stored itself, so the link limit does not apply to it.
+        if (operation != RevertOperation)
+            writeSync.EnsureRelationLinksWithinLimit(collection, body, options.MaxRelationLinks);
         var d = registry.Get(collection)!;
 
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
         if (loaded is null) return null;
         var (existing, preMerge) = loaded.Value;
+        // After the 404, and before the merge overwrites the stored values the junction keys, declared foreign keys and file fields are compared with.
+        var parentId = IdOf(d, existing);
+        var translations = meta.Translation is { } tm ? new StoredTranslations(repository, tm, parentId) : null;
+        relationTargets.RequireStoredKeys(meta, d, body, existing);
+        await relationTargets.RequireFilesAsync(
+            meta, body, () => StoredFileLinks.LoadAsync(meta, d, existing, translations, ct));
 
-        var bodyKeys = MergeBody(collection, meta, d, body, existing);
+        var (bodyKeys, links) = MergeBody(collection, meta, d, body, existing);
 
         var hooks = writeInterceptors.Begin(
             operation == RevertOperation ? ItemWriteOperation.Revert : ItemWriteOperation.Update,
@@ -245,12 +259,16 @@ public sealed class ItemService(
         ValidateMerged(meta, d, body, existing);
 
         var persisted = await PersistUpdateAsync(
-            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings), meta, d, body, existing, hooks, ct);
+            new UpdateTarget(collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links, translations),
+            meta, d, body, existing, hooks, ct);
         if (persisted is null) return null;
         var (updated, updatedId) = persisted.Value;
         await AfterCommitAndNotifyAsync(hooks, SingleChange(meta.Name, updatedId, ItemChangeKind.Updated));
         return projector.Project(updated, meta, null);
     }
+
+    private static object IdOf(EntityDescriptor d, object entity) =>
+        d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(entity)!;
 
     // Loads the stored row (null -> 404); the merge mutates it.
     private async Task<(object Existing, object? PreMerge)?> LoadForUpdateAsync(
@@ -269,8 +287,10 @@ public sealed class ItemService(
     // non-system) and the M2O foreign keys that are not ReadOnly or system fields onto `existing`, and
     // returns the body keys. This preserves server-managed columns the client never sends — e.g. a
     // File's StorageKey/FileName/Size — so a partial PUT (status + translations only) cannot wipe NOT
-    // NULL metadata. Relations and translations are synced separately by persist.
-    private HashSet<string> MergeBody(
+    // NULL metadata. Relations and translations are synced separately by persist. Also returns the
+    // ids the body newly assigns to link keys, read against the stored row before the overlay
+    // replaces its values.
+    private (HashSet<string> BodyKeys, IReadOnlyList<PendingLink> Links) MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         // No Required check here — an update only overlays fields the client actually sent (see
@@ -281,9 +301,10 @@ public sealed class ItemService(
         // Shared with ItemDeserializer.DeserializeCore's own presence gating, so the two can never
         // silently drift apart on what counts as "the client sent this key".
         var bodyKeys = ItemDeserializer.PresentNames(body);
+        var links = linkExistence.RootLinks(meta, d, bodyKeys, existing, incoming);
         OverlayFields(meta, d, bodyKeys, existing, incoming);
         OverlayManyToOneKeys(meta, d, bodyKeys, existing, incoming);
-        return bodyKeys;
+        return (bodyKeys, links);
     }
 
     private static void OverlayFields(
@@ -348,19 +369,22 @@ public sealed class ItemService(
     }
 
     private readonly record struct UpdateTarget(
-        string Collection, string Id, string Operation, long? SourceRevisionNumber, bool LegacyJsonStrings);
+        string Collection, string Id, string Operation, long? SourceRevisionNumber, bool LegacyJsonStrings,
+        IReadOnlyList<PendingLink> Links, StoredTranslations? Translations);
 
     // Parent row + M2M + translations commit atomically (see CreateAsync). Null when the row vanished.
     private async Task<(object Updated, object UpdatedId)?> PersistUpdateAsync(
         UpdateTarget target, CollectionMetadata meta, EntityDescriptor d, JsonElement body,
         object existing, ItemWriteHooks hooks, CancellationToken ct)
     {
-        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings) = target;
+        var (collection, id, operation, sourceRevisionNumber, legacyJsonStrings, links, translations) = target;
         object? updated = null;
         object updatedId = null!;
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
+            // A revert replays a snapshot the system stored, so its keys are not checked against the rows that exist.
+            if (operation != RevertOperation) await linkExistence.EnsureAsync(meta, body, links, translations, ct);
             // Self-referencing tree collections: lock the row and find out whether the update changes the
             // parent key. Each mover holds its own row's lock before it waits on a chain row, so opposite
             // movers form a deadlock the database detects.
@@ -369,7 +393,7 @@ public sealed class ItemService(
             if (updated is null) return;
             // Reject a parentId that points at the item itself or one of its descendants.
             await cycleGuard.EnsureNoCycleAsync(collection, moves, ct);
-            updatedId = d.Properties.GetValueOrDefault(d.IdProperty)!.GetValue(updated)!;
+            updatedId = IdOf(d, updated);
             // A revert re-applies a past snapshot, which may reference an M2M target trashed since
             // capture — tolerate it (a revert); every other write path stays strict.
             await writeSync.SyncM2MAsync(collection, body, updatedId, includeDeleted: operation == RevertOperation, ct);
@@ -573,6 +597,10 @@ public sealed class ItemService(
     /// A non-null <c>expectedVersion</c> must equal the item's current version, otherwise the update path
     /// throws <see cref="ConcurrencyConflictException"/> (→ 409 VERSION_CONFLICT).
     /// <para>
+    /// A relation, foreign key or file field whose target collection the caller cannot read is not replayed: it
+    /// keeps its stored value, and the revision the revert records holds that value.
+    /// </para>
+    /// <para>
     /// PINNED BEHAVIOUR: because a payload M2M relation's snapshot is captured as
     /// <c>[{id, ...payload}]</c> object elements (not bare ids), reverting such a relation goes through
     /// the same <c>ItemWriteSideSync.EnsureJunctionPayloadGrant</c> gate as any other payload write — the
@@ -614,8 +642,22 @@ public sealed class ItemService(
             ? []
             : (await languages.GetEnabledAsync()).Where(l => !l.IsDefault).Select(l => l.Code).ToList();
         using var withLocales = JsonDocument.Parse(JsonBodyUtil.WithNullLocales(src.RootElement, nonDefault));
-        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(withLocales.RootElement, expectedVersion));
+        // A relation whose target the caller cannot read keeps its stored value: its key is left out of the body.
+        using var readable = JsonDocument.Parse(WithoutUnreadableLinks(meta, withLocales.RootElement));
+        using var doc = JsonDocument.Parse(JsonBodyUtil.WithVersion(readable.RootElement, expectedVersion));
         return await UpdateCoreAsync(collection, id, doc.RootElement, RevertOperation, revisionNumber, legacyJsonStrings, ct: ct);
+    }
+
+    // The body without the keys the write guard would refuse this caller (see RelationTargetReadGuard). A locale
+    // the snapshot lacks is still removed, with the file links it holds.
+    private byte[] WithoutUnreadableLinks(CollectionMetadata meta, JsonElement body)
+    {
+        var unreadable = relationTargets.UnreadableKeys(meta, body);
+        var names = (bool inTranslations) => unreadable
+            .Where(link => link.InTranslations == inTranslations)
+            .Select(link => link.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return JsonBodyUtil.WithoutLinkKeys(body, names(false), names(true));
     }
 
     /// <summary>Newest-first revision metadata for an item. Requires read permission. Empty for a
@@ -646,8 +688,9 @@ public sealed class ItemService(
     /// The captured snapshot is FULL item state incl. <c>Hidden</c> fields (a revert needs
     /// them all); that full-fidelity form is internal to <see cref="RevertAsync"/> only. The snapshot
     /// returned HERE to external callers (REST/GraphQL <c>xRevision</c>) has hidden fields redacted via
-    /// <see cref="RevisionSnapshotRedactor.RedactHidden"/> first. Otherwise gated only by collection-level
-    /// <c>CanRead</c>; a future field-level-read-grant feature should tighten this further.
+    /// <see cref="RevisionSnapshotRedactor.RedactHidden"/> first, and the many-to-many arrays and foreign keys of
+    /// relations whose target collection the caller cannot read are left out. Otherwise gated only by
+    /// collection-level <c>CanRead</c>; a future field-level-read-grant feature should tighten this further.
     /// </para></summary>
     public async Task<Struo.Application.Revisions.RevisionRecord?> GetRevisionAsync(
         string collection, string id, long revisionNumber, CancellationToken ct = default)
@@ -658,7 +701,37 @@ public sealed class ItemService(
         if (!await IsItemVisibleForRevisionsAsync(collection, id, ct)) return null;
         var rec = await revisions.GetAsync(collection, id, revisionNumber, ct);
         if (rec is null) return null;
-        return rec with { Snapshot = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, m2mSource.M2MDescriptors(collection)) };
+        var descriptors = m2mSource.M2MDescriptors(collection);
+        var redacted = RevisionSnapshotRedactor.RedactHidden(rec.Snapshot, meta, descriptors);
+        return rec with { Snapshot = WithoutUnreadableRelations(redacted, meta, descriptors) };
+    }
+
+    // The item read shows a relation key only for a target the caller can read, so the snapshot omits the
+    // many-to-many arrays and foreign keys that run to a collection the caller cannot read. A key that is also a
+    // declared field stays, as the item read returns it. The stored snapshot is not changed.
+    private string WithoutUnreadableRelations(
+        string snapshot, CollectionMetadata meta, IReadOnlyList<M2MDescriptor> descriptors)
+    {
+        var fieldNames = meta.Fields.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var keys = descriptors
+            .Where(desc => !permissions.CanRead(desc.TargetCollection))
+            .Select(desc => desc.RelationName)
+            .Concat(meta.Relations
+                .Where(rel => rel is { Kind: RelationKind.ManyToOne, ForeignKey: { } fk }
+                              && !fieldNames.Contains(fk) && !permissions.CanRead(rel.TargetCollection))
+                .Select(rel => rel.ForeignKey!))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // The item read attaches a junction payload only for a caller who can read the junction collection.
+        var bareIds = descriptors
+            .Where(desc => desc.HasPayload && !keys.Contains(desc.RelationName)
+                           && (desc.JunctionCollection is null || !permissions.CanRead(desc.JunctionCollection)))
+            .Select(desc => desc.RelationName)
+            .ToHashSet(StringComparer.Ordinal);
+        if (keys.Count == 0 && bareIds.Count == 0) return snapshot;
+        using var doc = JsonDocument.Parse(snapshot);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object) return snapshot;
+        using var stripped = JsonDocument.Parse(JsonBodyUtil.StripKeys(doc.RootElement, keys));
+        return System.Text.Encoding.UTF8.GetString(JsonBodyUtil.WithBareIds(stripped.RootElement, bareIds));
     }
 
     // U5b: post-commit change notification. CancellationToken.None on purpose — the write already

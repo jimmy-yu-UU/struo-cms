@@ -18,12 +18,14 @@ const i18n = createI18n({
     opCreate: 'Created', opUpdate: 'Updated', opRevert: 'Reverted', opRevertFrom: 'Reverted (from #{n})',
     opUnknown: 'Changed', system: 'System',
     revert: 'Revert to this revision', revertConfirmHeader: 'Confirm revert',
-    revertConfirmMessage: 'Revert to {n}?', reverted: 'Reverted to {n}', revertFailed: 'Revert failed',
+    revertConfirmMessage: 'Revert to {n}?', revertKeptHeading: 'These fields are left out:', reverted: 'Reverted to {n}', revertFailed: 'Revert failed',
     detailError: 'Failed to load this revision', selectHint: 'Select a revision', reverting: 'Reverting…',
   } } },
 })
 
-type DrawerProps = { visible?: boolean; collection?: string; itemId?: string; canRevert?: boolean; version?: number }
+type DrawerProps = {
+  visible?: boolean; collection?: string; itemId?: string; canRevert?: boolean; version?: number; keptFields?: string[]
+}
 
 function mountDrawer(props: DrawerProps = {}) {
   return mount(RevisionHistoryDrawer, {
@@ -204,6 +206,29 @@ describe('RevisionHistoryDrawer', () => {
     expect(w.emitted('reverted')).toBeTruthy()
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ severity: 'success' }))
     expect(confirmRequire.mock.calls[0][0]).not.toHaveProperty('group')
+  })
+
+  it('asks with the message alone when no field stays as it is', async () => {
+    vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+    vi.spyOn(itemsApi, 'revert').mockResolvedValue({ id: '5' } as never)
+    const w = mountDrawer({ keptFields: [] })
+    await flushPromises()
+    await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
+    expect(confirmRequire.mock.calls[0][0]).toEqual({ header: 'Confirm revert', message: 'Revert to 2?' })
+  })
+
+  it('lists the fields the revert leaves out in the confirmation', async () => {
+    vi.spyOn(itemsApi, 'listRevisions').mockResolvedValue(rows as never)
+    vi.spyOn(itemsApi, 'revert').mockResolvedValue({ id: '5' } as never)
+    const w = mountDrawer({ keptFields: ['Category', 'Hero image'] })
+    await flushPromises()
+    await (w.vm as unknown as { onRevert: (n: number) => Promise<void> }).onRevert(2)
+    expect(confirmRequire.mock.calls[0][0]).toEqual({
+      header: 'Confirm revert',
+      message: 'Revert to 2?',
+      itemsHeading: 'These fields are left out:',
+      items: ['Category', 'Hero image'],
+    })
   })
 
   it('sends the loaded version with the revert', async () => {

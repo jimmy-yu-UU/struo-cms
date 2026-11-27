@@ -8,8 +8,8 @@ namespace Struo.Application.Query;
 /// <summary>
 /// Files fields (List&lt;Guid&gt;) live on the parent entity as an ordered list of file ids. Drop
 /// Guid.Empty, de-duplicate keeping first (preserves order), and enforce Required as a non-empty
-/// list. No existence check — mirrors the scalar File/Image field (a deleted file degrades to a
-/// raw-id fallback in the picker). A non-guid array element already 400s at the deserialize
+/// list. Existence of the files is checked by <see cref="LinkExistenceCheck"/>, which sees only the ids a write
+/// newly assigns. A non-guid array element already 400s at the deserialize
 /// guard. Non-translatable only.
 /// </summary>
 public sealed class FilesFieldValidator : IFieldValidator

@@ -114,7 +114,7 @@ public static class QueryValidator
                     && string.Equals(r.ForeignKey, head, StringComparison.OrdinalIgnoreCase));
             if (rel is null) return;
             if (!permissions.CanRead(rel.TargetCollection))
-                throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
+                throw RelationTargetReadGuard.ReadDenied(rel.TargetCollection);
         }
 
         public void ValidateAggregate(AggregateSpec? spec, CollectionMetadata meta)
@@ -218,7 +218,7 @@ public static class QueryValidator
 
             var junctionCollection = predicateRelation.JunctionCollection;
             if (!permissions.CanRead(junctionCollection))
-                throw new PermissionDeniedException($"Read not permitted on '{junctionCollection}'.");
+                throw RelationTargetReadGuard.ReadDenied(junctionCollection);
 
             var remainder = fieldPath[(FilterReservedTokens.Junction.Length + 1)..];
             if (remainder.Length == 0 || remainder.Contains('.'))
@@ -335,14 +335,14 @@ public static class QueryValidator
                 {
                     if (previousRel?.JunctionCollection is null) return; // misuse: Parse owns the error
                     if (!permissions.CanRead(previousRel.JunctionCollection))
-                        throw new PermissionDeniedException($"Read not permitted on '{previousRel.JunctionCollection}'.");
+                        throw RelationTargetReadGuard.ReadDenied(previousRel.JunctionCollection);
                     return; // the one field after "_junction" is the leaf; no further hop to check
                 }
 
                 var rel = graph.Resolve(current, parts[i]);
                 if (rel is null) return;
                 if (!permissions.CanRead(rel.TargetCollection))
-                    throw new PermissionDeniedException($"Read not permitted on '{rel.TargetCollection}'.");
+                    throw RelationTargetReadGuard.ReadDenied(rel.TargetCollection);
                 current = rel.TargetCollection;
                 previousRel = rel;
             }

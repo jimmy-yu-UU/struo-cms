@@ -52,4 +52,20 @@ public sealed record CollectionMetadata
 
     /// <summary>Translation sidecar metadata, or null when the collection has no translatable fields.</summary>
     public TranslationMetadata? Translation { get; init; }
+
+    /// <summary>
+    /// The names a body never sets, compared ignoring case: the system and <c>ReadOnly</c> fields, and on a
+    /// soft-deletable collection <c>deletedAt</c> and <c>deletedBy</c>, which the soft-delete machinery stamps.
+    /// </summary>
+    public IReadOnlySet<string> ServerOwnedKeyNames() => ServerOwnedKeyNames(Fields, SoftDelete);
+
+    /// <summary>The names <see cref="ServerOwnedKeyNames()"/> returns for <paramref name="fields"/>.</summary>
+    public static IReadOnlySet<string> ServerOwnedKeyNames(IEnumerable<FieldMetadata> fields, bool softDelete)
+    {
+        var names = fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (softDelete) names.UnionWith(SoftDeleteKeyNames);
+        return names;
+    }
+
+    private static readonly string[] SoftDeleteKeyNames = ["deletedAt", "deletedBy"];
 }

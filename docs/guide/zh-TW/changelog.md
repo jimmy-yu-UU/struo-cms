@@ -58,6 +58,29 @@
   `init`、有對應的建構式參數，或帶 `[JsonInclude]`），主機在啟動時失敗。原本 REST 的建立與更新照樣
   把送來的值存進去，GraphQL 的項目輸入卻不列這個子欄位（在 SQLite 上、HTTP 層之下量到的）。拿掉
   `ReadOnly = true`；值由型別自己算出時，把屬性改成只有 getter（[第 6 章](06-field-types.md)）。
+- junction 集合的鍵是 `ReadOnly`、稽核欄位或軟刪除欄位時，主機在啟動時失敗。原本只要 junction 上有
+  多對一關聯以這個鍵為外鍵，就能通過啟動檢查，但請求的 body 永遠設定不了它。兩個鍵都要用 body 設定
+  得了的屬性，並宣告成可寫入的 `[CmsField]`（[第 8 章](08-relations.md)）。
+- 在可軟刪除類別的 `DeletedAt` 或 `DeletedBy` 上掛 `[CmsField]`，主機在啟動時失敗：這兩個欄位由刪除
+  與復原的操作掌管。拿掉 `[CmsField]`（[第 9 章](09-revisions-and-trash.md)）。
+- 建立或更新時指名一個連結，需要連結所指集合的讀取授權：多對多關聯（包含空的 `[]`）、多對一的外鍵
+  （包含 `null`）、junction 列的任一個鍵、`File`／`Image`／`Files` 欄位（`translations` 裡的
+  也算），以及上傳時的 `folderId`。沒有授權的寫入回 `403` 與 `Read not permitted on '{target}'.`，
+  而且在看任何 id 之前就拒絕。原本連結的寫入只看寫入授權，呼叫端因此可以連結、也可以解除自己讀不到
+  的集合裡的列。更新時，檔案欄位、junction 的鍵，以及同時是宣告欄位且不是 `Hidden` 的外鍵，送來的
+  值跟已存的一樣就放行；伺服器不會寫入的鍵（`ReadOnly` 或系統欄位、軟刪除欄位）不檢查。還原會略過
+  呼叫端寫不了的連結、其餘照常套用，後台的確認對話框會列出被略過的欄位。會寫這類連結的角色要補上
+  目標的讀取授權；替使用者指派角色需要 `role` 的讀取
+  （[第 8 章](08-relations.md#連結的寫入要求)）。
+- 多對一的外鍵、junction 的鍵、檔案 id 指向不存在的列或垃圾桶裡的列，回 `400` `BAD_USER_INPUT`：
+  `The id in '{key}' does not exist in '{target}'.`。原本這種 id 照樣存進去。更新時只檢查已存的值裡
+  沒有的 id，還原不檢查。全為零的 GUID、空字串，以及不可為 `null` 的鍵裡的 `0` 表示「沒有連結」，
+  不檢查。會先寫 id、之後才建立那一列的用戶端，要改成先建立那一列
+  （[第 8 章](08-relations.md#連結的寫入要求)）。
+- `GET /api/items/{collection}/{id}/revisions/{n}` 與 GraphQL 的版本查詢，露出的連結不會比項目讀取給
+  這個呼叫端的多：呼叫端讀不到目標時，多對多關聯與不是宣告欄位的多對一外鍵不在回應裡；讀不到
+  junction 集合時，帶 payload 的關聯縮成純 id。原本快照整份回傳。會檢視版本紀錄的角色要補上目標的
+  讀取授權（[第 9 章](09-revisions-and-trash.md)）。
 - 欄位標了 `[CmsField(Hidden = true)]` 的外鍵，讀取端不能用名稱指到它：`filter`、`sort`、`fields`、
   `facets`、`aggregate` 回 `400` `Unknown field '{key}' on collection '{collection}'.`，GraphQL 的
   建立、更新與篩選輸入也不列它。原本這些地方都接受它，跟不是外鍵的隱藏欄位不一樣（在 SQLite 上、經
@@ -68,14 +91,17 @@
 
 ### 新增
 
+- `CollectionMetadata.ServerOwnedKeyNames()`：請求的 body 永遠設定不了的名稱，也就是系統欄位與
+  `ReadOnly` 欄位，以及可軟刪除集合的 `deletedAt` 與 `deletedBy`。
+- `IM2MDescriptorSource.JunctionKeyLinks(junctionCollection)` 與 record `JunctionKeyLink`：junction
+  集合的兩個鍵，以及各自所指的集合。介面成員有預設實作，回傳空清單。
+- `RelationTargetReadGuard`（`Require`、`ReadDenied`）：連結寫入要通過的讀取檢查
+  （[第 8 章](08-relations.md#連結的寫入要求)），以及常數 `FileCollection.FolderName`。
 - `CollectionMetadata.OffersForeignKey(relation)`：讀取端能不能用名稱指到多對一關聯的外鍵；有
   `Hidden = true` 的欄位用這個名稱時不能。
 
 ### 變更
 
-- `File` 或 `Image` 欄位同時又是關聯的鍵時，主機在啟動時失敗，丟出 `MetadataException`，訊息點名
-  那個關聯與鍵，並說明要拿掉關聯、或把鍵改成別的介面。原本主機是因為 GraphQL 函式庫的
-  `The following field ... is declared multiple times` 而停下（[第 8 章](08-relations.md)）。
 - `/graphql` 的請求在進到 GraphQL 伺服器之前、伺服器自己出錯時（例如認證階段查不到憑證儲存），回
   HTTP `500` 與 GraphQL 的 `errors` 形狀，代碼是 `INTERNAL_SERVER_ERROR`，訊息是遮罩過的那一句；
   原本回的是 REST 的錯誤信封。狀態、代碼、訊息與 error 等級的記錄都不變
@@ -86,9 +112,17 @@
   顯示中文，每個集合的四個稽核欄位也是；原本這些一律顯示伺服器送來的英文。fork 改過的標籤與 fork
   自己集合的其他標籤，照伺服器送來的文字顯示。API 的回應不變
   （[第 19 章](19-admin-customization.md#ui-語言)）。
+- 項目表單遇到登入者讀不到目標的關聯或檔案欄位，顯示停用的輸入框與一句說明，存檔時不送出這個欄位。
+- `File` 或 `Image` 欄位同時又是關聯的鍵時，主機在啟動時失敗，丟出 `MetadataException`，訊息點名
+  那個關聯與鍵，並說明要拿掉關聯、或把鍵改成別的介面。原本主機是因為 GraphQL 函式庫的
+  `The following field ... is declared multiple times` 而停下（[第 8 章](08-relations.md)）。
 
 ### 修正
 
+- 可軟刪除集合的 `deletedAt` 與 `deletedBy` 不會由請求的 body 設定。原本集合若宣告了以 `DeletedBy`
+  為外鍵的多對一關聯，建立或更新時送來的值會被存進去（在 SQLite 上、經 HTTP 管線量到的）。這種關聯
+  在 schema 裡回報為不可編輯，GraphQL 的 input 也不列這個鍵
+  （[第 9 章](09-revisions-and-trash.md)）。
 - 多對一的外鍵同時帶可寫的 `[CmsField]` 時，GraphQL 的建立、更新與篩選輸入只列這個鍵一次，型別照
   欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
   `The following field ... is declared multiple times`；量到的鍵型別是 `Guid?`、`int?`、`long?` 與

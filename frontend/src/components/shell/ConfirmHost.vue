@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
@@ -19,6 +19,7 @@ const rejectLabel = computed(() => request.value?.rejectLabel ?? t('common.cance
 const acceptClass = computed(() =>
   buttonVariants({ variant: request.value?.severity === 'danger' ? 'destructive' : 'default' }),
 )
+const itemsHeadingId = useId()
 const rejectClass = computed(() => buttonVariants({ variant: 'outline' }))
 
 // reka-ui's AlertDialog only ever calls this for Escape. Route it back through reject() so the
@@ -61,7 +62,24 @@ function onOpenChange(next: boolean): void {
     <AlertDialogContent class="z-[60]">
       <AlertDialogHeader>
         <AlertDialogTitle>{{ header }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ request?.message }}</AlertDialogDescription>
+        <!-- A div, so the list is valid inside it: the dialog's aria-describedby then covers the message, the heading and the list. -->
+        <AlertDialogDescription as="div">
+          <p>{{ request?.message }}</p>
+          <template v-if="request?.items?.length">
+            <p
+              v-if="request.itemsHeading"
+              :id="itemsHeadingId"
+              class="text-foreground mt-2"
+              data-test="confirm-items-heading"
+            >{{ request.itemsHeading }}</p>
+            <ul
+              :aria-labelledby="request.itemsHeading ? itemsHeadingId : undefined"
+              class="mt-1 list-disc pl-5"
+            >
+              <li v-for="(item, index) in request.items" :key="index">{{ item }}</li>
+            </ul>
+          </template>
+        </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <button type="button" :class="rejectClass" @click="store.reject()">{{ rejectLabel }}</button>

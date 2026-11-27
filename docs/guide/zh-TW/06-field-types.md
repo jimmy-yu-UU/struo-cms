@@ -184,8 +184,8 @@ UTC。
 | `Image` | `Guid`／`Guid?` | CLR 預設 | `FileField` |
 | `Files` | `List<Guid>` | JSON | `FilesField` |
 
-`File` 與 `Image` 共用同一個編輯器，`Image` 多了圖片預覽。`Files` 存的 id 在寫入時不會檢查
-是否存在——指向已被清除檔案的 id 一樣會被存下來，後台選擇器只能退回顯示原始 id。
+`File` 與 `Image` 共用同一個編輯器，`Image` 多了圖片預覽。檔案 id 在寫入時會檢查
+（[第 8 章](08-relations.md#連結的寫入要求)）；之後檔案被清除的話，後台選擇器只能退回顯示原始 id。
 
 ### 顯示用與識別碼
 

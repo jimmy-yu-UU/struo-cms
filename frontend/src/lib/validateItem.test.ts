@@ -156,3 +156,43 @@ describe('validateItem required collection fields', () => {
     expect(validateItem(m, model, 'en')).toEqual({})
   })
 })
+
+describe('validateItem with an unreadable target collection', () => {
+  const none = () => false
+  it('does not require a file field whose collection the caller cannot read', () => {
+    const m: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+      field('hero', { interface: 'image', required: true, label: 'Hero' }),
+    ] }
+    const model: FormModel = { shared: { hero: null }, translations: {}, relations: {} }
+    expect(validateItem(m, model, 'en')).toHaveProperty('hero')
+    expect(validateItem(m, model, 'en', undefined, undefined, undefined, none)).toEqual({})
+  })
+  it('does not require a translatable file field whose collection the caller cannot read', () => {
+    const m: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+      field('cover', { interface: 'image', required: true, translatable: true }),
+    ] }
+    const model: FormModel = { shared: {}, translations: { en: { cover: null } }, relations: {} }
+    expect(validateItem(m, model, 'en')).toHaveProperty('cover')
+    expect(validateItem(m, model, 'en', undefined, undefined, undefined, none)).toEqual({})
+  })
+  it('still requires the other translatable fields of a locale', () => {
+    const m: CollectionMeta = { name: 'article', label: 'Article', relations: [], fields: [
+      field('cover', { interface: 'image', required: true, translatable: true }),
+      field('title', { required: true, translatable: true }),
+    ] }
+    const model: FormModel = { shared: {}, translations: { en: { cover: null, title: '' } }, relations: {} }
+    expect(Object.keys(validateItem(m, model, 'en', undefined, undefined, undefined, none))).toEqual(['title'])
+  })
+  it('does not validate the payload rows of links whose target the caller cannot read', () => {
+    const rel: RelationMeta = { name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', interface: 'tagSelect',
+      foreignKey: null, displayTemplate: '{Name}', editable: true, selfReferencing: false,
+      junctionCollection: 'articleTag', junctionPayloadFields: ['note'], sortField: null }
+    const m: CollectionMeta = { name: 'article', label: 'Article', fields: [], relations: [rel] }
+    const resolve = (n: string): CollectionMeta | undefined => (n === 'articleTag'
+      ? { name: 'articleTag', label: 'Tag link', relations: [], fields: [field('note', { required: true })] }
+      : undefined)
+    const model: FormModel = { shared: {}, translations: {}, relations: { tags: [{ id: 't1', junction: { note: '' } }] } }
+    expect(validateItem(m, model, 'en', resolve)).toHaveProperty('tags')
+    expect(validateItem(m, model, 'en', resolve, undefined, undefined, none)).toEqual({})
+  })
+})

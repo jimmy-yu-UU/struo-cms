@@ -177,6 +177,7 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
             },
             environment: "Production", onSelectedBackend: true);
         CreateTables(host, assembly);
+        SeedSampleFile(host);
         var client = await LoginAsync(host);
 
         var failures = new List<string>();
@@ -208,6 +209,17 @@ public sealed class AcceptedCellsRoundTripTests(ITestOutputHelper output)
         var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
         foreach (var face in Enum.GetValues<FieldInterface>())
             db.CodeFirst.InitTables(registry.Get(Camel(EntityName(face)))!.EntityType);
+    }
+
+    // The sample id of a File, Image or Files cell must name a stored file.
+    private static void SeedSampleFile(ForkHost host)
+    {
+        using var scope = host.App.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ISqlSugarClient>();
+        db.Insertable(new Struo.Infrastructure.Files.File
+        {
+            Id = Guid.Parse(Guid1), StorageKey = "sample", FileName = "sample.png", ContentType = "image/png", Size = 1,
+        }).ExecuteCommand();
     }
 
     private static async Task<HttpClient> LoginAsync(ForkHost host)

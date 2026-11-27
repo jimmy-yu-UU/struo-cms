@@ -34,6 +34,7 @@ import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
 import { hasDrafts, relationOfDraftKey, withDraft, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
+import { fieldsLeftByRevert } from '../lib/unreadableTargets'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 import type { CollectionMeta, RelationMeta } from '../types/schema'
@@ -63,6 +64,11 @@ const canDelete = computed(() => auth.canDelete(name.value))
 // Junction payload grants for the links editor (spec U2b §3.3): passed as plain functions so
 // parse/build/validate stay store-free.
 const resolveCollection = (n: string) => schema.get(n)
+// A relation or file field whose target the caller cannot read is neither sent nor editable: the server
+// refuses a write that names it. Plain functions keep parse/build/validate store-free.
+const canReadCollection = (n: string): boolean => auth.canRead(n)
+const revertKeptFields = computed(() => (meta.value ? fieldsLeftByRevert(meta.value, canReadCollection) : []))
+const collectionLabel = (n: string): string | undefined => schema.get(n)?.label
 const junctionAccess = computed(() => junctionAccessFrom(auth))
 function canWriteJunctionFor(rel: RelationMeta): boolean {
   return canWriteJunction(rel, resolveCollection, junctionAccess.value)
@@ -298,7 +304,7 @@ async function onSubmit(): Promise<void> {
   // A second trigger (Enter in a lone input, a double click) must not send a second request.
   if (formBusy.value || !meta.value) return
   serverError.value = ''
-  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t)
+  errors.value = validateItem(meta.value, model, langStore.defaultCode, resolveCollection, canWriteJunctionFor, t, canReadCollection)
   if (Object.keys(errors.value).length > 0 || hasDrafts(drafts.value)) {
     // The form shows each draft's own error, which follows the text; this brings the field into view.
     void itemForm.value?.revealErrors()
@@ -310,7 +316,7 @@ async function onSubmit(): Promise<void> {
     // When it failed, its own notice (or the conflict banner) is showing and nothing is sent.
     if (!isCreate.value && name.value === ROLE_COLLECTION && matrix.value && !(await matrix.value.whenSaved())) return
     const payload = buildItemPayload(meta.value, model, langStore.languages, isCreate.value ? 'create' : 'update',
-      { resolveCollection, canWriteJunction: canWriteJunctionFor,
+      { resolveCollection, canWriteJunction: canWriteJunctionFor, canReadCollection,
         baselineTranslations: baselineTranslations(baseline.value) })
     // Capture the created item so a role-create can PUT its buffered grants against the
     // freshly-minted id (created.id) below.
@@ -718,6 +724,8 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :server-error="serverError"
         :disabled="!canWrite || lockedBySuperAdmin || formBusy"
         :relation-option-hint="relationOptionHint"
+        :can-read-collection="canReadCollection"
+        :collection-label="collectionLabel"
         @submit="onSubmit"
         @draft="onDraft"
       />
@@ -757,6 +765,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :item-id="idStr"
         :can-revert="canWrite"
         :version="model.version"
+        :kept-fields="revertKeptFields"
         @reverted="onReverted"
         @conflict="onRevertConflict"
       />

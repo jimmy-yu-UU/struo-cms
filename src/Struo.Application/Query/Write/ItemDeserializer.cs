@@ -167,11 +167,11 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     /// <summary>
-    /// The names of the system and <c>ReadOnly</c> fields. A body never sets one, including a field that is
-    /// also the foreign key of a ManyToOne relation: the allow-list and the update overlay both skip them.
+    /// The names of the system and <c>ReadOnly</c> fields and the soft-delete columns of a soft-deletable
+    /// collection (<see cref="CollectionMetadata.ServerOwnedKeyNames()"/>). A body never sets one, including a name
+    /// that is also the foreign key of a ManyToOne relation: the allow-list and the update overlay both skip them.
     /// </summary>
-    internal static HashSet<string> ServerOwnedFieldNames(CollectionMetadata meta) =>
-        meta.Fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    internal static IReadOnlySet<string> ServerOwnedFieldNames(CollectionMetadata meta) => meta.ServerOwnedKeyNames();
 
     private static object DeserializeEntity(EntityDescriptor d, JsonElement body, HashSet<string> stripNames)
     {

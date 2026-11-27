@@ -6,4 +6,7 @@ namespace Struo.Application.Files;
 public static class FileCollection
 {
     public const string Name = "file";
+
+    /// <summary>The collection of media folders, which a file's <c>folderId</c> links.</summary>
+    public const string FolderName = "mediaFolder";
 }
