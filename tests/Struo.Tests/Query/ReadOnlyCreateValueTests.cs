@@ -23,16 +23,22 @@ namespace Struo.Tests.Query;
 /// <summary>
 /// A create binds every non-system <c>ReadOnly</c> field to the value a new instance of the entity has,
 /// whatever the body carries; a <c>BeforeWrite</c> interceptor that sets one afterwards wins; an update
-/// never reaches one.
+/// and a revert never reach one, a ManyToOne foreign key included. Stored values are read through a row
+/// type without initialisers, because reading the entity type fills a NULL column with the initialiser.
 /// </summary>
 public sealed class ReadOnlyCreateValueTests : IDisposable
 {
+    private const string ItemCollection = "roCreateItem";
+    private const string RepeaterCollection = "roCreateRepeater";
+    private const string PlainBody = """{"name":"n"}""";
+    private const string RepeaterBody = """{"rows":[{"title":"t","locked":"c"}]}""";
+
     private static readonly Guid InitialGuid = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid InterceptorGuid = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid OtherGuid = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     [SugarTable("ro_create_item")]
-    [CmsCollection("RoCreateItem", Name = "roCreateItem", Revisions = true)]
+    [CmsCollection("RoCreateItem", Name = ItemCollection, Revisions = true)]
     public sealed class Item : AuditableEntity
     {
         [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
@@ -58,7 +64,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
         [SugarColumn(IsNullable = true)]
         [CmsField(Label = "Key", Interface = FieldInterface.Hidden, ReadOnly = true)]
-        public Guid? Key { get; set; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        public Guid? Key { get; set; } = InitialGuid;
 
         [CmsField(Label = "Items", Interface = FieldInterface.Hidden, ReadOnly = true)]
         public List<string> Items { get; set; } = ["a"];
@@ -74,7 +80,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
         [SugarColumn(IsNullable = true)]
         [CmsField(Label = "OwnerId", Interface = FieldInterface.Hidden, ReadOnly = true)]
-        public Guid? OwnerId { get; set; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        public Guid? OwnerId { get; set; } = InitialGuid;
 
         [Navigate(NavigateType.ManyToOne, nameof(OwnerId))]
         [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
@@ -82,7 +88,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         public Role? Owner { get; set; }
 
         [CmsField(Label = "RequiredOwnerId", Interface = FieldInterface.Hidden, ReadOnly = true)]
-        public Guid RequiredOwnerId { get; set; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        public Guid RequiredOwnerId { get; set; } = InitialGuid;
 
         [Navigate(NavigateType.ManyToOne, nameof(RequiredOwnerId))]
         [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
@@ -141,7 +147,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     }
 
     [SugarTable("ro_create_repeater")]
-    [CmsCollection("RoCreateRepeater", Name = "roCreateRepeater")]
+    [CmsCollection("RoCreateRepeater", Name = RepeaterCollection)]
     public sealed class RepeaterItem : AuditableEntity
     {
         [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
@@ -152,7 +158,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
     private sealed class SetsReadOnlyFields : IItemWriteInterceptor
     {
-        public bool AppliesTo(string collection) => string.Equals(collection, "roCreateItem", StringComparison.OrdinalIgnoreCase);
+        public bool AppliesTo(string collection) => string.Equals(collection, ItemCollection, StringComparison.OrdinalIgnoreCase);
 
         public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
         {
@@ -198,15 +204,15 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
-            ["roCreateItem"] = typeof(Item),
+            [ItemCollection] = typeof(Item),
             ["roCreateRequired"] = typeof(RequiredMemberItem),
             ["roCreateJsonRequired"] = typeof(JsonRequiredItem),
-            ["roCreateRepeater"] = typeof(RepeaterItem),
+            [RepeaterCollection] = typeof(RepeaterItem),
             ["role"] = typeof(Role),
         });
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
         _deserializer = new ItemDeserializer(registry, graph, new RichTextCleaner(new GanssHtmlSanitizer()));
-        _meta = provider.GetCollection("roCreateItem")!;
+        _meta = provider.GetCollection(ItemCollection)!;
         var expander = new RelationExpander(_repo, graph, new StruoQueryOptions());
         var user = new TestCurrentUserAccessor(Guid.Empty);
         var revisions = new SqlSugarRevisionStore(_db, user);
@@ -224,7 +230,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         return document.RootElement.Clone();
     }
 
-    private Item Bind(string json) => (Item)_deserializer.DeserializeForCreate("roCreateItem", Body(json), _meta);
+    private Item Bind(string json) => (Item)_deserializer.DeserializeForCreate(ItemCollection, Body(json), _meta);
 
     // Reads the columns through a row type without initialisers, so a stored NULL stays NULL: reading the
     // entity type fills a NULL column with the property initialiser.
@@ -277,7 +283,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [MemberData(nameof(InitialValueCases))]
     public void A_create_binds_a_read_only_field_to_its_initial_value(string field)
     {
-        HoldsInitialValue(Bind("""{"name":"n"}"""), field).Should().BeTrue(field);
+        HoldsInitialValue(Bind(PlainBody), field).Should().BeTrue(field);
     }
 
     [Theory]
@@ -318,8 +324,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [Fact]
     public void Each_create_gets_its_own_instance_of_a_list_field()
     {
-        var first = Bind("""{"name":"n"}""");
-        var second = Bind("""{"name":"n"}""");
+        var first = Bind(PlainBody);
+        var second = Bind(PlainBody);
 
         first.Items.Should().NotBeSameAs(second.Items);
     }
@@ -327,7 +333,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [Fact]
     public async Task A_create_stores_the_initial_values_of_its_read_only_fields()
     {
-        var created = await _service(null).CreateAsync("roCreateItem", Body(HostileBody));
+        var created = await _service(null).CreateAsync(ItemCollection, Body(HostileBody));
 
         var stored = await StoredAsync(created);
         AssertInitialColumns(stored);
@@ -337,7 +343,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [Fact]
     public async Task The_stored_row_reader_shows_a_database_null_as_null()
     {
-        var created = await _service(null).CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var created = await _service(null).CreateAsync(ItemCollection, Body(PlainBody));
         var id = Guid.Parse(created["id"]!.ToString()!);
 
         await _db.Updateable<Item>().SetColumns(i => i.OwnerId == null).Where(i => i.Id == id).ExecuteCommandAsync();
@@ -348,7 +354,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [Fact]
     public async Task A_before_write_interceptor_that_sets_a_read_only_field_wins()
     {
-        var created = await _service([new SetsReadOnlyFields()]).CreateAsync("roCreateItem", Body(HostileBody));
+        var created = await _service([new SetsReadOnlyFields()]).CreateAsync(ItemCollection, Body(HostileBody));
 
         var stored = await StoredAsync(created);
         stored.NullableText.Should().Be("interceptor");
@@ -362,10 +368,10 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [Fact]
     public async Task A_before_write_interceptor_that_sets_a_read_only_foreign_key_wins_on_update()
     {
-        var created = await _service(null).CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var created = await _service(null).CreateAsync(ItemCollection, Body(PlainBody));
         var id = created["id"]!.ToString()!;
 
-        await _service([new SetsReadOnlyFields()]).UpdateAsync("roCreateItem", id, Body(HostileBody));
+        await _service([new SetsReadOnlyFields()]).UpdateAsync(ItemCollection, id, Body(HostileBody));
 
         var stored = await StoredAsync(created);
         stored.OwnerId.Should().Be(InterceptorGuid);
@@ -380,9 +386,9 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     public async Task An_update_body_cannot_change_a_read_only_foreign_key(string key)
     {
         var svc = _service(null);
-        var created = await svc.CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
 
-        await svc.UpdateAsync("roCreateItem", created["id"]!.ToString()!, Body("{\"" + key + "\":\"" + OtherGuid + "\"}"));
+        await svc.UpdateAsync(ItemCollection, created["id"]!.ToString()!, Body("{\"" + key + "\":\"" + OtherGuid + "\"}"));
 
         AssertInitialKeys(await StoredAsync(created));
     }
@@ -391,7 +397,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     public async Task A_revert_does_not_change_a_read_only_foreign_key()
     {
         var svc = _service(null);
-        var created = await svc.CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
         var id = Guid.Parse(created["id"]!.ToString()!);
         var other = OtherGuid;
         await _db.Updateable<Item>()
@@ -400,7 +406,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
             .Where(i => i.Id == id)
             .ExecuteCommandAsync();
 
-        var reverted = await svc.RevertAsync("roCreateItem", id.ToString(), 1);
+        var reverted = await svc.RevertAsync(ItemCollection, id.ToString(), 1);
 
         reverted.Should().NotBeNull();
         var stored = await StoredAsync(created);
@@ -412,10 +418,10 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     public async Task An_update_never_reaches_a_read_only_field()
     {
         var svc = _service(null);
-        var created = await svc.CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
         var id = created["id"]!.ToString()!;
 
-        await svc.UpdateAsync("roCreateItem", id, Body(HostileBody));
+        await svc.UpdateAsync(ItemCollection, id, Body(HostileBody));
 
         var stored = await StoredAsync(created);
         AssertInitialColumns(stored);
@@ -431,7 +437,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     [Fact]
     public async Task A_create_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater()
     {
-        var created = await _service(null).CreateAsync("roCreateRepeater", Body("""{"rows":[{"title":"t","locked":"c"}]}"""));
+        var created = await _service(null).CreateAsync(RepeaterCollection, Body(RepeaterBody));
 
         var rows = await StoredRowsAsync(created["id"]!);
 
@@ -442,9 +448,9 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     public async Task An_update_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater()
     {
         var svc = _service(null);
-        var created = await svc.CreateAsync("roCreateRepeater", Body("""{"rows":[{"title":"t","locked":"c"}]}"""));
+        var created = await svc.CreateAsync(RepeaterCollection, Body(RepeaterBody));
 
-        await svc.UpdateAsync("roCreateRepeater", created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u"}]}"""));
+        await svc.UpdateAsync(RepeaterCollection, created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u"}]}"""));
 
         var rows = await StoredRowsAsync(created["id"]!);
         rows.Should().ContainSingle().Which.Locked.Should().Be("u");
