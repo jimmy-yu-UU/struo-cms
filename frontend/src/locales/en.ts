@@ -492,6 +492,12 @@ export default {
   },
   core: {
     groups: { System: 'System' },
+    audit: {
+      createdAt: 'CreatedAt',
+      createdBy: 'CreatedBy',
+      updatedAt: 'UpdatedAt',
+      updatedBy: 'UpdatedBy',
+    },
     collections: {
       file: {
         label: 'File',
@@ -504,10 +510,6 @@ export default {
           width: 'Width',
           height: 'Height',
           status: 'Status',
-          createdAt: 'CreatedAt',
-          createdBy: 'CreatedBy',
-          updatedAt: 'UpdatedAt',
-          updatedBy: 'UpdatedBy',
         },
         relations: {
           folder: 'Folder',
@@ -524,20 +526,12 @@ export default {
           isDefault: 'Default',
           enabled: 'Enabled',
           sort: 'Sort',
-          createdAt: 'CreatedAt',
-          createdBy: 'CreatedBy',
-          updatedAt: 'UpdatedAt',
-          updatedBy: 'UpdatedBy',
         },
       },
       mediaFolder: {
         label: 'MediaFolder',
         fields: {
           name: 'Name',
-          createdAt: 'CreatedAt',
-          updatedAt: 'UpdatedAt',
-          createdBy: 'CreatedBy',
-          updatedBy: 'UpdatedBy',
         },
         relations: {
           parent: 'Parent',
@@ -551,10 +545,6 @@ export default {
           canRead: 'Can Read',
           canWrite: 'Can Write',
           canDelete: 'Can Delete',
-          createdAt: 'CreatedAt',
-          createdBy: 'CreatedBy',
-          updatedAt: 'UpdatedAt',
-          updatedBy: 'UpdatedBy',
         },
       },
       role: {
@@ -563,10 +553,6 @@ export default {
           name: 'Name',
           isSuperAdmin: 'Super Admin',
           description: 'Description',
-          createdAt: 'CreatedAt',
-          createdBy: 'CreatedBy',
-          updatedAt: 'UpdatedAt',
-          updatedBy: 'UpdatedBy',
         },
       },
       user: {
@@ -575,10 +561,6 @@ export default {
           email: 'Email',
           name: 'Name',
           isActive: 'Active',
-          createdAt: 'CreatedAt',
-          createdBy: 'CreatedBy',
-          updatedAt: 'UpdatedAt',
-          updatedBy: 'UpdatedBy',
         },
         relations: {
           roles: 'Roles',
@@ -589,10 +571,6 @@ export default {
         fields: {
           userId: 'User',
           roleId: 'Role',
-          createdAt: 'CreatedAt',
-          createdBy: 'CreatedBy',
-          updatedAt: 'UpdatedAt',
-          updatedBy: 'UpdatedBy',
         },
       },
     },

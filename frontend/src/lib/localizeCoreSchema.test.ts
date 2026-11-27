@@ -4,10 +4,11 @@ import type { CollectionMeta } from '../types/schema'
 
 const en: CoreLabelCatalog = {
   groups: { System: 'System' },
+  audit: { createdAt: 'CreatedAt' },
   collections: {
     role: {
       label: 'Role',
-      fields: { name: 'Name', createdAt: 'CreatedAt' },
+      fields: { name: 'Name' },
       relations: { users: 'Users' },
       options: { kind: { a: 'Alpha' } },
     },
@@ -15,10 +16,11 @@ const en: CoreLabelCatalog = {
 }
 const zh: CoreLabelCatalog = {
   groups: { System: '系統' },
+  audit: { createdAt: '建立時間' },
   collections: {
     role: {
       label: '角色',
-      fields: { name: '名稱', createdAt: '建立時間' },
+      fields: { name: '名稱' },
       relations: { users: '使用者' },
       options: { kind: { a: '甲' } },
     },
@@ -26,18 +28,20 @@ const zh: CoreLabelCatalog = {
 }
 const fr: CoreLabelCatalog = {
   groups: { System: 'Système' },
-  collections: { role: { label: 'Rôle', fields: { name: 'Nom', createdAt: 'Créé le' }, relations: { users: 'Utilisateurs' }, options: { kind: { a: 'Alpha-fr' } } } },
+  audit: { createdAt: 'Créé le' },
+  collections: { role: { label: 'Rôle', fields: { name: 'Nom' }, relations: { users: 'Utilisateurs' }, options: { kind: { a: 'Alpha-fr' } } } },
 }
 
-function field(name: string, label: string, options?: { value: string; label: string }[]) {
-  return { name, label, interface: 'text', required: false, searchable: false, sortable: false, readOnly: false, hidden: false, translatable: false, sort: 1, isSystem: false, options }
+function field(name: string, label: string, options?: { value: string; label: string }[], isSystem = false) {
+  return { name, label, interface: 'text', required: false, searchable: false, sortable: false, readOnly: false, hidden: false, translatable: false, sort: 1, isSystem, options }
 }
+const auditField = (name: string, label: string) => field(name, label, undefined, true)
 function role(over: Partial<CollectionMeta> = {}): CollectionMeta {
   return {
     name: 'role',
     label: 'Role',
     group: 'System',
-    fields: [field('name', 'Name'), field('createdAt', 'CreatedAt'), field('kind', 'Kind', [{ value: 'a', label: 'Alpha' }])],
+    fields: [field('name', 'Name'), auditField('createdAt', 'CreatedAt'), field('kind', 'Kind', [{ value: 'a', label: 'Alpha' }])],
     relations: [{ name: 'users', label: 'Users', kind: 'oneToMany', targetCollection: 'user', interface: 'relatedList', editable: false, selfReferencing: false }],
     ...over,
   }
@@ -72,6 +76,34 @@ describe('localizeCoreSchema', () => {
     expect(out).toEqual(article)
   })
 
+  describe('audit fields of a collection outside the catalog', () => {
+    const post = (fields: CollectionMeta['fields']): CollectionMeta => ({ name: 'post', label: 'Post', group: 'Content', fields, relations: [] })
+
+    it('translates the audit fields of a fork collection', () => {
+      const [out] = toZh([post([auditField('createdAt', 'CreatedAt'), field('title', 'Title')])])
+      expect(out.fields.map((f) => f.label)).toEqual(['建立時間', 'Title'])
+    })
+
+    it('keeps an audit label the fork changed', () => {
+      const [out] = toZh([post([auditField('createdAt', 'Written on')])])
+      expect(out.fields[0].label).toBe('Written on')
+    })
+
+    it('keeps a non-system field named like an audit key', () => {
+      const input = post([field('createdAt', 'CreatedAt')])
+      const [out] = toZh([input])
+      expect(out).toBe(input)
+    })
+
+    it('does not mutate a fork collection', () => {
+      const input = [post([auditField('createdAt', 'CreatedAt')])]
+      const snapshot = structuredClone(input)
+      const [out] = toZh(input)
+      expect(input).toEqual(snapshot)
+      expect(out.fields[0]).not.toBe(input[0].fields[0])
+    })
+  })
+
   it('does not mutate its input', () => {
     const input = [role()]
     const snapshot = structuredClone(input)
@@ -96,7 +128,7 @@ describe('localizeCoreSchema', () => {
   })
 
   it('shows the server text when the target has no value for a key', () => {
-    const sparse: CoreLabelCatalog = { groups: {}, collections: { role: { label: '', fields: {} } } }
+    const sparse: CoreLabelCatalog = { groups: {}, audit: {}, collections: { role: { label: '', fields: {} } } }
     const [out] = localizeCoreSchema([role()], { source: en, target: sparse })
     expect(out.label).toBe('Role')
     expect(out.fields[0].label).toBe('Name')

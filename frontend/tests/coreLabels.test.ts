@@ -13,6 +13,8 @@ const collections: CollectionMeta[] = JSON.parse(readFileSync(SNAPSHOT_PATH, 'ut
 // Core texts zh-TW deliberately keeps identical to the English. Each entry is a `key` below.
 const KEPT_IN_ENGLISH: readonly string[] = []
 
+const AUDIT_FIELDS = new Set(['createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+
 type Expected = { key: string; english: string }
 
 function expectedTexts(): Expected[] {
@@ -21,7 +23,8 @@ function expectedTexts(): Expected[] {
     if (c.group) out.push({ key: `groups.${c.group}`, english: c.group })
     out.push({ key: `collections.${c.name}.label`, english: c.label })
     for (const f of c.fields) {
-      out.push({ key: `collections.${c.name}.fields.${f.name}`, english: f.label })
+      const key = f.isSystem && AUDIT_FIELDS.has(f.name) ? `audit.${f.name}` : `collections.${c.name}.fields.${f.name}`
+      out.push({ key, english: f.label })
       for (const o of f.options ?? []) {
         out.push({ key: `collections.${c.name}.options.${f.name}.${o.value}`, english: o.label })
       }

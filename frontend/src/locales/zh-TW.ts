@@ -490,6 +490,12 @@ export default {
   },
   core: {
     groups: { System: '系統' },
+    audit: {
+      createdAt: '建立時間',
+      createdBy: '建立者',
+      updatedAt: '更新時間',
+      updatedBy: '更新者',
+    },
     collections: {
       file: {
         label: '檔案',
@@ -502,10 +508,6 @@ export default {
           width: '寬度',
           height: '高度',
           status: '狀態',
-          createdAt: '建立時間',
-          createdBy: '建立者',
-          updatedAt: '更新時間',
-          updatedBy: '更新者',
         },
         relations: {
           folder: '資料夾',
@@ -522,20 +524,12 @@ export default {
           isDefault: '預設',
           enabled: '啟用',
           sort: '排序',
-          createdAt: '建立時間',
-          createdBy: '建立者',
-          updatedAt: '更新時間',
-          updatedBy: '更新者',
         },
       },
       mediaFolder: {
         label: '媒體資料夾',
         fields: {
           name: '名稱',
-          createdAt: '建立時間',
-          updatedAt: '更新時間',
-          createdBy: '建立者',
-          updatedBy: '更新者',
         },
         relations: {
           parent: '上層資料夾',
@@ -549,10 +543,6 @@ export default {
           canRead: '可讀取',
           canWrite: '可寫入',
           canDelete: '可刪除',
-          createdAt: '建立時間',
-          createdBy: '建立者',
-          updatedAt: '更新時間',
-          updatedBy: '更新者',
         },
       },
       role: {
@@ -561,10 +551,6 @@ export default {
           name: '名稱',
           isSuperAdmin: '超級管理員',
           description: '說明',
-          createdAt: '建立時間',
-          createdBy: '建立者',
-          updatedAt: '更新時間',
-          updatedBy: '更新者',
         },
       },
       user: {
@@ -573,10 +559,6 @@ export default {
           email: '電子郵件',
           name: '名稱',
           isActive: '啟用',
-          createdAt: '建立時間',
-          createdBy: '建立者',
-          updatedAt: '更新時間',
-          updatedBy: '更新者',
         },
         relations: {
           roles: '角色',
@@ -587,10 +569,6 @@ export default {
         fields: {
           userId: '使用者',
           roleId: '角色',
-          createdAt: '建立時間',
-          createdBy: '建立者',
-          updatedAt: '更新時間',
-          updatedBy: '更新者',
         },
       },
     },

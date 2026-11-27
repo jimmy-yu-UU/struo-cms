@@ -99,6 +99,18 @@ describe('schemaStore localisation', () => {
     expect(store.get('article')?.label).toBe('Role')
   })
 
+  it('translates the audit fields of a fork collection', async () => {
+    const audit = { interface: 'text', required: false, searchable: false, sortable: false, readOnly: true, hidden: false, translatable: false, sort: 1000, isSystem: true }
+    vi.mocked(schemaApi.getAll).mockResolvedValue([
+      { name: 'article', label: 'Article', fields: [{ ...audit, name: 'createdAt', label: 'CreatedAt' }], relations: [] },
+    ])
+    const store = useSchemaStore()
+    await store.load()
+    useUiLocaleStore().apply('zh-TW')
+    expect(store.get('article')?.label).toBe('Article')
+    expect(store.get('article')?.fields[0].label).toBe('建立時間')
+  })
+
   it('accepts an assigned collections list and clears it on reset', () => {
     const store = useSchemaStore()
     store.collections = [{ name: 'role', label: 'Role', fields: [], relations: [] }]

@@ -9,6 +9,7 @@ export type CoreCollectionLabels = {
 
 export type CoreLabelCatalog = {
   groups: Record<string, string>
+  audit: Record<string, string> // labels of the framework audit fields, shared by every collection
   collections: Record<string, CoreCollectionLabels>
 }
 
@@ -41,20 +42,33 @@ function localizeField(f: FieldMeta, src: CoreCollectionLabels, tgt: CoreCollect
   return localized
 }
 
+// Only a system field is an audit field; a fork's own field that shares the name is left alone.
+function localizeAuditField(f: FieldMeta, { source, target }: CoreLabelMessages): FieldMeta {
+  if (!f.isSystem) return f
+  const label = swap(f.label, own(source.audit, f.name), own(target.audit, f.name))
+  return label === f.label ? f : { ...f, label }
+}
+
 function localizeRelation(r: RelationMeta, src: CoreCollectionLabels, tgt: CoreCollectionLabels | undefined): RelationMeta {
   return { ...r, label: swap(r.label, own(src.relations, r.name), own(tgt?.relations, r.name)) }
 }
 
-function localizeCollection(c: CollectionMeta, { source, target }: CoreLabelMessages): CollectionMeta {
+function localizeCollection(c: CollectionMeta, messages: CoreLabelMessages): CollectionMeta {
+  const { source, target } = messages
   const src = own(source.collections, c.name)
   const tgt = own(target.collections, c.name)
   const group = c.group ? swap(c.group, own(source.groups, c.group), own(target.groups, c.group)) : c.group
-  if (!src) return group === c.group ? c : { ...c, group }
+  const audited = c.fields.map((f) => localizeAuditField(f, messages))
+  const fieldsChanged = audited.some((f, i) => f !== c.fields[i])
+  if (!src) {
+    if (group === c.group && !fieldsChanged) return c
+    return { ...c, group, fields: fieldsChanged ? audited : c.fields }
+  }
   return {
     ...c,
     label: swap(c.label, src.label, tgt?.label),
     group,
-    fields: c.fields.map((f) => localizeField(f, src, tgt)),
+    fields: audited.map((f) => localizeField(f, src, tgt)),
     relations: c.relations.map((r) => localizeRelation(r, src, tgt)),
   }
 }
