@@ -140,19 +140,39 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
         json["meta"]!["total"]!.GetValue<int>().Should().Be(1);
     }
 
+    private async Task<string> GraphQlErrorAsync(string template, string name, string id)
+    {
+        var json = await GraphQlRawAsync(string.Format(template, name, Guid.NewGuid(), id, Tag()));
+        return json[ErrorsKey]![0]![MessageKey]!.GetValue<string>();
+    }
+
+    public static TheoryData<string> GraphQlOperations() => new()
+    {
+        "{{ fkHiddenFlagOwners(filter: {{ {0}: {{ eq: \"{1}\" }} }}) {{ items {{ id }} }} }}",
+        "mutation {{ createFkHiddenFlagOwner(input: {{ name: \"{3}\", {0}: \"{1}\" }}) {{ id }} }}",
+        "mutation {{ updateFkHiddenFlagOwner(id: \"{2}\", input: {{ {0}: \"{1}\" }}) {{ id }} }}",
+    };
+
+    [Theory]
+    [MemberData(nameof(GraphQlOperations))]
+    public async Task GraphQL_refuses_the_hidden_key_by_name_as_it_refuses_a_hidden_field_that_is_not_a_key(string template)
+    {
+        var (_, ownerId, _) = await SeedAsync(Flagged);
+
+        var reference = await GraphQlErrorAsync(template, SecretName, ownerId);
+        var key = await GraphQlErrorAsync(template, KeyName, ownerId);
+
+        key.Should().Contain(KeyName);
+        key.Should().Be(reference.Replace(SecretName, KeyName));
+    }
+
     [Fact]
-    public async Task The_graphql_inputs_and_filter_do_not_offer_the_hidden_key_and_the_relation_filter_works()
+    public async Task The_graphql_relation_filter_works_while_the_hidden_key_is_not_offered()
     {
         var (_, ownerId, tag) = await SeedAsync(Flagged);
 
-        var named = await GraphQlRawAsync($$"""{ fkHiddenFlagOwners(filter: { ownerId: { eq: "{{Guid.NewGuid()}}" } }) { items { id } } }""");
-        var create = await GraphQlRawAsync($$"""mutation { createFkHiddenFlagOwner(input: { name: "{{Tag()}}", ownerId: "{{Guid.NewGuid()}}" }) { id } }""");
-        var update = await GraphQlRawAsync($$"""mutation { updateFkHiddenFlagOwner(id: "{{ownerId}}", input: { ownerId: "{{Guid.NewGuid()}}" }) { id } }""");
         var related = await GraphQlRawAsync($$"""{ fkHiddenFlagOwners(filter: { name: { eq: "{{tag}}" }, owner: { name: { eq: "target-{{tag}}" } } }) { items { id owner { name } } } }""");
 
-        named[ErrorsKey]![0]![MessageKey]!.GetValue<string>().Should().Contain(KeyName);
-        create[ErrorsKey]![0]![MessageKey]!.GetValue<string>().Should().Contain(KeyName);
-        update[ErrorsKey]![0]![MessageKey]!.GetValue<string>().Should().Contain(KeyName);
         related[ErrorsKey].Should().BeNull();
         related["data"]!["fkHiddenFlagOwners"]!["items"]!.AsArray().Select(n => n!["id"]!.GetValue<string>()).Should().Equal(ownerId);
     }
