@@ -17,7 +17,7 @@ internal sealed record PendingLink(string Key, string Target, IReadOnlyList<obje
 /// collection (many-to-many arrays are checked by <see cref="ItemWriteSideSync"/>). Only an id the write newly
 /// assigns is checked: on an update an id equal to the stored one passes, so an item that already holds a
 /// dangling or trashed reference stays saveable when the client sends the field back. A trashed row is not a
-/// valid new assignment, except for a revert. The ids of one target collection are looked up with one query.
+/// valid new assignment. A revert is not checked. The ids of one target collection are looked up with one query.
 /// </summary>
 internal sealed class LinkExistenceCheck(
     IItemRepository repository, IEntityRegistry registry, IM2MDescriptorSource m2mSource)
@@ -49,12 +49,12 @@ internal sealed class LinkExistenceCheck(
     /// </summary>
     internal async Task EnsureAsync(
         CollectionMetadata meta, JsonElement body, IReadOnlyList<PendingLink> rootLinks, StoredTranslations? translations,
-        bool includeDeleted, CancellationToken ct)
+        CancellationToken ct)
     {
         var links = rootLinks.Concat(await TranslatedLinksAsync(meta, body, translations, ct)).ToList();
         foreach (var target in links.GroupBy(link => link.Target, StringComparer.OrdinalIgnoreCase))
         {
-            var found = await ExistingIdsAsync(target.Key, target.SelectMany(l => l.Ids).Distinct().ToList(), includeDeleted, ct);
+            var found = await ExistingIdsAsync(target.Key, target.SelectMany(l => l.Ids).Distinct().ToList(), ct);
             var missing = target.FirstOrDefault(link => link.Ids.Any(id => !found.Contains(id.ToString()!)));
             if (missing is not null) throw Missing(missing);
         }
@@ -64,12 +64,9 @@ internal sealed class LinkExistenceCheck(
         ? $"One or more ids in '{link.Key}' do not exist in '{link.Target}'."
         : $"The id in '{link.Key}' does not exist in '{link.Target}'.");
 
-    private async Task<HashSet<string>> ExistingIdsAsync(
-        string target, List<object> ids, bool includeDeleted, CancellationToken ct)
+    private async Task<HashSet<string>> ExistingIdsAsync(string target, List<object> ids, CancellationToken ct)
     {
-        var rows = includeDeleted
-            ? await repository.QueryWhereInWithDeletedAsync(target, "id", ids, ct)
-            : await repository.QueryWhereInAsync(target, "id", ids, ct);
+        var rows = await repository.QueryWhereInAsync(target, "id", ids, ct);
         var d = registry.Get(target)!;
         // The database matched the sent ids by its own collation, which for a string key may ignore case.
         var comparer = d.Properties.GetValueOrDefault(d.IdProperty)?.PropertyType == typeof(string)

@@ -29,7 +29,7 @@ public sealed class LinkExistenceStringKeyTests
         public object[] Rows { get; set; } = [];
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
-            targetMethod!.Name is "QueryWhereInAsync" or "QueryWhereInWithDeletedAsync"
+            targetMethod!.Name is "QueryWhereInAsync"
                 ? Task.FromResult<IReadOnlyList<object>>(Rows)
                 : throw new NotSupportedException(targetMethod.Name);
     }
@@ -56,7 +56,7 @@ public sealed class LinkExistenceStringKeyTests
         ((Repository)(object)repository).Rows = [row];
         var check = new LinkExistenceCheck(repository, new Registry(target), new NoJunctions());
         var link = new PendingLink("codeId", "target", [sent], IsList: false);
-        return check.EnsureAsync(Meta(), JsonDocument.Parse("{}").RootElement, [link], null, false, default);
+        return check.EnsureAsync(Meta(), JsonDocument.Parse("{}").RootElement, [link], null, default);
     }
 
     [Fact]

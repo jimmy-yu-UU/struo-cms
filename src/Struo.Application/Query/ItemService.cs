@@ -202,7 +202,7 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
-            await linkExistence.EnsureAsync(meta, body, links, translations: null, includeDeleted: false, ct);
+            await linkExistence.EnsureAsync(meta, body, links, translations: null, ct);
             created = await repository.CreateAsync(collection, entity, ct);
             createdId = IdOf(d, created);
             await writeSync.SyncM2MAsync(collection, body, createdId, includeDeleted: false, ct);
@@ -380,8 +380,8 @@ public sealed class ItemService(
         await repository.InTransactionAsync(async () =>
         {
             await hooks.InTransactionBeforeWriteAsync(ct);
-            // A revert validates against rows trashed since the snapshot was captured too.
-            await linkExistence.EnsureAsync(meta, body, links, translations, operation == RevertOperation, ct);
+            // A revert replays a snapshot the system stored, so its keys are not checked against the rows that exist.
+            if (operation != RevertOperation) await linkExistence.EnsureAsync(meta, body, links, translations, ct);
             // Self-referencing tree collections: lock the row and find out whether the update changes the
             // parent key. Each mover holds its own row's lock before it waits on a chain row, so opposite
             // movers form a deadlock the database detects.

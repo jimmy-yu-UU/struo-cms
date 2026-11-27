@@ -93,6 +93,15 @@ internal sealed partial class RelationWriteHarness
 
     public Task<int> FolderCountAsync() => WithDbAsync(db => db.Queryable<MediaFolder>().CountAsync());
 
+    /// <summary>Removes the rows from the database, as a purge does.</summary>
+    public Task PurgeAsync(Guid? category = null, Guid? file = null, Guid? tag = null) => WithDbAsync(async db =>
+    {
+        if (category is { } c) await db.Deleteable<FxCategory>().Where(x => x.Id == c).ExecuteCommandAsync();
+        if (file is { } f) await db.Deleteable<Struo.Infrastructure.Files.File>().Where(x => x.Id == f).ExecuteCommandAsync();
+        if (tag is { } t) await db.Deleteable<FxTag>().Where(x => x.Id == t).ExecuteCommandAsync();
+        return 0;
+    });
+
     /// <summary>Moves a row of a soft-deletable collection to the trash.</summary>
     public static async Task TrashAsync(HttpClient admin, string collection, Guid id) =>
         (await admin.DeleteAsync($"/api/items/{collection}/{id}")).EnsureSuccessStatusCode();
