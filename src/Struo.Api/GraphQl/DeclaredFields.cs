@@ -72,6 +72,6 @@ internal sealed class DeclaredFields
         }
     }
 
-    private static string Join(IReadOnlyList<string> origins) =>
+    private static string Join(List<string> origins) =>
         origins.Count == 2 ? $"{origins[0]} and {origins[1]}" : $"{string.Join(", ", origins.Take(origins.Count - 1))} and {origins[^1]}";
 }
