@@ -46,9 +46,11 @@ to look in, and the property that differs only in case when there is one.
 A many-to-one foreign key may also carry `[CmsField]`. GraphQL lists such a key once in the create,
 update and filter inputs, with the type the field gives it (`Int` and `IntFilter` for an `int?`
 key with the `Number` interface) in place of `ID` and `IdFilter`. A key whose field is
-`Hidden = true` is not listed at all (see [Chapter 6](06-field-types.md)). A `File` or `Image`
-field cannot be a relation key: the field already resolves to the file, and startup fails with a
-message that names the relation and the key.
+`Hidden = true` is not listed at all (see [Chapter 6](06-field-types.md)). A one-to-many relation
+whose child key is hidden that way needs a many-to-one relation back to the parent on that key,
+which the admin list of the relation filters through; without one, startup fails. A `File` or
+`Image` field cannot be a relation key: the field already resolves to the file, and startup fails
+with a message that names the relation and the key.
 
 A key must have the type of the primary key it points at, each without `?`: `long?` matches `long`,
 and `int` against `long` does not. Four keys are compared:
@@ -227,7 +229,8 @@ fails; the requirement is writability, not a particular interface — `UserRole`
 (e.g. Interface = FieldInterface.Uuid); otherwise items created through the API store empty keys.`
 A key that is `ReadOnly`, an audit field or a soft-delete column is not writable, also when a
 many-to-one relation of the junction names it: a request body never sets it, and the message says
-which key it is.
+which key it is. A key whose field is `Hidden = true` is refused as well: the GraphQL inputs would
+not list it.
 
 A junction collection can carry `Hidden` too, and it behaves exactly like a collection-level
 `Hidden` ([Chapter 5: Defining Collections](05-collections.md)): it only removes the junction
@@ -461,8 +464,9 @@ the admin SPA wires each one to its own input component:
 - `Dropdown`: a single-value dropdown, running a debounced search against the target collection.
 - `TreeSelect`: a single-value tree picker, with the tree built from a self-referencing many-to-one
   relation.
-- `RelatedList`: a read-only, paginated, lazily loaded list of the target collection, filtered by
-  the reverse foreign key; each row navigates to that row's own edit page, and the list appears only
+- `RelatedList`: a read-only, paginated, lazily loaded list of the target collection, filtered
+  through the target's many-to-one relation back to this collection when it declares one and by the
+  reverse foreign key otherwise; each row navigates to that row's own edit page, and the list appears only
   once the parent row has been saved.
 - `TagSelect`: splits into two looks depending on whether the junction carries a visible payload or
   a `SortField` — see below.

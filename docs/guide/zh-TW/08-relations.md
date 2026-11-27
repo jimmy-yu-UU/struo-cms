@@ -35,8 +35,10 @@ navigation 屬性、或用 `new` 遮住它，而沒有重複標 `[CmsRelation]`�
 
 多對一的外鍵也可以同時帶 `[CmsField]`。這時 GraphQL 的建立、更新與篩選輸入只列這個鍵一次，型別照
 欄位的宣告（`Number` 介面的 `int?` 鍵是 `Int` 與 `IntFilter`），而不是 `ID` 與 `IdFilter`。欄位標了
-`Hidden = true` 的鍵完全不列（見[第 6 章](06-field-types.md)）。`File` 或 `Image` 欄位不能當關聯
-的鍵：這種欄位本身就會解析成檔案，啟動時失敗，訊息點名那個關聯與鍵。
+`Hidden = true` 的鍵完全不列（見[第 6 章](06-field-types.md)）。一對多關聯的子項外鍵若這樣隱藏，
+子集合就要在這個鍵上宣告指回父集合的多對一關聯，後台的關聯清單透過它篩選；沒有的話啟動失敗。
+`File` 或 `Image` 欄位不能當關聯的鍵：這種欄位本身就會解析成檔案，啟動時失敗，訊息點名那個關聯
+與鍵。
 
 鍵的型別要等於它所指向的主鍵的型別，兩邊各自去掉 `?` 再比：`long?` 對得上 `long`，`int` 對 `long`
 就對不上。要比的鍵有四個：
@@ -192,7 +194,8 @@ junction collection 的兩個外鍵都必須宣告成可寫入的 `[CmsField]`�
 writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created through the API
 store empty keys.`
 `ReadOnly`、稽核欄位或軟刪除欄位的鍵不算可寫入，即使 junction 上有多對一關聯以它為外鍵也一樣：
-請求的 body 永遠設定不了它，訊息會指出是哪一個鍵。
+請求的 body 永遠設定不了它，訊息會指出是哪一個鍵。欄位標了 `Hidden = true` 的鍵同樣被擋下：
+GraphQL 的輸入不會列它。
 
 跟集合層的 `Hidden`（見[第 5 章：定義集合](05-collections.md)）一樣，只讓它從後台側邊欄消失：它仍然
 完整出現在 `/api/schema`、RBAC 權限表與產生的 GraphQL schema 裡。框架自己的 `UserRole` 是權限表的例外：
@@ -384,7 +387,8 @@ relation '{name}' on '{collection}' in path '{path}'.`
 
 - `Dropdown`：單值下拉選單，對目標集合做去抖動的搜尋。
 - `TreeSelect`：單值的樹狀選擇器，樹是從一個自我參照的多對一關聯建出來的。
-- `RelatedList`：唯讀、分頁、延遲載入的目標集合清單，依反向外鍵篩選；每一列點進去是該列自己的
+- `RelatedList`：唯讀、分頁、延遲載入的目標集合清單；目標集合有指回這個集合的多對一關聯時透過它
+  篩選，沒有就依反向外鍵篩選；每一列點進去是該列自己的
   編輯頁，只有父列存過之後才會出現。
 - `TagSelect`：依 junction 是否帶可見 payload 或 `SortField` 分成兩種樣子，見下段。
 

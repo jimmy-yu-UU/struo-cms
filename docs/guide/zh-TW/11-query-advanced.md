@@ -248,8 +248,8 @@ to-many 的形態依目標 id 分組，用 `COUNT(DISTINCT ...)` 算：一個根
 | `min`／`max` | 上面三種再加 `Date`、`DateTime` | `null` |
 
 `sum` 保留欄位自己的數字型別家族——整數會放大成更寬的型別、`decimal` 不變、`double`／`float`
-變 `double`；`avg` 不管欄位型別，一律是 `double`。多對一外鍵只能用 `count`：它沒有
-`[CmsField]`，驗證器退回 `Uuid` 介面，不落在數字或時間任何一邊，這是刻意的，因為一個外鍵求和或
+變 `double`；`avg` 不管欄位型別，一律是 `double`。沒有 `[CmsField]` 的多對一外鍵只能用
+`count`：驗證器退回 `Uuid` 介面，不落在數字或時間任何一邊，這是刻意的，因為一個外鍵求和或
 求平均沒有意義。
 
 可翻譯的自有欄位不能彙總，每個 op 都一樣，連 `count` 也不例外。

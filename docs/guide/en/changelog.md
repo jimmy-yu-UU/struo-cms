@@ -116,6 +116,20 @@
   pipeline). A collection whose only GraphQL input was such a key does not start. Query through the
   relation (`filter[relation.field]`, `facets=relation`), or remove `Hidden = true`
   ([Chapter 6](06-field-types.md)).
+- A one-to-many relation whose child key field is `Hidden = true` stops the host at start unless
+  the child collection declares a many-to-one relation back to the parent on that key: the admin
+  list of the relation cannot filter by a hidden key. Declare the relation on the child, or remove
+  `Hidden = true` ([Chapter 8](08-relations.md)).
+- A junction collection key whose field is `Hidden = true` stops the host at start. The GraphQL
+  inputs did not list such a key, and a row created through GraphQL stored an empty key (measured
+  on SQLite). Remove `Hidden = true` from the key; the collection-level `Hidden` takes the junction
+  out of the sidebar ([Chapter 8](08-relations.md)).
+- A `File` or `Image` field that is also the key of a relation stops the host at start with a
+  `MetadataException` that names the relation and the key. A relation named like the field without
+  its `Id` suffix already stopped the host, with the GraphQL library's
+  `The following field ... is declared multiple times`; under another name, or with `Hidden = true`
+  on the field, the host started (measured on SQLite). Remove the relation, since the field already
+  resolves to the file, or give the key a non-file interface ([Chapter 8](08-relations.md)).
 :::
 
 ### Added
@@ -149,10 +163,12 @@
   ([Chapter 19](19-admin-customization.md#ui-language)).
 - The item form shows a relation or file field whose target the signed-in user cannot read as a
   disabled input with a note, and leaves it out of what it saves.
-- A `File` or `Image` field that is also the key of a relation stops the host at start with a
-  `MetadataException` that names the relation and the key, and says to remove the relation or to
-  give the key another interface. The host stopped with the GraphQL library's
-  `The following field ... is declared multiple times` ([Chapter 8](08-relations.md)).
+- A field name declared twice in one GraphQL type of a collection stops the host at start with a
+  `MetadataException` that names the collection, the type, the field and both declarations. The
+  host stopped with the GraphQL library's `The following field ... is declared multiple times`
+  ([Chapter 14](14-graphql.md)).
+- The admin list of a one-to-many relation filters through the child collection's many-to-one
+  relation back to the parent when it declares one, and by the child key otherwise.
 
 ### Fixed
 

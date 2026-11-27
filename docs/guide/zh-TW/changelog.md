@@ -87,6 +87,17 @@
   HTTP 管線量到的）。唯一的 GraphQL 輸入就是這種鍵的集合，主機會啟動失敗。改成經關聯查詢
   （`filter[relation.field]`、`facets=relation`），或拿掉 `Hidden = true`
   （[第 6 章](06-field-types.md)）。
+- 一對多關聯的子項外鍵欄位標了 `Hidden = true`，而子集合沒有在這個鍵上宣告指回父集合的多對一關聯時，
+  主機在啟動時失敗：後台的關聯清單沒辦法用隱藏的鍵篩選。在子集合宣告那個關聯，或拿掉
+  `Hidden = true`（[第 8 章](08-relations.md)）。
+- junction 集合的鍵欄位標了 `Hidden = true` 時，主機在啟動時失敗。原本 GraphQL 的輸入不列這種鍵，
+  經 GraphQL 建立的列存進空的鍵（在 SQLite 上量到的）。拿掉鍵上的 `Hidden = true`；要讓 junction 不
+  出現在側邊欄，用集合層的 `Hidden`（[第 8 章](08-relations.md)）。
+- `File` 或 `Image` 欄位同時又是關聯的鍵時，主機在啟動時失敗，丟出 `MetadataException`，訊息點名
+  那個關聯與鍵。原本關聯的名稱等於欄位名去掉 `Id` 時，主機就已經因為 GraphQL 函式庫的
+  `The following field ... is declared multiple times` 而停下；關聯用別的名稱、或欄位標了
+  `Hidden = true` 時，主機起得來（在 SQLite 上量到的）。拿掉關聯（這種欄位本身就會解析成檔案），
+  或把鍵改成非檔案的介面（[第 8 章](08-relations.md)）。
 :::
 
 ### 新增
@@ -113,9 +124,10 @@
   自己集合的其他標籤，照伺服器送來的文字顯示。API 的回應不變
   （[第 19 章](19-admin-customization.md#ui-語言)）。
 - 項目表單遇到登入者讀不到目標的關聯或檔案欄位，顯示停用的輸入框與一句說明，存檔時不送出這個欄位。
-- `File` 或 `Image` 欄位同時又是關聯的鍵時，主機在啟動時失敗，丟出 `MetadataException`，訊息點名
-  那個關聯與鍵，並說明要拿掉關聯、或把鍵改成別的介面。原本主機是因為 GraphQL 函式庫的
-  `The following field ... is declared multiple times` 而停下（[第 8 章](08-relations.md)）。
+- 集合的同一個 GraphQL 型別裡，欄位名稱宣告了兩次時，主機在啟動時失敗，丟出 `MetadataException`，
+  訊息點名集合、型別、欄位名稱與兩個宣告。原本主機是因為 GraphQL 函式庫的
+  `The following field ... is declared multiple times` 而停下（[第 14 章](14-graphql.md)）。
+- 後台的一對多關聯清單，在子集合宣告了指回父集合的多對一關聯時透過它篩選，沒有就依子項的外鍵篩選。
 
 ### 修正
 

@@ -368,7 +368,8 @@ fork 若換掉 `IItemUseCases` 的實作，要自己執行這條規則。
 ## 哪些欄位能篩、能排，走錯會怎樣
 
 一個欄位能不能拿來篩選、排序或投影，看的是同一份白名單：集合自己非隱藏的 `[CmsField]`，加上宣告出
-來的多對一外鍵——`categoryId` 因此可以篩，即使它自己沒有 `[CmsField]`；`id` 永遠合法，即使不在欄位
+來的多對一外鍵（同名欄位標了 `Hidden = true` 的除外）——`categoryId` 因此可以篩，即使它自己沒有
+`[CmsField]`；`id` 永遠合法，即使不在欄位
 清單裡。
 
 屬性帶 `[SugarColumn(IsIgnore = true)]` 的 `[CmsField]` 沒有欄位，所以白名單把它排除在 `filter`、

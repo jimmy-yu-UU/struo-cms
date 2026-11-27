@@ -31,7 +31,10 @@ camelCase，清單欄位套一個簡單的英文複數規則——子音後的 `
 相遇就算撞名，例如 `article` 與 `articleList`（都會產生型別 `ArticleList`），或 `category` 與
 `categories`（都會產生查詢欄位 `categories`）。集合若產生出內建名稱也算撞名，例如 `revision`（型別
 `Revision`）、`query`、`mutation`、`string`、`tagItem`。產生名稱是逐字比對的（GraphQL 名稱區分大小
-寫），而集合名稱本身就必須在忽略大小寫後彼此不同。改掉其中一個集合的名稱即可；`Name` 的規則見[第 5 章：定義集合](05-collections.md)。
+寫），而集合名稱本身就必須在忽略大小寫後彼此不同。改掉其中一個集合的名稱即可。同一個集合裡，同一個
+型別的欄位名稱宣告了兩次，啟動也會中止，訊息點名集合、型別、欄位名稱與兩個宣告——例如有翻譯 sidecar
+的集合上名為 `Translations` 的屬性、掛在 `Id` 上的 `[CmsField]`，或名稱等於某個 `Image` 欄位去掉
+`Id` 的關聯。`Name` 的規則見[第 5 章：定義集合](05-collections.md)。
 
 物件型別固定帶 `id: ID!` 與 `version: Long`；每個非隱藏、沒被排除的自有欄位各一個欄位，每個關聯也
 各一個，有翻譯 sidecar 的集合再多一個 `translations: [Translation!]`。`version` 在每個型別上都宣
@@ -166,7 +169,8 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 
 多對一關聯在篩選輸入裡貢獻兩個欄位：自己的外鍵當 `IdFilter`（產生出來的純量篩選輸入型別之一，id 型
 欄位專用），加上目標型別的巢狀篩選輸入；一對多或
-多對多關聯則只貢獻巢狀篩選輸入這一個。跨關聯的巢狀篩選攤平成 REST 用的同一條帶點號路徑，兩邊收斂到
+多對多關聯則只貢獻巢狀篩選輸入這一個。同時帶 `[CmsField]` 的鍵用欄位自己的篩選型別，欄位標了
+`Hidden = true` 的鍵不列（[第 8 章](08-relations.md)）。跨關聯的巢狀篩選攤平成 REST 用的同一條帶點號路徑，兩邊收斂到
 同一棵過濾樹。GraphQL 沒有自己的排序文法，`sort: [String!]` 收的是 REST `sort=` 同一套 `-field` 字
 串。
 

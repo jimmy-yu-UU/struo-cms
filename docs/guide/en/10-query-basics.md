@@ -446,8 +446,9 @@ same refusal. A fork that replaces `IItemUseCases` has to enforce the rule itsel
 ## Which fields can be filtered and sorted, and what happens when it goes wrong
 
 Whether a field can be filtered, sorted, or projected comes down to one shared allowlist: the
-collection's own non-hidden `[CmsField]`s, plus any declared many-to-one foreign key —
-`categoryId` can therefore be filtered even though it carries no `[CmsField]` of its own. `id` is
+collection's own non-hidden `[CmsField]`s, plus any declared many-to-one foreign key that no
+`Hidden = true` field names — `categoryId` can therefore be filtered even though it carries no
+`[CmsField]` of its own. `id` is
 always valid, even though it isn't in the field list.
 
 A `[CmsField]` on a property with `[SugarColumn(IsIgnore = true)]` has no column, so the allowlist
