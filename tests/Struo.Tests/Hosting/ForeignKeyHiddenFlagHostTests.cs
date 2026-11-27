@@ -23,6 +23,12 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
 {
     private const string Flagged = "fkHiddenFlagOwner";
     private const string Interfaced = "fkHiddenFaceOwner";
+    private const string KeyName = "ownerId";
+    private const string MessageKey = "message";
+    private const string ErrorsKey = "errors";
+    private const string KeyProperty = "OwnerId";
+    private const string SecretName = "secret";
+    private const string TargetType = "FkHiddenTarget";
 
     [SugarTable("fkHiddenFlagOwner")]
     public sealed class FlaggedRow { [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; } public Guid? OwnerId { get; set; } }
@@ -38,17 +44,17 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
         {
             (Host, Client) = await EmittedGraphQlHost.StartAsync(
                 [
-                    new EmittedEntity("FkHiddenTarget", [Name]),
+                    new EmittedEntity(TargetType, [Name]),
                     new EmittedEntity("FkHiddenFlagOwner",
                         [
                             Name,
                             new EmittedProperty("Secret", typeof(string), FieldInterface.Text, Hidden: true, Nullable: true),
-                            new EmittedProperty("OwnerId", typeof(Guid?), FieldInterface.Uuid, Hidden: true, Nullable: true),
+                            new EmittedProperty(KeyProperty, typeof(Guid?), FieldInterface.Uuid, Hidden: true, Nullable: true),
                         ],
-                        Relations: [new EmittedRelation("Owner", "FkHiddenTarget", "OwnerId")]),
+                        Relations: [new EmittedRelation("Owner", TargetType, KeyProperty)]),
                     new EmittedEntity("FkHiddenFaceOwner",
-                        [Name, new EmittedProperty("OwnerId", typeof(Guid?), FieldInterface.Hidden, Nullable: true)],
-                        Relations: [new EmittedRelation("Owner", "FkHiddenTarget", "OwnerId")]),
+                        [Name, new EmittedProperty(KeyProperty, typeof(Guid?), FieldInterface.Hidden, Nullable: true)],
+                        Relations: [new EmittedRelation("Owner", TargetType, KeyProperty)]),
                 ],
                 "fkhiddenflag");
         }
@@ -65,7 +71,7 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
         var response = await Client.GetAsync(url);
         var text = await response.Content.ReadAsStringAsync();
         output.WriteLine($"GET {url} -> {(int)response.StatusCode}: {text}");
-        return (response.StatusCode, JsonNode.Parse(text)?["error"]?["message"]?.GetValue<string>() ?? "");
+        return (response.StatusCode, JsonNode.Parse(text)?["error"]?[MessageKey]?.GetValue<string>() ?? "");
     }
 
     private async Task<JsonNode> GetOkAsync(string url)
@@ -90,7 +96,7 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
     {
         var tag = Tag();
         var target = await EmittedGraphQlHost.CreateAsync(Client, "fkHiddenTarget", new JsonObject { ["name"] = "target-" + tag });
-        var owner = await EmittedGraphQlHost.CreateAsync(Client, collection, new JsonObject { ["name"] = tag, ["ownerId"] = target });
+        var owner = await EmittedGraphQlHost.CreateAsync(Client, collection, new JsonObject { ["name"] = tag, [KeyName] = target });
         return (target, owner, tag);
     }
 
@@ -115,13 +121,13 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
     [MemberData(nameof(KeyQueries))]
     public async Task REST_refuses_the_hidden_key_by_name_as_it_refuses_a_hidden_field_that_is_not_a_key(string template)
     {
-        var reference = await GetAsync($"/api/items/{Flagged}?" + string.Format(template, "secret"));
-        var key = await GetAsync($"/api/items/{Flagged}?" + string.Format(template, "ownerId"));
+        var reference = await GetAsync($"/api/items/{Flagged}?" + string.Format(template, SecretName));
+        var key = await GetAsync($"/api/items/{Flagged}?" + string.Format(template, KeyName));
 
         reference.Status.Should().Be(HttpStatusCode.BadRequest);
         key.Status.Should().Be(HttpStatusCode.BadRequest);
         key.Message.Should().Be($"Unknown field 'ownerId' on collection '{Flagged}'.");
-        key.Message.Should().Be(reference.Message.Replace("secret", "ownerId"));
+        key.Message.Should().Be(reference.Message.Replace(SecretName, KeyName));
     }
 
     [Fact]
@@ -144,10 +150,10 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
         var update = await GraphQlRawAsync($$"""mutation { updateFkHiddenFlagOwner(id: "{{ownerId}}", input: { ownerId: "{{Guid.NewGuid()}}" }) { id } }""");
         var related = await GraphQlRawAsync($$"""{ fkHiddenFlagOwners(filter: { name: { eq: "{{tag}}" }, owner: { name: { eq: "target-{{tag}}" } } }) { items { id owner { name } } } }""");
 
-        named["errors"]![0]!["message"]!.GetValue<string>().Should().Contain("ownerId");
-        create["errors"]![0]!["message"]!.GetValue<string>().Should().Contain("ownerId");
-        update["errors"]![0]!["message"]!.GetValue<string>().Should().Contain("ownerId");
-        related["errors"].Should().BeNull();
+        named[ErrorsKey]![0]![MessageKey]!.GetValue<string>().Should().Contain(KeyName);
+        create[ErrorsKey]![0]![MessageKey]!.GetValue<string>().Should().Contain(KeyName);
+        update[ErrorsKey]![0]![MessageKey]!.GetValue<string>().Should().Contain(KeyName);
+        related[ErrorsKey].Should().BeNull();
         related["data"]!["fkHiddenFlagOwners"]!["items"]!.AsArray().Select(n => n!["id"]!.GetValue<string>()).Should().Equal(ownerId);
     }
 
@@ -158,12 +164,12 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
         var other = await EmittedGraphQlHost.CreateAsync(Client, "fkHiddenTarget", new JsonObject { ["name"] = Tag() });
         (await StoredKeyAsync(id)).Should().Be(Guid.Parse(target));
 
-        var put = new StringContent(new JsonObject { ["ownerId"] = other }.ToJsonString(), Encoding.UTF8, "application/json");
+        var put = new StringContent(new JsonObject { [KeyName] = other }.ToJsonString(), Encoding.UTF8, "application/json");
         (await Client.PutAsync($"/api/items/{Flagged}/{id}", put)).StatusCode.Should().Be(HttpStatusCode.OK);
 
         (await StoredKeyAsync(id)).Should().Be(Guid.Parse(other));
         var item = (await GetOkAsync($"/api/items/{Flagged}/{id}"))["data"]!.AsObject();
-        item.ContainsKey("ownerId").Should().BeFalse();
+        item.ContainsKey(KeyName).Should().BeFalse();
     }
 
     [Fact]
@@ -184,6 +190,6 @@ public sealed class ForeignKeyHiddenFlagHostTests(ForeignKeyHiddenFlagHostTests.
     {
         var schema = (await GetOkAsync($"/api/schema/{Flagged}"))["data"]!;
 
-        schema["fields"]!.AsArray().Select(f => f!["name"]!.GetValue<string>()).Should().NotContain(["ownerId", "secret"]);
+        schema["fields"]!.AsArray().Select(f => f!["name"]!.GetValue<string>()).Should().NotContain([KeyName, SecretName]);
     }
 }

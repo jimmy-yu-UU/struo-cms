@@ -28,7 +28,7 @@ internal static class FileFieldRelationKeyCheck
             $"Relation '{RelationDeclarationCheck.RelationName(relation)}' uses '{holder}.{key.Name}' as its key, " +
             $"but '{key.Name}' is a [CmsField(Interface = {field.Interface})] property: a File or Image field already " +
             "resolves to the file (REST returns the id, GraphQL the File object, and the write checks of the file " +
-            $"field apply), so the relation is a second declaration of the same link. Remove [CmsRelation] and " +
+            "field apply), so the relation is a second declaration of the same link. Remove [CmsRelation] and " +
             $"[Navigate] from '{relation.Name}', or give '{key.Name}' a non-file interface such as Uuid if the target " +
             "is not the file collection.");
     }
