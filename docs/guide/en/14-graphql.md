@@ -279,8 +279,8 @@ REST write. Queries stay open to anonymous callers within their read grants.
 
 The `locale` argument only appears on the single-item query, the list query, `create`, and `update`
 — `delete`/`restore`/`revert` all have none. A create input carries writable own fields, many-to-one
-foreign keys that are not read-only or audit fields, many-to-many id arrays, and a typed
-translation list; an update input is the same, plus a `version: Long`. A `null` or omitted
+foreign keys that are not read-only fields, audit fields or soft-delete columns, many-to-many id
+arrays, and a typed translation list; an update input is the same, plus a `version: Long`. A `null` or omitted
 `version` skips the comparison. GraphQL's `Long` type
 rejects a value that is not a 64-bit integer before the resolver runs, and nothing is written.
 Written as a literal in the `version` input field or the `revert<X>` argument (`1.5`, `"abc"`,

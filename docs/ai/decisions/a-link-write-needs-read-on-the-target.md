@@ -18,7 +18,8 @@ What is let through:
 - On update, a file field (root or inside a locale), a junction key and a many-to-one foreign key
   that is also a declared field, sent with the value the row already stores: an item read returns
   those values, and a client sends them back. Every spelling of the key in the body must hold the
-  stored value, compared exactly. Not a `Hidden` field, and not on create.
+  stored value: a string exactly, a GUID in the form the binder parses, a number as written. Not a
+  `Hidden` field, and not on create.
 - A revert leaves out the keys the guard would refuse the caller and applies the rest. It does not
   run the existence check for foreign keys, junction keys and file ids: it replays a snapshot the
   system stored.
@@ -108,6 +109,8 @@ refused with `400`.
 - The answer of `origin/main` for a revert that names a purged many-to-many target was read from the
   code, not run.
 - `permission.roleId` is a text field, not a relation, and is not covered by either check.
+- An update needs the write grant only, and its response carries the item, so a caller with write
+  and no read on the collection gets the stored keys from any write.
 - The existence check matches the rows the database returned ignoring case for a string key. A
   write that names two ids of one string-keyed target differing only in case, of which one exists,
   passes for both on a database that compares strings exactly.

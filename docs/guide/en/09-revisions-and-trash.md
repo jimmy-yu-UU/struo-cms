@@ -219,7 +219,8 @@ implement it too, and neither member carries a `[SugarColumn]` of its own — bo
 framework's inference for nullable types.
 
 Neither member carries a `[CmsField]`, so soft-delete state is not part of field metadata at all —
-it never appears in the item projection, and it cannot be written through the generic item API.
+it never appears in the item projection, and it cannot be written through the generic item API. A
+`[CmsField]` on either member of a soft-deletable class is refused at startup.
 
 Underneath sits one globally registered query filter, condition "deleted-at is null", applied
 once for every database connection scope. It covers every query over a soft-deletable entity with

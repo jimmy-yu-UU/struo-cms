@@ -77,6 +77,13 @@
   input left the sub-field out (measured on SQLite below the HTTP layer). Remove `ReadOnly = true`,
   or make the property get-only when the type computes the value
   ([Chapter 6](06-field-types.md)).
+- A junction collection whose key is `ReadOnly`, an audit field or a soft-delete column stops the
+  host at start. Such a key passed the startup check when a many-to-one relation of the junction
+  named it, although a request body never sets it. Declare both keys as writable `[CmsField]`s
+  ([Chapter 8](08-relations.md)).
+- A `[CmsField]` on `DeletedAt` or `DeletedBy` of a soft-deletable class stops the host at start:
+  the delete and restore operations own those columns. Remove `[CmsField]`
+  ([Chapter 9](09-revisions-and-trash.md)).
 - A create or an update that names a link needs a read grant on the collection the link points at:
   a many-to-many relation (an empty `[]` included), a many-to-one foreign key (`null` included),
   either key of a junction row, a `File`, `Image` or `Files` field (inside `translations` too), and

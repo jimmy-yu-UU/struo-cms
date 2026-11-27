@@ -190,6 +190,8 @@ junction collection 的兩個外鍵都必須宣告成可寫入的 `[CmsField]`�
 '{junction}' (used by '{owner}.{relation}') must declare its foreign keys '{fkA}' and '{fkB}' as
 writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created through the API
 store empty keys.`
+`ReadOnly`、稽核欄位或軟刪除欄位的鍵不算可寫入，即使 junction 上有多對一關聯以它為外鍵也一樣：
+請求的 body 永遠設定不了它，訊息會指出是哪一個鍵。
 
 跟集合層的 `Hidden`（見[第 5 章：定義集合](05-collections.md)）一樣，只讓它從後台側邊欄消失：它仍然
 完整出現在 `/api/schema`、RBAC 權限表與產生的 GraphQL schema 裡。框架自己的 `UserRole` 是權限表的例外：

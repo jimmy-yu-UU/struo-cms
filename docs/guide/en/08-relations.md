@@ -223,6 +223,9 @@ fails; the requirement is writability, not a particular interface — `UserRole`
 `Text`, the sample's `ArticleTag` as `Uuid`: `Junction collection '{junction}' (used by
 '{owner}.{relation}') must declare its foreign keys '{fkA}' and '{fkB}' as writable [CmsField]s
 (e.g. Interface = FieldInterface.Uuid); otherwise items created through the API store empty keys.`
+A key that is `ReadOnly`, an audit field or a soft-delete column is not writable, also when a
+many-to-one relation of the junction names it: a request body never sets it, and the message says
+which key it is.
 
 A junction collection can carry `Hidden` too, and it behaves exactly like a collection-level
 `Hidden` ([Chapter 5: Defining Collections](05-collections.md)): it only removes the junction

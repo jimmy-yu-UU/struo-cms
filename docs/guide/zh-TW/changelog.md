@@ -58,6 +58,11 @@
   `init`、有對應的建構式參數，或帶 `[JsonInclude]`），主機在啟動時失敗。原本 REST 的建立與更新照樣
   把送來的值存進去，GraphQL 的項目輸入卻不列這個子欄位（在 SQLite 上、HTTP 層之下量到的）。拿掉
   `ReadOnly = true`；值由型別自己算出時，把屬性改成只有 getter（[第 6 章](06-field-types.md)）。
+- junction 集合的鍵是 `ReadOnly`、稽核欄位或軟刪除欄位時，主機在啟動時失敗。原本只要 junction 上有
+  多對一關聯以這個鍵為外鍵，就能通過啟動檢查，但請求的 body 永遠設定不了它。把兩個鍵都宣告成可寫入的
+  `[CmsField]`（[第 8 章](08-relations.md)）。
+- 在可軟刪除類別的 `DeletedAt` 或 `DeletedBy` 上掛 `[CmsField]`，主機在啟動時失敗：這兩個欄位由刪除
+  與復原的操作掌管。拿掉 `[CmsField]`（[第 9 章](09-revisions-and-trash.md)）。
 - 建立或更新時指名一個連結，需要連結所指集合的讀取授權：多對多關聯（包含空的 `[]`）、多對一的外鍵
   （包含 `null`）、junction 列的任一個鍵、`File`／`Image`／`Files` 欄位（`translations` 裡的
   也算），以及上傳時的 `folderId`。沒有授權的寫入回 `403` 與 `Read not permitted on '{target}'.`，
