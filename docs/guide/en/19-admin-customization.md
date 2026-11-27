@@ -283,7 +283,8 @@ translate), the label is shown as the server sends it, with no fallback to the d
 catalog. Two things apply to every collection, a fork's own included: a group name is matched by
 its text, so a fork collection placed in the `System` group shows the translated group name too;
 and the labels of the four audit fields (`createdAt`, `createdBy`, `updatedAt`, `updatedBy`) live
-in `core.audit`, which translates those four system fields in any collection. `frontend/tests/coreLabels.test.ts` compares the catalogs with
+in `core.audit`, which translates those four system fields in any collection.
+`frontend/tests/coreLabels.test.ts` compares the catalogs with
 `schema/core-collections.json` key by key: the `en` value must equal the snapshot's English and
 `zh-TW` must hold a translation that is not empty; a field added to core without a catalog entry
 fails the test.
