@@ -296,6 +296,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         stored.Items.Should().Equal("a");
         stored.Aliased.Should().Be("x");
         stored.Payload.Should().Be("""{"a":1}""");
+        stored.OwnerId.Should().Be(InitialGuid);
     }
 
     [Fact]
