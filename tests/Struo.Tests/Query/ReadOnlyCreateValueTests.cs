@@ -31,7 +31,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     private const string ItemCollection = "roCreateItem";
     private const string RepeaterCollection = "roCreateRepeater";
     private const string PlainBody = """{"name":"n"}""";
-    private const string RepeaterBody = """{"rows":[{"title":"t","locked":"c"}]}""";
+    private const string RepeaterBody = """{"rows":[{"title":"t","locked":"c","qty":3,"total":99}]}""";
 
     private static readonly Guid InitialGuid = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid InterceptorGuid = Guid.Parse("33333333-3333-3333-3333-333333333333");
@@ -144,7 +144,12 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         [CmsField(Label = "Title", Interface = FieldInterface.Text)] public string Title { get; set; } = "";
 
         [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)]
-        public string Locked { get; set; } = "x";
+        public string Locked { get; private set; } = "x";
+
+        [CmsField(Label = "Qty", Interface = FieldInterface.Number)] public int Qty { get; set; }
+
+        [CmsField(Label = "Total", Interface = FieldInterface.Number, ReadOnly = true)]
+        public int Total => Qty * 2;
     }
 
     [SugarTable("ro_create_repeater")]
@@ -463,25 +468,29 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     }
 
     [Fact]
-    public async Task A_create_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater()
+    public async Task A_create_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set()
     {
         var created = await _service(null).CreateAsync(RepeaterCollection, Body(RepeaterBody));
 
         var rows = await StoredRowsAsync(created["id"]!);
 
-        rows.Should().ContainSingle().Which.Locked.Should().Be("c");
+        var row = rows.Should().ContainSingle().Which;
+        row.Locked.Should().Be("x");
+        row.Total.Should().Be(6);
     }
 
     [Fact]
-    public async Task An_update_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater()
+    public async Task An_update_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set()
     {
         var svc = _service(null);
         var created = await svc.CreateAsync(RepeaterCollection, Body(RepeaterBody));
 
-        await svc.UpdateAsync(RepeaterCollection, created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u"}]}"""));
+        await svc.UpdateAsync(
+            RepeaterCollection, created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u","qty":4,"total":99}]}"""));
 
-        var rows = await StoredRowsAsync(created["id"]!);
-        rows.Should().ContainSingle().Which.Locked.Should().Be("u");
+        var row = (await StoredRowsAsync(created["id"]!)).Should().ContainSingle().Which;
+        row.Locked.Should().Be("x");
+        row.Total.Should().Be(8);
     }
 
     [Fact]

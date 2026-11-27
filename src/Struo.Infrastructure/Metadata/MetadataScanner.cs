@@ -796,6 +796,7 @@ public static class MetadataScanner
         FieldDeclarationCheck.RequirePublicInstanceFields(childType);
         FieldInheritanceCheck.Require(childType);
         FieldSetterCheck.RequireRowSetters(childType);
+        FieldSetterCheck.RequireReadOnlyRowFieldsUnbound(childType, Camel(prop.Name));
         var subProps = childType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null)
             .ToList();

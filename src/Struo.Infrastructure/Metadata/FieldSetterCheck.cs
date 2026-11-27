@@ -10,7 +10,8 @@ namespace Struo.Infrastructure.Metadata;
 /// field through a public setter, or a non-public one that carries <c>[JsonInclude]</c>; a repeater
 /// sub-field through a public setter, or through a parameter of the same name and type on the one public
 /// constructor of its row type; a translation field is assigned through any setter its type can reach. A
-/// <c>ReadOnly</c> collection field or sub-field is not written, so it needs none.
+/// <c>ReadOnly</c> collection field or sub-field is not written, so it needs none; a <c>ReadOnly</c>
+/// sub-field that a body can still set is refused, because the stored row takes the value sent.
 /// Why: docs/ai/decisions/cmsfield-is-a-public-instance-property.md
 /// </summary>
 internal static class FieldSetterCheck
@@ -34,6 +35,26 @@ internal static class FieldSetterCheck
     {
         var constructor = BindingConstructor(type);
         Require(type, prop => HasPublicSetter(prop) || BoundByConstructor(constructor, prop), RowRefusal);
+    }
+
+    /// <summary>
+    /// A <c>ReadOnly</c> sub-field of a repeater row type (<paramref name="type"/>) is one no body can set:
+    /// a write stores the value a body sends to a sub-field with a public setter, a constructor parameter
+    /// or a <c>[JsonInclude]</c> setter, whatever <c>ReadOnly</c> says.
+    /// </summary>
+    public static void RequireReadOnlyRowFieldsUnbound(Type type, string repeaterName)
+    {
+        var constructor = BindingConstructor(type);
+        var settable = FieldsOf(type).FirstOrDefault(p =>
+            p.GetCustomAttribute<CmsFieldAttribute>() is { ReadOnly: true }
+            && (HasPublicSetter(p) || BoundByConstructor(constructor, p) || IsJsonIncluded(p)));
+        if (settable is null) return;
+
+        throw new MetadataException(
+            $"Repeater field '{repeaterName}' sub-field '{NameOf(settable)}' declares ReadOnly = true, but a " +
+            "request body can still set it: the value sent in a body is stored all the same. Remove ReadOnly = " +
+            "true, or, when the type computes the value, declare the property get-only, without a matching " +
+            "constructor parameter or [JsonInclude].");
     }
 
     /// <summary>

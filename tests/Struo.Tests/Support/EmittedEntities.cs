@@ -10,11 +10,12 @@ namespace Struo.Tests.Support;
 /// <summary>
 /// One <c>[CmsField]</c> property of an emitted type. <paramref name="Child"/> gives it the child type
 /// instead of <paramref name="Type"/>: a <c>List</c> of it, or the child itself when
-/// <paramref name="ChildIsList"/> is false.
+/// <paramref name="ChildIsList"/> is false. <paramref name="GetOnly"/> emits no setter.
 /// </summary>
 public sealed record EmittedProperty(
     string Name, Type? Type, FieldInterface Interface, bool WithOptions = false, EmittedChild? Child = null,
-    bool ChildIsList = true, bool Hidden = false, bool ReadOnly = false, bool Translatable = false);
+    bool ChildIsList = true, bool Hidden = false, bool ReadOnly = false, bool Translatable = false,
+    bool GetOnly = false);
 
 /// <summary>A class used as a Repeater child or as a structured value; a plain one declares no <c>[CmsField]</c>.</summary>
 public sealed record EmittedChild(string Name, IReadOnlyList<EmittedProperty> Properties, bool Plain = false);
@@ -119,15 +120,17 @@ public static class EmittedEntities
         il.Emit(OpCodes.Ldfld, field);
         il.Emit(OpCodes.Ret);
 
-        var setter = owner.DefineMethod("set_" + spec.Name, Accessor, null, [type]);
-        il = setter.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, field);
-        il.Emit(OpCodes.Ret);
-
         property.SetGetMethod(getter);
-        property.SetSetMethod(setter);
+        if (!spec.GetOnly)
+        {
+            var setter = owner.DefineMethod("set_" + spec.Name, Accessor, null, [type]);
+            il = setter.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, field);
+            il.Emit(OpCodes.Ret);
+            property.SetSetMethod(setter);
+        }
 
         if (isKey)
         {
