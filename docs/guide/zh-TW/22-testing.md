@@ -158,11 +158,13 @@ migration，`tests/Struo.Tests` 透過 `ContentAssemblyEnvBootstrap` 把它釘�
 中到另一個目錄；跨檔案的守衛測試多半放在 `frontend/tests/`，語系包那一個則跟著
 `frontend/src/locales/` 走。
 
-三個守衛測試各釘住一件事：
+四個守衛測試各釘住一件事：
 
 - `frontend/tests/iconCoverage.test.ts`：掃過 `frontend/src/`，確認原始碼裡出現的每一個 `pi-` 圖示
   token 在 `ICON_MAP` 裡都有對應的鍵。
 - `frontend/src/locales/locales.test.ts`：`zh-TW`、`en` 兩份介面語言目錄的鍵集合完全對稱。
+- `frontend/tests/coreLabels.test.ts`：拿 `schema/core-collections.json` 比對目錄的 `core`
+  命名空間，核心的每個集合、欄位、關聯、選項與群組，`en` 要是伺服器送的英文，`zh-TW` 要有翻譯。
 - `frontend/tests/schemaContract.test.ts`：把 `schema/` 底下兩份 JSON 檔餵進真正的欄位介面
   registry，驗證前端認得的欄位型別跟後端宣告的一致，下面〈Schema 契約〉細談。
 
