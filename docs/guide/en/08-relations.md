@@ -335,14 +335,15 @@ write grant on the collection being written:
 Without it the write is refused with `403` and `Read not permitted on '{target}'.`, before any id
 is looked at, so an id that exists, one that does not, one in the trash and one that is not an id
 all get the same answer. A key the body does not carry is not checked and the stored link stays as
-it is. A key whose field is `ReadOnly` or an audit field is not checked either: the server does not
-write it from a request (see [Chapter 6](06-field-types.md)), so naming it links nothing. A
-super-admin reads every collection.
+it is. A key the server does not write from a request is not checked either, since naming it links
+nothing: a `ReadOnly` or system field (see [Chapter 6](06-field-types.md)), and `deletedAt` and
+`deletedBy` on a soft-deletable collection. A super-admin reads every collection.
 
 On update, a `File`, `Image` or `Files` field sent with the value it already holds is let through,
-inside `translations` as well, and so is a key of a junction row: an item read returns those ids,
-and a form sends them back as they were. A `Hidden` field has no such allowance, and neither has a
-create. Removing a whole locale with `null` removes the file links it holds and needs no read grant
+inside `translations` as well, and so are a key of a junction row and a many-to-one foreign key
+that is also a declared field: an item read returns those ids, and a form sends them back as they
+were. Every spelling of the key in the body must hold the stored value. A `Hidden` field has no
+such allowance, and neither has a create. Removing a whole locale with `null` removes the file links it holds and needs no read grant
 on `file`: nothing is linked.
 
 For a caller who can read the target, the row must also exist. A many-to-many id is checked as
@@ -350,7 +351,8 @@ described above. A many-to-one foreign key, a junction key or a file id that nam
 row in the trash, is refused with `400`: `The id in '{key}' does not exist in '{target}'.`, and for
 a `Files` list `One or more ids in '{field}' do not exist in 'file'.` On create every id sent is
 checked; on update only an id the stored value does not already hold, so an item that already holds
-a dangling id can still be saved. An all-zero GUID is not checked. A revert does not check a foreign
+a dangling id can still be saved. An all-zero GUID, an empty string, and `0` in a key that cannot
+hold `null` mean "no link" and are not checked. A revert does not check a foreign
 key, a junction key or a file id either; see [Chapter 9](09-revisions-and-trash.md).
 
 The admin form shows a relation or file field whose target the signed-in user cannot read as a

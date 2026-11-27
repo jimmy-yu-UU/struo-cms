@@ -15,17 +15,21 @@ assigns is checked.
 
 What is let through:
 
-- On update, a file field (root or inside a locale) and a junction key sent with the value the row
-  already stores: an item read returns those values, and a client sends them back. Not a `Hidden`
-  field, and not on create.
+- On update, a file field (root or inside a locale), a junction key and a many-to-one foreign key
+  that is also a declared field, sent with the value the row already stores: an item read returns
+  those values, and a client sends them back. Every spelling of the key in the body must hold the
+  stored value, compared exactly. Not a `Hidden` field, and not on create.
 - A revert leaves out the keys the guard would refuse the caller and applies the rest. It does not
   run the existence check for foreign keys, junction keys and file ids: it replays a snapshot the
   system stored.
-- A key whose field is `ReadOnly` or system (an audit key such as `createdBy`) is not a link write:
-  the binder drops it, so neither check looks at it and a revert does not list it. An item read
+- A key whose field is `ReadOnly` or system (an audit key such as `createdBy`), and `deletedAt` or
+  `deletedBy` on a soft-deletable collection (`CollectionMetadata.ServerOwnedKeyNames`), is not a
+  link write: the binder drops it, so neither check looks at it and a revert does not list it. An item read
   returns an audit field, and a client that sends the item back names it
   (`RelationWriteServerOwnedKeyTests`).
-- An all-zero GUID is not checked for existence: a non-nullable key uses it for "none".
+- An all-zero GUID, an empty string, and the default value of a key type that cannot hold null are
+  not checked for existence: a key that cannot hold null uses them for "none". `0` in an `int?` key
+  is an id (`ForeignKeyNoValueHostTests`).
 - Removing a whole locale removes the file links it holds without read on `file`: nothing is linked.
 
 A revision read shows no more links than an item read shows the caller: a many-to-many array or a
@@ -43,8 +47,8 @@ The allowance for an unchanged value keeps a read-then-write client working: the
 read the caller was allowed to make, and writing it back links nothing. A `Hidden` field is not
 returned by a read, so equality with the stored value would be observable only through the write.
 
-The existence check is not run inside the write transaction and takes no lock, so a row purged
-between the check and the insert can still leave a dangling id. That is accepted: the check is for
+The existence check runs inside the write transaction and takes no lock on the row it finds, so a
+row purged between the check and the commit can still leave a dangling id. That is accepted: the check is for
 client mistakes, and the foreign-key columns carry no database constraint to race against.
 
 ## Evidence
@@ -81,6 +85,21 @@ A revert, measured on 2026-11-27 (`RevertPurgedLinkTests`, `LocaleRemovalWithout
 | no row for a locale the item has, the locale holding a file link | the locale row removed, without read on `file` |
 
 The same ids sent in an ordinary update are refused with `400`.
+
+Measured on 2026-11-27 before each rule (`RelationWriteTwoSpellingsTests`,
+`RelationWriteDeclaredKeyUnchangedTests`, `RelationWriteServerOwnedKeyTests`), for a caller with
+write on the collection and no read on the key's target:
+
+| Body of the update | Answer before the rule |
+|---|---|
+| a junction key twice, in two letter cases: the stored value, then another existing id | `200`, the row moved to the other target |
+| the same, the second spelling naming a missing id | `400` "does not exist" |
+| a declared foreign key with the value the row stores | `403` on every save |
+| a `ReadOnly` foreign key or an audit key, any value | `403` |
+| `deletedBy` on a collection with a relation on it, caller reads the target | stored |
+
+For a caller who reads the target, `""` in a `string?` key and `0` in an `int` or `long` key were
+refused with `400`.
 
 ## Unknowns
 
