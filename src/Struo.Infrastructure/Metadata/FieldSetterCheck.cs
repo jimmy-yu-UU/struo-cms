@@ -39,12 +39,13 @@ internal static class FieldSetterCheck
 
     /// <summary>
     /// A <c>ReadOnly</c> sub-field of a repeater row type (<paramref name="type"/>) is one no body can set:
-    /// a write stores the value a body sends to a sub-field with a public setter, a constructor parameter
-    /// or a <c>[JsonInclude]</c> setter, whatever <c>ReadOnly</c> says.
+    /// a write stores the value a body sends to a sub-field with a public setter, a parameter of the
+    /// constructor the body is bound through (<c>[JsonConstructor]</c>, public or not, else the one public
+    /// constructor) or a <c>[JsonInclude]</c> setter, whatever <c>ReadOnly</c> says.
     /// </summary>
     public static void RequireReadOnlyRowFieldsUnbound(Type type, string repeaterName)
     {
-        var constructor = BindingConstructor(type);
+        var constructor = RequestConstructor(type);
         var settable = FieldsOf(type).FirstOrDefault(p =>
             p.GetCustomAttribute<CmsFieldAttribute>() is { ReadOnly: true }
             && (HasPublicSetter(p) || BoundByConstructor(constructor, p) || IsJsonIncluded(p)));
@@ -130,6 +131,12 @@ internal static class FieldSetterCheck
         && !rowType.GetTypeInfo().DeclaredConstructors.Any(c => c != only && c.IsDefined(typeof(JsonConstructorAttribute)))
             ? only
             : null;
+
+    // The constructor a request body is bound through: the one that carries [JsonConstructor], public or
+    // not, otherwise the one public constructor; null when the body is bound through a parameterless one.
+    private static ConstructorInfo? RequestConstructor(Type rowType) =>
+        rowType.GetTypeInfo().DeclaredConstructors.FirstOrDefault(c => !c.IsStatic && c.IsDefined(typeof(JsonConstructorAttribute)))
+        ?? (rowType.GetConstructors() is [{ } only] ? only : null);
 
     // A property without a public setter is bound by the constructor parameter of the same name and type.
     private static bool BoundByConstructor(ConstructorInfo? constructor, PropertyInfo prop) =>
