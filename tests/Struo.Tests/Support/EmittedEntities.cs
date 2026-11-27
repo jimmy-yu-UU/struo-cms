@@ -59,7 +59,7 @@ public static class EmittedEntities
         {
             var builder = DefineClass(module, child.Name, null);
             children[child] = builder;
-            foreach (var property in child.Properties) AddProperty(builder, property, children, plain: child.Plain);
+            foreach (var property in child.Properties) AddProperty(builder, property, children, new PropertyShape(Plain: child.Plain));
             builder.CreateType();
         }
 
@@ -71,7 +71,8 @@ public static class EmittedEntities
                 Attribute(typeof(SugarTable), [lower]),
             ]);
             entityTypes[entity.Name] = builder;
-            AddProperty(builder, new EmittedProperty("Id", entity.IdType ?? typeof(Guid), FieldInterface.Text), children, isKey: true);
+            AddProperty(
+                builder, new EmittedProperty("Id", entity.IdType ?? typeof(Guid), FieldInterface.Text), children, new PropertyShape(IsKey: true));
             foreach (var property in entity.Properties) AddProperty(builder, property, children);
             foreach (var relation in entity.Relations ?? []) AddRelation(builder, relation, entityTypes[relation.Target], children);
             if (entity.Translations is { } translated) AddSidecar(module, builder, entity.Name, translated, children);
@@ -95,16 +96,18 @@ public static class EmittedEntities
         Dictionary<EmittedChild, TypeBuilder> children)
     {
         var sidecar = DefineClass(module, ownerName + "Translation", null);
-        AddProperty(sidecar, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);
-        AddProperty(sidecar, new EmittedProperty(ownerName + "Id", typeof(Guid), FieldInterface.Text), children, plain: true);
-        AddProperty(sidecar, new EmittedProperty("Locale", typeof(string), FieldInterface.Text), children, plain: true);
+        AddProperty(sidecar, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, new PropertyShape(IsKey: true));
+        AddProperty(sidecar, new EmittedProperty(ownerName + "Id", typeof(Guid), FieldInterface.Text), children, new PropertyShape(Plain: true));
+        AddProperty(sidecar, new EmittedProperty("Locale", typeof(string), FieldInterface.Text), children, new PropertyShape(Plain: true));
         foreach (var field in fields) AddProperty(sidecar, field with { Translatable = true }, children);
         sidecar.CreateType();
 
         var list = new EmittedProperty("Translations", typeof(object), FieldInterface.Text);
         AddProperty(
-            owner, list, children, plain: true, listOf: sidecar,
-            extra: [Attribute(typeof(CmsTranslationsAttribute), [sidecar]), Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true))]);
+            owner, list, children,
+            new PropertyShape(
+                Plain: true, ListOf: sidecar,
+                Extra: [Attribute(typeof(CmsTranslationsAttribute), [sidecar]), Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true))]));
     }
 
     private static void AddRelation(
@@ -117,8 +120,8 @@ public static class EmittedEntities
             typeof(CmsRelationAttribute), [], Named(nameof(CmsRelationAttribute.Interface), RelationInterface.Dropdown));
         var ignored = Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true));
         AddProperty(
-            owner, new EmittedProperty(relation.Name, typeof(object), FieldInterface.Text), children, plain: true,
-            asType: target, extra: [navigate, cmsRelation, ignored]);
+            owner, new EmittedProperty(relation.Name, typeof(object), FieldInterface.Text), children,
+            new PropertyShape(Plain: true, AsType: target, Extra: [navigate, cmsRelation, ignored]));
     }
 
     private static TypeBuilder DefineClass(ModuleBuilder module, string name, CustomAttributeBuilder[]? attributes)
@@ -129,11 +132,16 @@ public static class EmittedEntities
         return builder;
     }
 
+    // How a property differs from a plain field: the key, an undecorated property, a list of a type, extra
+    // attributes, or a type given as a builder.
+    private sealed record PropertyShape(
+        bool IsKey = false, bool Plain = false, TypeBuilder? ListOf = null, CustomAttributeBuilder[]? Extra = null,
+        TypeBuilder? AsType = null);
+
     private static void AddProperty(
-        TypeBuilder owner, EmittedProperty spec, Dictionary<EmittedChild, TypeBuilder> children,
-        bool isKey = false, bool plain = false, TypeBuilder? listOf = null, CustomAttributeBuilder[]? extra = null,
-        TypeBuilder? asType = null)
+        TypeBuilder owner, EmittedProperty spec, Dictionary<EmittedChild, TypeBuilder> children, PropertyShape? shape = null)
     {
+        var (isKey, plain, listOf, extra, asType) = shape ?? new PropertyShape();
         var type = asType is not null ? asType
             : listOf is not null ? typeof(List<>).MakeGenericType(listOf)
             : spec.Child is not { } child ? spec.Type!
