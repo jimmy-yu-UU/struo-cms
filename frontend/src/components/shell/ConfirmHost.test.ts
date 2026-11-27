@@ -97,4 +97,33 @@ describe('ConfirmHost', () => {
     await flushPromises()
     expect(w.find('ul').exists()).toBe(false)
   })
+
+  it('covers the heading and the list with the dialog description', async () => {
+    const w = mountHost()
+    useConfirmStore().ask({ message: 'Sure?', itemsHeading: 'These stay:', items: ['Category'] })
+    await flushPromises()
+    const description = w.find('[data-slot="alert-dialog-description"]')
+    expect(description.attributes('id')).toBeTruthy()
+    expect(w.find('[role="alertdialog"]').attributes('aria-describedby')).toBe(description.attributes('id'))
+    expect(description.find('ul').exists()).toBe(true)
+    expect(description.find('[data-test="confirm-items-heading"]').exists()).toBe(true)
+    expect(description.element.tagName).toBe('DIV')
+  })
+
+  it('renders the list without a heading paragraph or aria-labelledby when there is no heading', async () => {
+    const w = mountHost()
+    useConfirmStore().ask({ message: 'Sure?', items: ['Category'] })
+    await flushPromises()
+    expect(w.find('[data-test="confirm-items-heading"]').exists()).toBe(false)
+    expect(w.findAll('p').filter((p) => p.text() === '')).toHaveLength(0)
+    expect(w.find('ul').attributes('aria-labelledby')).toBeUndefined()
+    expect(w.findAll('li')).toHaveLength(1)
+  })
+
+  it('lists two items that share a label', async () => {
+    const w = mountHost()
+    useConfirmStore().ask({ message: 'Sure?', itemsHeading: 'These stay:', items: ['Image', 'Image'] })
+    await flushPromises()
+    expect(w.findAll('li').map((li) => li.text())).toEqual(['Image', 'Image'])
+  })
 })

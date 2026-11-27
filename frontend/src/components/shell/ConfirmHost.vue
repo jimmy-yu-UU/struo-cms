@@ -62,13 +62,24 @@ function onOpenChange(next: boolean): void {
     <AlertDialogContent class="z-[60]">
       <AlertDialogHeader>
         <AlertDialogTitle>{{ header }}</AlertDialogTitle>
-        <AlertDialogDescription>{{ request?.message }}</AlertDialogDescription>
-        <template v-if="request?.items?.length">
-          <p :id="itemsHeadingId" class="text-sm" data-test="confirm-items-heading">{{ request.itemsHeading }}</p>
-          <ul :aria-labelledby="itemsHeadingId" class="text-muted-foreground list-disc pl-5 text-sm">
-            <li v-for="item in request.items" :key="item">{{ item }}</li>
-          </ul>
-        </template>
+        <!-- A div, so the list is valid inside it: the dialog's aria-describedby then covers the message, the heading and the list. -->
+        <AlertDialogDescription as="div">
+          <p>{{ request?.message }}</p>
+          <template v-if="request?.items?.length">
+            <p
+              v-if="request.itemsHeading"
+              :id="itemsHeadingId"
+              class="text-foreground mt-2"
+              data-test="confirm-items-heading"
+            >{{ request.itemsHeading }}</p>
+            <ul
+              :aria-labelledby="request.itemsHeading ? itemsHeadingId : undefined"
+              class="mt-1 list-disc pl-5"
+            >
+              <li v-for="(item, index) in request.items" :key="index">{{ item }}</li>
+            </ul>
+          </template>
+        </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <button type="button" :class="rejectClass" @click="store.reject()">{{ rejectLabel }}</button>

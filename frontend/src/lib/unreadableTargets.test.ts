@@ -76,4 +76,19 @@ describe('fieldsLeftByRevert', () => {
     expect(left).toEqual(['Hero image', 'Gallery', 'Cover', 'Category', 'Tags'])
     expect(left).not.toContain('hero')
   })
+
+  it('lists a many-to-one with a foreign key and a many-to-many whatever interface shows them', () => {
+    const shown = meta([], [
+      rel({ name: 'category', label: 'Category', interface: 'relatedList' }),
+      rel({ name: 'tags', label: 'Tags', kind: 'manyToMany', interface: 'dropdown', targetCollection: 'tag', foreignKey: null }),
+    ])
+    expect(fieldsLeftByRevert(shown, () => false)).toEqual(['Category', 'Tags'])
+  })
+  it('leaves out a many-to-one without a foreign key and a one-to-many, as the server does', () => {
+    const other = meta([], [
+      rel({ name: 'parent', label: 'Parent', foreignKey: null }),
+      rel({ name: 'comments', label: 'Comments', kind: 'oneToMany', targetCollection: 'comment' }),
+    ])
+    expect(fieldsLeftByRevert(other, () => false)).toEqual([])
+  })
 })
