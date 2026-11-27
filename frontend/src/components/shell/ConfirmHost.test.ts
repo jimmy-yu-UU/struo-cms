@@ -80,4 +80,21 @@ describe('ConfirmHost', () => {
     await cancelBtn!.trigger('click')
     await expect(p).resolves.toBe(false)
   })
+
+  it('renders the items of a request as a list under their heading', async () => {
+    const w = mountHost()
+    useConfirmStore().ask({ message: 'Sure?', itemsHeading: 'These stay:', items: ['Category', 'Hero image'] })
+    await flushPromises()
+    const list = w.find('ul')
+    expect(list.findAll('li').map((li) => li.text())).toEqual(['Category', 'Hero image'])
+    expect(w.text()).toContain('These stay:')
+    expect(list.attributes('aria-labelledby')).toBe(w.find('[data-test="confirm-items-heading"]').attributes('id'))
+  })
+
+  it('renders no list for a request without items', async () => {
+    const w = mountHost()
+    useConfirmStore().ask({ message: 'Sure?', items: [] })
+    await flushPromises()
+    expect(w.find('ul').exists()).toBe(false)
+  })
 })

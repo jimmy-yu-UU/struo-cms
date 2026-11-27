@@ -1,4 +1,5 @@
-import type { FieldMeta, RelationMeta } from '../types/schema'
+import type { CollectionMeta, FieldMeta, RelationMeta } from '../types/schema'
+import { splitFields } from './splitFields'
 import { relationInputKind } from './relationInputKind'
 import { FILE_COLLECTION } from './frameworkCollections'
 
@@ -24,4 +25,14 @@ export function isRelationTargetUnreadable(rel: RelationMeta, canRead?: CanReadC
 export function isFileFieldUnreadable(field: FieldMeta, canRead?: CanReadCollection): boolean {
   if (!canRead) return false
   return FILE_INTERFACES.includes(field.interface) && !canRead(FILE_COLLECTION)
+}
+
+// The labels of the fields a revert leaves as they are for this caller: the file fields (shared and
+// translatable) and the relations whose target the caller cannot read. A read-only field never changes on
+// a write, so it is not listed.
+export function fieldsLeftByRevert(meta: CollectionMeta, canRead?: CanReadCollection): string[] {
+  const { shared, translatable } = splitFields(meta)
+  const fields = [...shared, ...translatable].filter((f) => !f.readOnly && isFileFieldUnreadable(f, canRead))
+  const relations = (meta.relations ?? []).filter((rel) => isRelationTargetUnreadable(rel, canRead))
+  return [...fields.map((f) => f.label), ...relations.map((rel) => rel.label)]
 }

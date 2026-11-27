@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
@@ -19,6 +19,7 @@ const rejectLabel = computed(() => request.value?.rejectLabel ?? t('common.cance
 const acceptClass = computed(() =>
   buttonVariants({ variant: request.value?.severity === 'danger' ? 'destructive' : 'default' }),
 )
+const itemsHeadingId = useId()
 const rejectClass = computed(() => buttonVariants({ variant: 'outline' }))
 
 // reka-ui's AlertDialog only ever calls this for Escape. Route it back through reject() so the
@@ -62,6 +63,12 @@ function onOpenChange(next: boolean): void {
       <AlertDialogHeader>
         <AlertDialogTitle>{{ header }}</AlertDialogTitle>
         <AlertDialogDescription>{{ request?.message }}</AlertDialogDescription>
+        <template v-if="request?.items?.length">
+          <p :id="itemsHeadingId" class="text-sm" data-test="confirm-items-heading">{{ request.itemsHeading }}</p>
+          <ul :aria-labelledby="itemsHeadingId" class="text-muted-foreground list-disc pl-5 text-sm">
+            <li v-for="item in request.items" :key="item">{{ item }}</li>
+          </ul>
+        </template>
       </AlertDialogHeader>
       <AlertDialogFooter>
         <button type="button" :class="rejectClass" @click="store.reject()">{{ rejectLabel }}</button>

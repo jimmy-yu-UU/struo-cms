@@ -34,6 +34,7 @@ import { deleteKindFor, deleteConfirm } from '../lib/deleteAction'
 import { snapshotModel, baselineTranslations, isDirty, unsavedConfirm } from '../lib/formDirty'
 import { hasDrafts, relationOfDraftKey, withDraft, type FieldDraft, type FieldDrafts } from '../lib/fieldDrafts'
 import { canWriteJunction, junctionAccessFrom } from '../lib/junctionLinks'
+import { fieldsLeftByRevert } from '../lib/unreadableTargets'
 import { LANGUAGE_COLLECTION, PUBLIC_ROLE_NAME, ROLE_COLLECTION, USER_COLLECTION } from '../lib/frameworkCollections'
 import type { FormModel } from '../types/itemForm'
 import type { CollectionMeta, RelationMeta } from '../types/schema'
@@ -66,6 +67,7 @@ const resolveCollection = (n: string) => schema.get(n)
 // A relation or file field whose target the caller cannot read is neither sent nor editable: the server
 // refuses a write that names it. Plain functions keep parse/build/validate store-free.
 const canReadCollection = (n: string): boolean => auth.canRead(n)
+const revertKeptFields = computed(() => (meta.value ? fieldsLeftByRevert(meta.value, canReadCollection) : []))
 const collectionLabel = (n: string): string | undefined => schema.get(n)?.label
 const junctionAccess = computed(() => junctionAccessFrom(auth))
 function canWriteJunctionFor(rel: RelationMeta): boolean {
@@ -763,6 +765,7 @@ defineExpose({ init, onSubmit, onDelete, onCancel, reloadLatest, onReverted, onR
         :item-id="idStr"
         :can-revert="canWrite"
         :version="model.version"
+        :kept-fields="revertKeptFields"
         @reverted="onReverted"
         @conflict="onRevertConflict"
       />

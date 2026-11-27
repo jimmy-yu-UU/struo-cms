@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { isFileFieldUnreadable, isRelationTargetUnreadable } from './unreadableTargets'
-import type { FieldMeta, RelationMeta } from '../types/schema'
+import { fieldsLeftByRevert, isFileFieldUnreadable, isRelationTargetUnreadable } from './unreadableTargets'
+import type { CollectionMeta, FieldMeta, RelationMeta } from '../types/schema'
 
 const field = (over: Partial<FieldMeta>): FieldMeta => ({ name: 'f', label: 'f', interface: 'image', required: false,
   searchable: false, sortable: false, readOnly: false, hidden: false, translatable: false, sort: 0, isSystem: false, ...over })
@@ -37,5 +37,43 @@ describe('isFileFieldUnreadable', () => {
     expect(isFileFieldUnreadable(field({ interface: 'text' }), deny('file'))).toBe(false)
     expect(isFileFieldUnreadable(field({}), deny('tag'))).toBe(false)
     expect(isFileFieldUnreadable(field({}))).toBe(false)
+  })
+})
+
+describe('fieldsLeftByRevert', () => {
+  const meta = (fields: FieldMeta[], relations: RelationMeta[]): CollectionMeta => ({ name: 'article', label: 'Article', fields, relations })
+  const article = meta(
+    [
+      field({ name: 'title', label: 'Title', interface: 'text' }),
+      field({ name: 'hero', label: 'Hero image' }),
+      field({ name: 'gallery', label: 'Gallery', interface: 'files' }),
+      field({ name: 'cover', label: 'Cover', translatable: true }),
+      field({ name: 'stamp', label: 'Stamp', readOnly: true }),
+      field({ name: 'sys', label: 'System image', isSystem: true }),
+    ],
+    [
+      rel({ name: 'category', label: 'Category' }),
+      rel({ name: 'tags', label: 'Tags', kind: 'manyToMany', interface: 'tagSelect', targetCollection: 'tag', foreignKey: null }),
+      rel({ name: 'comments', label: 'Comments', kind: 'oneToMany', interface: 'relatedList', targetCollection: 'comment' }),
+    ],
+  )
+
+  it('is empty for a user who reads everything, and without a check', () => {
+    expect(fieldsLeftByRevert(article, () => true)).toEqual([])
+    expect(fieldsLeftByRevert(article)).toEqual([])
+  })
+  it('lists the labels of a many-to-one relation whose target cannot be read', () => {
+    expect(fieldsLeftByRevert(article, deny('category'))).toEqual(['Category'])
+  })
+  it('lists the labels of a many-to-many relation whose target cannot be read', () => {
+    expect(fieldsLeftByRevert(article, deny('tag'))).toEqual(['Tags'])
+  })
+  it('lists every shared and translatable file field when file cannot be read, not read-only or system ones', () => {
+    expect(fieldsLeftByRevert(article, deny('file'))).toEqual(['Hero image', 'Gallery', 'Cover'])
+  })
+  it('lists fields before relations, labels and not keys', () => {
+    const left = fieldsLeftByRevert(article, (n) => n === 'comment')
+    expect(left).toEqual(['Hero image', 'Gallery', 'Cover', 'Category', 'Tags'])
+    expect(left).not.toContain('hero')
   })
 })

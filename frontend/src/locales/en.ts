@@ -321,6 +321,7 @@ export default {
     reverting: 'Reverting…',
     revertConfirmHeader: 'Confirm revert',
     revertConfirmMessage: 'This reverts the item to revision {n} and overwrites your current unsaved edits. A new revision will be recorded.',
+    revertKeptHeading: 'These fields stay as they are, because you cannot read what they point to:',
     reverted: 'Reverted to revision {n}',
     revertFailed: 'Revert failed',
     revertConflict: 'Revert failed: this item was changed by someone else. Reload the latest version, then decide whether to revert.',
