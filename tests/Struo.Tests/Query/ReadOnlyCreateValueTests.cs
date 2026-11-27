@@ -65,6 +65,44 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         [CmsField(Label = "Aliased", Interface = FieldInterface.Text, ReadOnly = true)]
         [JsonPropertyName("alias")]
         public string? Aliased { get; set; } = "x";
+
+        [SugarColumn(IsNullable = true, ColumnDataType = "text")]
+        [CmsField(Label = "Payload", Interface = FieldInterface.Json, ReadOnly = true)]
+        public string? Payload { get; set; } = """{"a":1}""";
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "OwnerId", Interface = FieldInterface.Hidden, ReadOnly = true)]
+        public Guid? OwnerId { get; set; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        [Navigate(NavigateType.ManyToOne, nameof(OwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        [SugarColumn(IsIgnore = true)]
+        public Role? Owner { get; set; }
+    }
+
+    [SugarTable("ro_create_required")]
+    [CmsCollection("RoCreateRequired", Name = "roCreateRequired")]
+    public sealed class RequiredMemberItem : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public required string Name { get; set; }
+
+        [CmsField(Label = "Text", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Text { get; set; } = "x";
+    }
+
+    [SugarTable("ro_create_jsonrequired")]
+    [CmsCollection("RoCreateJsonRequired", Name = "roCreateJsonRequired")]
+    public sealed class JsonRequiredItem : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [JsonRequired]
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [CmsField(Label = "Text", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Text { get; set; } = "x";
     }
 
     private sealed class SetsReadOnlyFields : IItemWriteInterceptor
@@ -83,7 +121,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
     private const string HostileBody = """
         {"name":"n","nullableText":"c","NULLABLETEXT":"c","text":"c","tExT":"c","nullableNumber":9,"number":9,
-         "flag":false,"key":"22222222-2222-2222-2222-222222222222","items":["z"],"alias":"c","aliased":"c","ALIAS":"c"}
+         "flag":false,"key":"22222222-2222-2222-2222-222222222222","items":["z"],"alias":"c","aliased":"c","ALIAS":"c",
+         "payload":{"b":2},"PAYLOAD":{"b":2},"Payload":[1],"ownerId":"22222222-2222-2222-2222-222222222222","OWNERID":"22222222-2222-2222-2222-222222222222"}
         """;
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
@@ -97,18 +136,22 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     {
         _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
         _db.CodeFirst.InitTables<Item>();
+        _db.CodeFirst.InitTables<RequiredMemberItem>();
+        _db.CodeFirst.InitTables<JsonRequiredItem>();
         _db.CodeFirst.InitTables<Role>();
         _db.CodeFirst.InitTables<Language>();
         _db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(_db, TestLocalization.Default).GetAwaiter().GetResult();
 
-        var types = new[] { typeof(Item), typeof(Role) };
+        var types = new[] { typeof(Item), typeof(RequiredMemberItem), typeof(JsonRequiredItem), typeof(Role) };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
         var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["roCreateItem"] = typeof(Item),
+            ["roCreateRequired"] = typeof(RequiredMemberItem),
+            ["roCreateJsonRequired"] = typeof(JsonRequiredItem),
             ["role"] = typeof(Role),
         });
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
@@ -125,38 +168,67 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
     public void Dispose() => _file.Dispose();
 
-    private static JsonElement Body(string json) => JsonDocument.Parse(json).RootElement;
+    private static JsonElement Body(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
 
     private Item Bind(string json) => (Item)_deserializer.DeserializeForCreate("roCreateItem", Body(json), _meta);
 
     private async Task<Item> StoredAsync(IReadOnlyDictionary<string, object?> created) =>
         (Item)(await _repo.GetByIdAsync("roCreateItem", created["id"]!.ToString()!))!;
 
-    public static TheoryData<string, Func<Item, object?>, object?> InitialValues() => new()
+    public static TheoryData<string> InitialValueCases() =>
+        new(nameof(Item.NullableText), nameof(Item.Text), nameof(Item.NullableNumber), nameof(Item.Number),
+            nameof(Item.Flag), nameof(Item.Key), nameof(Item.Aliased), nameof(Item.Payload), nameof(Item.OwnerId));
+
+    private static bool HoldsInitialValue(Item item, string field) => field switch
     {
-        { nameof(Item.NullableText), i => i.NullableText, "x" },
-        { nameof(Item.Text), i => i.Text, "x" },
-        { nameof(Item.NullableNumber), i => i.NullableNumber, 5 },
-        { nameof(Item.Number), i => i.Number, 5 },
-        { nameof(Item.Flag), i => i.Flag, true },
-        { nameof(Item.Key), i => i.Key, InitialGuid },
-        { nameof(Item.Aliased), i => i.Aliased, "x" },
+        nameof(Item.NullableText) => item.NullableText == "x",
+        nameof(Item.Text) => item.Text == "x",
+        nameof(Item.NullableNumber) => item.NullableNumber == 5,
+        nameof(Item.Number) => item.Number == 5,
+        nameof(Item.Flag) => item.Flag,
+        nameof(Item.Key) => item.Key == InitialGuid,
+        nameof(Item.Aliased) => item.Aliased == "x",
+        nameof(Item.Payload) => item.Payload == """{"a":1}""",
+        nameof(Item.OwnerId) => item.OwnerId == InitialGuid,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown case."),
     };
 
     [Theory]
-    [MemberData(nameof(InitialValues))]
-    public void A_create_binds_a_read_only_field_to_its_initial_value(
-        string field, Func<Item, object?> read, object? expected)
+    [MemberData(nameof(InitialValueCases))]
+    public void A_create_binds_a_read_only_field_to_its_initial_value(string field)
     {
-        Bind("""{"name":"n"}""").Should().Match<Item>(i => Equals(read(i), expected), field);
+        HoldsInitialValue(Bind("""{"name":"n"}"""), field).Should().BeTrue(field);
     }
 
     [Theory]
-    [MemberData(nameof(InitialValues))]
-    public void A_body_that_names_a_read_only_field_in_any_casing_does_not_change_it(
-        string field, Func<Item, object?> read, object? expected)
+    [MemberData(nameof(InitialValueCases))]
+    public void A_body_that_names_a_read_only_field_in_any_casing_does_not_change_it(string field)
     {
-        Bind(HostileBody).Should().Match<Item>(i => Equals(read(i), expected), field);
+        HoldsInitialValue(Bind(HostileBody), field).Should().BeTrue(field);
+    }
+
+    [Fact]
+    public async Task A_create_of_an_entity_with_a_required_member_succeeds()
+    {
+        var created = await _service(null).CreateAsync("roCreateRequired", Body("""{"name":"n","text":"c"}"""));
+
+        var stored = (RequiredMemberItem)(await _repo.GetByIdAsync("roCreateRequired", created["id"]!.ToString()!))!;
+        stored.Name.Should().Be("n");
+        stored.Text.Should().Be("x");
+    }
+
+    [Fact]
+    public async Task A_create_of_an_entity_with_a_json_required_member_succeeds()
+    {
+        var created = await _service(null).CreateAsync("roCreateJsonRequired", Body("""{"name":"n","text":"c"}"""));
+
+        var stored = (JsonRequiredItem)(await _repo.GetByIdAsync("roCreateJsonRequired", created["id"]!.ToString()!))!;
+        stored.Name.Should().Be("n");
+        stored.Text.Should().Be("x");
     }
 
     [Fact]
@@ -188,6 +260,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         stored.Key.Should().Be(InitialGuid);
         stored.Items.Should().Equal("a");
         stored.Aliased.Should().Be("x");
+        stored.Payload.Should().Be("""{"a":1}""");
+        stored.OwnerId.Should().Be(InitialGuid);
     }
 
     [Fact]
@@ -221,6 +295,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         stored.Key.Should().Be(InitialGuid);
         stored.Items.Should().Equal("a");
         stored.Aliased.Should().Be("x");
+        stored.Payload.Should().Be("""{"a":1}""");
     }
 
     [Fact]
