@@ -162,6 +162,13 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         public List<Row> Rows { get; set; } = [];
     }
 
+    [SugarTable("ro_create_repeater")]
+    public sealed class RawRepeaterRow
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public string? Rows { get; set; }
+    }
+
     private sealed class SetsReadOnlyFields : IItemWriteInterceptor
     {
         public bool AppliesTo(string collection) => string.Equals(collection, ItemCollection, StringComparison.OrdinalIgnoreCase);
@@ -461,22 +468,35 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         stored.RequiredOwnerId.Should().Be(StoredGuid);
     }
 
-    private async Task<List<Row>> StoredRowsAsync(object id)
+    // The raw text of the stored rows column: a row type with initialisers, a private setter or a computed
+    // getter would show its own values whatever the column holds.
+    private async Task<string> StoredRowsTextAsync(object id)
     {
         var key = Guid.Parse(id.ToString()!);
-        return await _db.Queryable<RepeaterItem>().Where(i => i.Id == key).Select(i => i.Rows).FirstAsync();
+        var stored = await _db.Queryable<RawRepeaterRow>().Where(r => r.Id == key).FirstAsync();
+        return stored.Rows!;
     }
+
+    private static JsonElement SingleRow(string rowsText)
+    {
+        using var document = JsonDocument.Parse(rowsText);
+        var rows = document.RootElement.EnumerateArray().ToList();
+        rows.Should().ContainSingle();
+        return rows[0].Clone();
+    }
+
+    private static string Field(JsonElement row, string name) =>
+        row.EnumerateObject().Single(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).Value.GetRawText();
 
     [Fact]
     public async Task A_create_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set()
     {
         var created = await _service(null).CreateAsync(RepeaterCollection, Body(RepeaterBody));
 
-        var rows = await StoredRowsAsync(created["id"]!);
+        var row = SingleRow(await StoredRowsTextAsync(created["id"]!));
 
-        var row = rows.Should().ContainSingle().Which;
-        row.Locked.Should().Be("x");
-        row.Total.Should().Be(6);
+        Field(row, "locked").Should().Be("\"x\"");
+        Field(row, "total").Should().Be("6");
     }
 
     [Fact]
@@ -488,9 +508,9 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         await svc.UpdateAsync(
             RepeaterCollection, created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u","qty":4,"total":99}]}"""));
 
-        var row = (await StoredRowsAsync(created["id"]!)).Should().ContainSingle().Which;
-        row.Locked.Should().Be("x");
-        row.Total.Should().Be(8);
+        var row = SingleRow(await StoredRowsTextAsync(created["id"]!));
+        Field(row, "locked").Should().Be("\"x\"");
+        Field(row, "total").Should().Be("8");
     }
 
     [Fact]
