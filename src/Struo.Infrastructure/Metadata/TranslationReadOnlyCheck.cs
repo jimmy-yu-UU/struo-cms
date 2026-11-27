@@ -9,6 +9,7 @@ namespace Struo.Infrastructure.Metadata;
 /// <c>translations</c> payload writes every translatable field on create and on update without a read-only
 /// check, so <c>ReadOnly</c> on one only changes what the schema reports and what GraphQL leaves out of its
 /// translations input.
+/// Why: docs/ai/decisions/cmsfield-is-a-public-instance-property.md
 /// </summary>
 internal static class TranslationReadOnlyCheck
 {

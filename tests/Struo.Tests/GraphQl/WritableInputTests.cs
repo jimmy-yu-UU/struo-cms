@@ -190,7 +190,7 @@ public sealed class WritableInputTests
             "Collection 'vault' has a translation sidecar, but none of its translatable fields can be written through " +
             "GraphQL, so its translations input type would be empty and the schema cannot be built. " +
             "None of them counts: 'title' (Hidden = true), 'note' (Interface = Password, which is never written). " +
-            "Make at least one translatable field writable: it must not set Hidden = true or ReadOnly = true, and its " +
+            "Make at least one translatable field writable: it must not set Hidden = true, and its " +
             "interface must not be Hidden, Divider or Password.");
     }
 

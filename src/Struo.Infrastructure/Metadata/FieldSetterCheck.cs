@@ -38,7 +38,8 @@ internal static class FieldSetterCheck
 
     /// <summary>
     /// A <c>[CmsField]</c> property of a translation class (<paramref name="type"/>) has a setter it can
-    /// reach: the write of a translation value fails without one, <c>ReadOnly</c> or not.
+    /// reach: the write of a translation value fails without one. A <c>ReadOnly</c> translation field is
+    /// refused by <see cref="TranslationReadOnlyCheck"/>, which runs first.
     /// </summary>
     public static void RequireSetters(Type type)
     {

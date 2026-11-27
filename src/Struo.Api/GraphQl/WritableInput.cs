@@ -127,7 +127,7 @@ internal static class WritableInput
             $"Collection '{meta.Name}' has a translation sidecar, but none of its translatable fields can be written " +
             "through GraphQL, so its translations input type would be empty and the schema cannot be built. " +
             $"None of them counts: {Bounded(skipped)}. " +
-            "Make at least one translatable field writable: it must not set Hidden = true or ReadOnly = true, and its " +
+            "Make at least one translatable field writable: it must not set Hidden = true, and its " +
             "interface must not be Hidden, Divider or Password.");
     }
 

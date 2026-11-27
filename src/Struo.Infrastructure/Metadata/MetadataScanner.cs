@@ -493,6 +493,8 @@ public static class MetadataScanner
     private static CollectionMetadata BuildCollection(Type type, CmsCollectionAttribute attr)
     {
         FieldDeclarationCheck.RequirePublicInstanceFields(type);
+        RelationDeclarationCheck.RequirePublicInstanceRelations(type);
+        RelationInheritanceCheck.Require(type);
         ColumnOverrideCheck.Require(type, primaryKeyRuleReports: true);
         FieldInheritanceCheck.Require(type);
         FieldSetterCheck.RequirePublicSetters(type);
@@ -574,8 +576,8 @@ public static class MetadataScanner
         FieldDeclarationCheck.RequirePublicInstanceFields(tType);
         ColumnOverrideCheck.Require(tType, primaryKeyRuleReports: false);
         FieldInheritanceCheck.Require(tType);
-        FieldSetterCheck.RequireSetters(tType);
         TranslationReadOnlyCheck.Require(tType);
+        FieldSetterCheck.RequireSetters(tType);
         var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
         var hasId = tProps.Any(p => string.Equals(p.Name, "Id", StringComparison.Ordinal));

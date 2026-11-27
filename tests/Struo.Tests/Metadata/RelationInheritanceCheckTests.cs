@@ -171,23 +171,102 @@ public sealed class RelationInheritanceCheckTests
         [SugarColumn(IsIgnore = true)] public Target? Link { get; set; }
     }
 
+    // ── bare overrides, middle classes, generic base, different arguments ──
+
+    [CmsCollection("Ric bare override", Name = "ricBareOverride")]
+    private sealed class BareOverride : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public override Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric bare hide", Name = "ricBareHide")]
+    private sealed class BareHide : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public new Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric override no column", Name = "ricOverrideNoColumn")]
+    private sealed class OverrideWithoutColumn : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        public override Target? Link { get; set; }
+    }
+
+    private abstract class MiddleHides : RelationBase
+    {
+        [SugarColumn(IsIgnore = true)] public new Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric middle hides", Name = "ricMiddleHides")]
+    private sealed class LeafOfHidingMiddle : MiddleHides
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+    }
+
+    private abstract class MiddleRepeats : RelationBase
+    {
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        [SugarColumn(IsIgnore = true)]
+        public override Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric leaf omits", Name = "ricLeafOmitsAfterRepeat")]
+    private sealed class LeafOmitsAfterRepeat : MiddleRepeats
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsIgnore = true)] public override Target? Link { get; set; }
+    }
+
+    private abstract class GenericBase<T> where T : class
+    {
+        public Guid? TargetId { get; set; }
+
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        [SugarColumn(IsIgnore = true)]
+        public virtual T? Link { get; set; }
+    }
+
+    [CmsCollection("Ric generic omits", Name = "ricGenericOmits")]
+    private sealed class GenericOmits : GenericBase<Target>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [SugarColumn(IsIgnore = true)] public override Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric generic repeats", Name = "ricGenericRepeats")]
+    private sealed class GenericRepeats : GenericBase<Target>
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [Navigate(NavigateType.OneToOne, nameof(TargetId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name} (derived)")]
+        [SugarColumn(IsIgnore = true)]
+        public override Target? Link { get; set; }
+    }
+
     // ── tests ──
 
     private static string OverrideMessage(string derived) =>
         $"Relation '{derived}.Link' overrides 'RelationBase.Link', which carries [CmsRelation], without repeating it. " +
         $"[CmsRelation] is not inherited, so the relation is not served: {NotServed}. " +
-        $"Repeat [CmsRelation(...)] and [Navigate(...)] on '{derived}.Link', or remove them from 'RelationBase.Link'.";
+        $"Repeat [CmsRelation(...)], [Navigate(...)] and [SugarColumn(IsIgnore = true)] on '{derived}.Link', or remove [CmsRelation] and [Navigate] from 'RelationBase.Link'.";
 
     private static string HidingMessage(string derived) =>
         $"Relation 'RelationBase.Link' is hidden by '{derived}.Link', which does not carry [CmsRelation], so the " +
         $"relation is not served: {NotServed}. " +
-        $"Put [CmsRelation(...)] and [Navigate(...)] on '{derived}.Link' and declare it public, or remove the hiding member.";
+        $"Put [CmsRelation(...)], [Navigate(...)] and [SugarColumn(IsIgnore = true)] on '{derived}.Link' and declare it public, or remove the hiding member.";
 
     public static TheoryData<Type, string> RefusedOverrides() => new()
     {
         { typeof(OverrideNeither), OverrideMessage("OverrideNeither") },
         { typeof(OverrideNavigateOnly), OverrideMessage("OverrideNavigateOnly") },
         { typeof(ChainLeafOmits), OverrideMessage("MiddleWithoutRelation") },
+        { typeof(BareOverride), OverrideMessage("BareOverride") },
     };
 
     [Theory]
@@ -203,6 +282,8 @@ public sealed class RelationInheritanceCheckTests
     {
         { typeof(HideNeither), HidingMessage("HideNeither") },
         { typeof(HideNavigateOnly), HidingMessage("HideNavigateOnly") },
+        { typeof(BareHide), HidingMessage("BareHide") },
+        { typeof(LeafOfHidingMiddle), HidingMessage("MiddleHides") },
     };
 
     [Theory]
@@ -222,7 +303,7 @@ public sealed class RelationInheritanceCheckTests
         scan.Should().Throw<MetadataException>().Which.Message.Should().Be(
             "Relation 'AbstractOmits.Link' overrides 'AbstractRoot.Link', which carries [CmsRelation], without " +
             $"repeating it. [CmsRelation] is not inherited, so the relation is not served: {NotServed}. " +
-            "Repeat [CmsRelation(...)] and [Navigate(...)] on 'AbstractOmits.Link', or remove them from 'AbstractRoot.Link'.");
+            "Repeat [CmsRelation(...)], [Navigate(...)] and [SugarColumn(IsIgnore = true)] on 'AbstractOmits.Link', or remove [CmsRelation] and [Navigate] from 'AbstractRoot.Link'.");
     }
 
     public static TheoryData<Type> RefusedForMissingNavigate() => new()
@@ -249,6 +330,7 @@ public sealed class RelationInheritanceCheckTests
         { typeof(ChainLeafRepeats) },
         { typeof(AbstractRepeats) },
         { typeof(ImplementsInterface) },
+        { typeof(GenericRepeats) },
     };
 
     [Theory]
@@ -270,5 +352,44 @@ public sealed class RelationInheritanceCheckTests
 
         scanned.Single(c => c.Name == MetadataScanner.CollectionNameOf(collection)).Relations
             .Should().ContainSingle(r => r.Name == "link" && r.ForeignKey == "targetId");
+    }
+
+    [Fact]
+    public void An_override_that_repeats_both_relation_attributes_but_not_SugarColumn_is_refused_for_the_column()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(Target), typeof(OverrideWithoutColumn)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().StartWith(
+            "Property 'OverrideWithoutColumn.Link' overrides 'RelationBase.Link', which carries [SugarColumn], without repeating it.");
+    }
+
+    [Fact]
+    public void A_leaf_that_omits_what_a_middle_class_repeated_is_refused_naming_the_middle_declaration()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(Target), typeof(LeafOmitsAfterRepeat)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            "Relation 'LeafOmitsAfterRepeat.Link' overrides 'MiddleRepeats.Link', which carries [CmsRelation], " +
+            $"without repeating it. [CmsRelation] is not inherited, so the relation is not served: {NotServed}. " +
+            "Repeat [CmsRelation(...)], [Navigate(...)] and [SugarColumn(IsIgnore = true)] on 'LeafOmitsAfterRepeat.Link', " +
+            "or remove [CmsRelation] and [Navigate] from 'MiddleRepeats.Link'.");
+    }
+
+    [Fact]
+    public void An_override_of_a_generic_base_declaration_is_refused()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(Target), typeof(GenericOmits)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().StartWith(
+            "Relation 'GenericOmits.Link' overrides 'GenericBase`1.Link', which carries [CmsRelation], without repeating it.");
+    }
+
+    [Fact]
+    public void A_derived_declaration_that_repeats_CmsRelation_with_other_arguments_is_scanned_with_them()
+    {
+        var scanned = MetadataScanner.ScanTypes([typeof(Target), typeof(GenericRepeats)]);
+
+        scanned.Single(c => c.Name == MetadataScanner.CollectionNameOf(typeof(GenericRepeats))).Relations
+            .Should().ContainSingle(r => r.Name == "link" && r.DisplayTemplate == "{Name} (derived)");
     }
 }

@@ -102,22 +102,6 @@ public sealed class FieldSetterCheckTests
         [CmsField(Label = "X", Interface = FieldInterface.Text)] public string X { get; } = "";
     }
 
-    [CmsCollection("Fsc tr read only", Name = "fscTrReadOnly")]
-    private sealed class TrReadOnlyNoSetterParent
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        [CmsTranslations(typeof(TrReadOnlyNoSetter))]
-        [SugarColumn(IsIgnore = true)] public List<TrReadOnlyNoSetter> Translations { get; set; } = [];
-    }
-
-    private sealed class TrReadOnlyNoSetter
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        public Guid TrReadOnlyNoSetterParentId { get; set; }
-        public string Locale { get; set; } = "";
-        [CmsField(Label = "X", Interface = FieldInterface.Text, ReadOnly = true)] public string X { get; } = "";
-    }
-
     [CmsCollection("Fsc tr private", Name = "fscTrPrivate")]
     private sealed class TrPrivateSetterParent
     {
@@ -503,7 +487,6 @@ public sealed class FieldSetterCheckTests
     public static TheoryData<Type, string> RefusedTranslationFields() => new()
     {
         { typeof(TrNoSetterParent), "TrNoSetter.X" },
-        { typeof(TrReadOnlyNoSetterParent), "TrReadOnlyNoSetter.X" },
     };
 
     [Theory]

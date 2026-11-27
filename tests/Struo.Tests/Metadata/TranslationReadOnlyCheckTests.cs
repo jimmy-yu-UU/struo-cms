@@ -31,6 +31,23 @@ public sealed class TranslationReadOnlyCheckTests
         [CmsField(Label = "Source", Interface = FieldInterface.Text, ReadOnly = true)] public string? Source { get; set; }
     }
 
+    [CmsCollection("Tro get only", Name = "troGetOnly")]
+    private sealed class GetOnlyParent
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsTranslations(typeof(GetOnlyTr))]
+        [SugarColumn(IsIgnore = true)] public List<GetOnlyTr> Translations { get; set; } = [];
+    }
+
+    private sealed class GetOnlyTr
+    {
+        [SugarColumn(IsPrimaryKey = true)] public long Id { get; set; }
+        public Guid GetOnlyParentId { get; set; }
+        public string Locale { get; set; } = "";
+        [CmsField(Label = "Title", Interface = FieldInterface.Text)] public string Title { get; set; } = "";
+        [CmsField(Label = "Source", Interface = FieldInterface.Text, ReadOnly = true)] public string Source { get; } = "x";
+    }
+
     [CmsCollection("Tro writable", Name = "troWritable")]
     private sealed class WritableParent
     {
@@ -57,6 +74,15 @@ public sealed class TranslationReadOnlyCheckTests
             "Translation field 'ReadOnlyTr.Source' declares ReadOnly = true, but a translations payload writes it " +
             "on create and on update, so ReadOnly only changes what the schema reports. Remove ReadOnly = true, " +
             "or declare the property on the parent entity when server code owns the value.");
+    }
+
+    [Fact]
+    public void A_get_only_read_only_translation_field_gets_the_read_only_refusal_not_the_setter_one()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(GetOnlyParent)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().StartWith(
+            "Translation field 'GetOnlyTr.Source' declares ReadOnly = true,");
     }
 
     [Fact]
