@@ -71,7 +71,7 @@ turns them into system fields automatically.
 inherits `AuditableEntity` — a collection like `Language` or `ArticleTag` has none.
 
 `[CmsField]` goes on a public instance property; on a non-public or static property, startup fails
-with a message that names the property. Three more declarations fail at startup, each with a message
+with a message that names the property. Five more declarations fail at startup, each with a message
 that says what to write:
 
 | Declaration | What to write |
@@ -79,12 +79,16 @@ that says what to write:
 | Overrides or hides a `[CmsField]` property, has none itself | Repeat `[CmsField]` on it |
 | Overrides a `[SugarColumn]` property, has none itself | Repeat `[SugarColumn]` on it |
 | A writable field without a public setter | Add a public `set` or `init`, or `ReadOnly = true` |
+| Overrides or hides a `[CmsRelation]`, has none itself | Repeat it with `[Navigate]` and `[SugarColumn]` |
+| A translation class field with `ReadOnly = true` | Remove it, or move the property to the parent |
 
-`[CmsField]` is not inherited, and the ORM reads only a property's own `[SugarColumn]`, so an
-override repeats both. `ReadOnly = true` is for a value the server computes or sets: a get-only
-computed property that carries it is a read-only field. On a collection class a non-public setter
-with `[JsonInclude]` receives the value too. A field of a translation class always needs a setter.
-For the fields of a Repeater child type, see [Chapter 6](06-field-types.md).
+`[CmsField]` and `[CmsRelation]` are not inherited, and the ORM reads only a property's own
+`[SugarColumn]`, so an override repeats each. `ReadOnly = true` is for a value the server computes
+or sets: a get-only computed property that carries it is a read-only field, and a get-only property
+with an initializer always reads as that initializer, whatever its column holds. On a collection
+class a non-public setter with `[JsonInclude]` receives the value too. A field of a translation
+class always needs a setter and cannot be `ReadOnly`: a `translations` payload writes every field
+of the class. For the fields of a Repeater child type, see [Chapter 6](06-field-types.md).
 
 A property with no `[CmsField]` and a name other than the
 four audit names is skipped by the scanner entirely, so you can keep ordinary properties of your
@@ -111,7 +115,7 @@ interface is not `Hidden`, `Divider` or `Password`:
 
 | Input type | Fields that count | Relations that count | Startup message |
 |---|---|---|---|
-| The collection's create input | Writable, non-translatable field | Many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
+| The collection's create input | Writable, non-translatable field | Writable many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
 | Translations input (translation sidecar) | Writable, translatable field | None | `Collection '<name>' has a translation sidecar, ...` |
 | A `Repeater`'s item input | Writable sub-field, even if the `Repeater` is `Hidden = true` | None | `Repeater '<collection>.<field>' has no sub-field ...` |
 

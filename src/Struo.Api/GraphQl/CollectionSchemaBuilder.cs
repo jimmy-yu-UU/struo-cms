@@ -407,33 +407,37 @@ internal sealed class CollectionSchemaBuilder(
         var desc = registry.Get(meta.Name);
         config.Fields.Add(new InputFieldConfiguration("id", null, TypeReference.Parse("IdFilter")));
 
+        var declared = new HashSet<string>(StringComparer.Ordinal);
         foreach (var f in meta.Fields)
         {
             if (f.Hidden || f.Ignored || SchemaTypeMapper.IsExcluded(f.Interface)) continue;
             if (!IsFilterable(f.Interface)) continue;
             var opInput = FilterInputTranslator.OperatorInputTypeName(f.Interface, ClrType(desc, f.Name));
             config.Fields.Add(new InputFieldConfiguration(f.Name, null, TypeReference.Parse(opInput)));
+            declared.Add(f.Name);
         }
 
         foreach (var rel in meta.Relations)
-            AddRelationFilterField(config, meta, rel, payloadRelations);
+            AddRelationFilterField(config, meta, rel, payloadRelations, declared);
     }
 
     // Cross-relation filter inputs. M2O contributes its FK column as a filterable IdFilter (parity
-    // with the REST allowlist) PLUS a nested target FilterInput. O2M/M2M carry no FK on this
-    // collection, so they contribute only the nested target FilterInput (ANY/EXISTS/predicate via
+    // with the REST allowlist) unless a filterable own field already declares that name, PLUS a nested
+    // target FilterInput. O2M/M2M carry no FK on this collection, so they contribute only the nested
+    // target FilterInput (ANY/EXISTS/predicate via
     // FilterInputTranslator). A ManyToMany relation carrying an exposable junction payload uses the
     // relation-specific <Parent><Rel>FilterInput instead of the plain <Target>FilterInput, so its
     // "junction" field is reachable from here. Referenced by name -> recursive / self-referential /
     // cyclic input types resolve like and/or (no build loop).
     private static void AddRelationFilterField(
         InputObjectTypeConfiguration config, CollectionMetadata meta, RelationMetadata rel,
-        IReadOnlyList<M2MDescriptor> payloadRelations)
+        IReadOnlyList<M2MDescriptor> payloadRelations, HashSet<string> declared)
     {
         string? targetFilter = null;
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
         {
-            config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
+            if (!declared.Contains(fk))
+                config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
             targetFilter = SchemaTypeMapper.FilterInputName(rel.TargetCollection);
         }
         else if (rel.Kind is RelationKind.OneToMany or RelationKind.ManyToMany)

@@ -266,10 +266,10 @@ public sealed class ItemService(
     }
 
     // Merge update: overlays ONLY the fields the client actually sent (writable, non-readonly,
-    // non-system) and the M2O foreign keys onto `existing`, and returns the body keys. This preserves
-    // server-managed columns the client never sends — e.g. a File's StorageKey/FileName/Size — so a
-    // partial PUT (status + translations only) cannot wipe NOT NULL metadata. Relations and
-    // translations are synced separately by persist.
+    // non-system) and the M2O foreign keys that are not ReadOnly or system fields onto `existing`, and
+    // returns the body keys. This preserves server-managed columns the client never sends — e.g. a
+    // File's StorageKey/FileName/Size — so a partial PUT (status + translations only) cannot wipe NOT
+    // NULL metadata. Relations and translations are synced separately by persist.
     private HashSet<string> MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
@@ -310,10 +310,12 @@ public sealed class ItemService(
     private static void OverlayManyToOneKeys(
         CollectionMetadata meta, EntityDescriptor d, HashSet<string> bodyKeys, object existing, object incoming)
     {
+        var serverOwned = ItemDeserializer.ServerOwnedFieldNames(meta);
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
             if (!bodyKeys.Contains(rel.ForeignKey)) continue;  // only overlay when the client sent this FK
+            if (serverOwned.Contains(rel.ForeignKey)) continue; // a ReadOnly or system key is never overlaid
             // ForeignKey is stored camelCase (e.g. "categoryId") but the CLR property is PascalCase
             // (e.g. CategoryId), so the lookup must be case-insensitive.
             var pi = d.Properties.GetValueOrDefault(rel.ForeignKey);

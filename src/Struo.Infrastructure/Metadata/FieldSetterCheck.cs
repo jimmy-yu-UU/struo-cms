@@ -10,7 +10,8 @@ namespace Struo.Infrastructure.Metadata;
 /// field through a public setter, or a non-public one that carries <c>[JsonInclude]</c>; a repeater
 /// sub-field through a public setter, or through a parameter of the same name and type on the one public
 /// constructor of its row type; a translation field is assigned through any setter its type can reach. A
-/// <c>ReadOnly</c> collection field or sub-field is not written, so it needs none.
+/// <c>ReadOnly</c> collection field or sub-field is not written, so it needs none; a <c>ReadOnly</c>
+/// sub-field that a body can still set is refused, because the stored row takes the value sent.
 /// Why: docs/ai/decisions/cmsfield-is-a-public-instance-property.md
 /// </summary>
 internal static class FieldSetterCheck
@@ -37,8 +38,30 @@ internal static class FieldSetterCheck
     }
 
     /// <summary>
+    /// A <c>ReadOnly</c> sub-field of a repeater row type (<paramref name="type"/>) is one no body can set:
+    /// a write stores the value a body sends to a sub-field with a public setter, a parameter of the
+    /// constructor the body is bound through (<c>[JsonConstructor]</c>, public or not, else the one public
+    /// constructor) or a <c>[JsonInclude]</c> setter, whatever <c>ReadOnly</c> says.
+    /// </summary>
+    public static void RequireReadOnlyRowFieldsUnbound(Type type, string repeaterName)
+    {
+        var constructor = RequestConstructor(type);
+        var settable = FieldsOf(type).FirstOrDefault(p =>
+            p.GetCustomAttribute<CmsFieldAttribute>() is { ReadOnly: true }
+            && (HasPublicSetter(p) || BoundByConstructor(constructor, p) || IsJsonIncluded(p)));
+        if (settable is null) return;
+
+        throw new MetadataException(
+            $"Repeater field '{repeaterName}' sub-field '{NameOf(settable)}' declares ReadOnly = true, but a " +
+            "request body can still set it: the value sent in a body is stored all the same. Remove ReadOnly = " +
+            "true, or, when the type computes the value, declare the property get-only, without a matching " +
+            "constructor parameter or [JsonInclude].");
+    }
+
+    /// <summary>
     /// A <c>[CmsField]</c> property of a translation class (<paramref name="type"/>) has a setter it can
-    /// reach: the write of a translation value fails without one, <c>ReadOnly</c> or not.
+    /// reach: the write of a translation value fails without one. A <c>ReadOnly</c> translation field is
+    /// refused by <see cref="TranslationReadOnlyCheck"/>, which runs first.
     /// </summary>
     public static void RequireSetters(Type type)
     {
@@ -108,6 +131,12 @@ internal static class FieldSetterCheck
         && !rowType.GetTypeInfo().DeclaredConstructors.Any(c => c != only && c.IsDefined(typeof(JsonConstructorAttribute)))
             ? only
             : null;
+
+    // The constructor a request body is bound through: the one that carries [JsonConstructor], public or
+    // not, otherwise the one public constructor; null when the body is bound through a parameterless one.
+    private static ConstructorInfo? RequestConstructor(Type rowType) =>
+        rowType.GetTypeInfo().DeclaredConstructors.FirstOrDefault(c => !c.IsStatic && c.IsDefined(typeof(JsonConstructorAttribute)))
+        ?? (rowType.GetConstructors() is [{ } only] ? only : null);
 
     // A property without a public setter is bound by the constructor parameter of the same name and type.
     private static bool BoundByConstructor(ConstructorInfo? constructor, PropertyInfo prop) =>

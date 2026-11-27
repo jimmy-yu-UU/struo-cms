@@ -10,21 +10,31 @@ namespace Struo.Tests.Support;
 /// <summary>
 /// One <c>[CmsField]</c> property of an emitted type. <paramref name="Child"/> gives it the child type
 /// instead of <paramref name="Type"/>: a <c>List</c> of it, or the child itself when
-/// <paramref name="ChildIsList"/> is false.
+/// <paramref name="ChildIsList"/> is false. <paramref name="GetOnly"/> emits no setter.
+/// <paramref name="Nullable"/> makes the column nullable.
 /// </summary>
 public sealed record EmittedProperty(
     string Name, Type? Type, FieldInterface Interface, bool WithOptions = false, EmittedChild? Child = null,
-    bool ChildIsList = true, bool Hidden = false, bool ReadOnly = false, bool Translatable = false);
+    bool ChildIsList = true, bool Hidden = false, bool ReadOnly = false, bool Translatable = false,
+    bool GetOnly = false, bool Nullable = false);
+
+/// <summary>
+/// A many-to-one relation to the emitted entity <paramref name="Target"/> (declared earlier in the same
+/// build), through the key property <paramref name="KeyProperty"/> of the owner.
+/// </summary>
+public sealed record EmittedRelation(string Name, string Target, string KeyProperty);
 
 /// <summary>A class used as a Repeater child or as a structured value; a plain one declares no <c>[CmsField]</c>.</summary>
 public sealed record EmittedChild(string Name, IReadOnlyList<EmittedProperty> Properties, bool Plain = false);
 
 /// <summary>
 /// A <c>[CmsCollection]</c> entity with a Guid <c>Id</c> and the given properties. <paramref name="Translations"/>
-/// gives it a translation sidecar with those translatable properties.
+/// gives it a translation sidecar with those translatable properties, <paramref name="Relations"/> its many-to-one
+/// relations and <paramref name="IdType"/> the type of its primary key (a Guid when null).
 /// </summary>
 public sealed record EmittedEntity(
-    string Name, IReadOnlyList<EmittedProperty> Properties, IReadOnlyList<EmittedProperty>? Translations = null);
+    string Name, IReadOnlyList<EmittedProperty> Properties, IReadOnlyList<EmittedProperty>? Translations = null,
+    IReadOnlyList<EmittedRelation>? Relations = null, Type? IdType = null);
 
 /// <summary>
 /// Builds collections from a description, so a test can declare one property per (interface, type) pair
@@ -43,12 +53,13 @@ public static class EmittedEntities
         var assembly = new PersistedAssemblyBuilder(name, typeof(object).Assembly);
         var module = assembly.DefineDynamicModule(assemblyName);
         var children = new Dictionary<EmittedChild, TypeBuilder>();
+        var entityTypes = new Dictionary<string, TypeBuilder>(StringComparer.Ordinal);
 
         foreach (var child in entities.SelectMany(e => e.Properties).Select(p => p.Child).OfType<EmittedChild>().Distinct())
         {
             var builder = DefineClass(module, child.Name, null);
             children[child] = builder;
-            foreach (var property in child.Properties) AddProperty(builder, property, children, plain: child.Plain);
+            foreach (var property in child.Properties) AddProperty(builder, property, children, new PropertyShape(Plain: child.Plain));
             builder.CreateType();
         }
 
@@ -59,8 +70,11 @@ public static class EmittedEntities
                 Attribute(typeof(CmsCollectionAttribute), [entity.Name], Named(nameof(CmsCollectionAttribute.Name), lower)),
                 Attribute(typeof(SugarTable), [lower]),
             ]);
-            AddProperty(builder, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);
+            entityTypes[entity.Name] = builder;
+            AddProperty(
+                builder, new EmittedProperty("Id", entity.IdType ?? typeof(Guid), FieldInterface.Text), children, new PropertyShape(IsKey: true));
             foreach (var property in entity.Properties) AddProperty(builder, property, children);
+            foreach (var relation in entity.Relations ?? []) AddRelation(builder, relation, entityTypes[relation.Target], children);
             if (entity.Translations is { } translated) AddSidecar(module, builder, entity.Name, translated, children);
             builder.CreateType();
         }
@@ -82,16 +96,32 @@ public static class EmittedEntities
         Dictionary<EmittedChild, TypeBuilder> children)
     {
         var sidecar = DefineClass(module, ownerName + "Translation", null);
-        AddProperty(sidecar, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, isKey: true);
-        AddProperty(sidecar, new EmittedProperty(ownerName + "Id", typeof(Guid), FieldInterface.Text), children, plain: true);
-        AddProperty(sidecar, new EmittedProperty("Locale", typeof(string), FieldInterface.Text), children, plain: true);
+        AddProperty(sidecar, new EmittedProperty("Id", typeof(Guid), FieldInterface.Text), children, new PropertyShape(IsKey: true));
+        AddProperty(sidecar, new EmittedProperty(ownerName + "Id", typeof(Guid), FieldInterface.Text), children, new PropertyShape(Plain: true));
+        AddProperty(sidecar, new EmittedProperty("Locale", typeof(string), FieldInterface.Text), children, new PropertyShape(Plain: true));
         foreach (var field in fields) AddProperty(sidecar, field with { Translatable = true }, children);
         sidecar.CreateType();
 
         var list = new EmittedProperty("Translations", typeof(object), FieldInterface.Text);
         AddProperty(
-            owner, list, children, plain: true, listOf: sidecar,
-            extra: [Attribute(typeof(CmsTranslationsAttribute), [sidecar]), Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true))]);
+            owner, list, children,
+            new PropertyShape(
+                Plain: true, ListOf: sidecar,
+                Extra: [Attribute(typeof(CmsTranslationsAttribute), [sidecar]), Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true))]));
+    }
+
+    private static void AddRelation(
+        TypeBuilder owner, EmittedRelation relation, TypeBuilder target, Dictionary<EmittedChild, TypeBuilder> children)
+    {
+        var navigate = new CustomAttributeBuilder(
+            typeof(Navigate).GetConstructor([typeof(NavigateType), typeof(string), typeof(string[])])!,
+            [NavigateType.ManyToOne, relation.KeyProperty, Array.Empty<string>()]);
+        var cmsRelation = Attribute(
+            typeof(CmsRelationAttribute), [], Named(nameof(CmsRelationAttribute.Interface), RelationInterface.Dropdown));
+        var ignored = Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true));
+        AddProperty(
+            owner, new EmittedProperty(relation.Name, typeof(object), FieldInterface.Text), children,
+            new PropertyShape(Plain: true, AsType: target, Extra: [navigate, cmsRelation, ignored]));
     }
 
     private static TypeBuilder DefineClass(ModuleBuilder module, string name, CustomAttributeBuilder[]? attributes)
@@ -102,11 +132,18 @@ public static class EmittedEntities
         return builder;
     }
 
+    // How a property differs from a plain field: the key, an undecorated property, a list of a type, extra
+    // attributes, or a type given as a builder.
+    private sealed record PropertyShape(
+        bool IsKey = false, bool Plain = false, TypeBuilder? ListOf = null, CustomAttributeBuilder[]? Extra = null,
+        TypeBuilder? AsType = null);
+
     private static void AddProperty(
-        TypeBuilder owner, EmittedProperty spec, Dictionary<EmittedChild, TypeBuilder> children,
-        bool isKey = false, bool plain = false, TypeBuilder? listOf = null, CustomAttributeBuilder[]? extra = null)
+        TypeBuilder owner, EmittedProperty spec, Dictionary<EmittedChild, TypeBuilder> children, PropertyShape? shape = null)
     {
-        var type = listOf is not null ? typeof(List<>).MakeGenericType(listOf)
+        var (isKey, plain, listOf, extra, asType) = shape ?? new PropertyShape();
+        var type = asType is not null ? asType
+            : listOf is not null ? typeof(List<>).MakeGenericType(listOf)
             : spec.Child is not { } child ? spec.Type!
             : spec.ChildIsList ? typeof(List<>).MakeGenericType(children[child]) : children[child];
         var field = owner.DefineField("_" + spec.Name, type, FieldAttributes.Private);
@@ -119,15 +156,17 @@ public static class EmittedEntities
         il.Emit(OpCodes.Ldfld, field);
         il.Emit(OpCodes.Ret);
 
-        var setter = owner.DefineMethod("set_" + spec.Name, Accessor, null, [type]);
-        il = setter.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stfld, field);
-        il.Emit(OpCodes.Ret);
-
         property.SetGetMethod(getter);
-        property.SetSetMethod(setter);
+        if (!spec.GetOnly)
+        {
+            var setter = owner.DefineMethod("set_" + spec.Name, Accessor, null, [type]);
+            il = setter.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, field);
+            il.Emit(OpCodes.Ret);
+            property.SetSetMethod(setter);
+        }
 
         if (isKey)
         {
@@ -136,6 +175,8 @@ public static class EmittedEntities
         }
 
         foreach (var attribute in extra ?? []) property.SetCustomAttribute(attribute);
+        if (spec.Nullable)
+            property.SetCustomAttribute(Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsNullable), true)));
         if (plain) return;
         property.SetCustomAttribute(Attribute(
             typeof(CmsFieldAttribute), [],

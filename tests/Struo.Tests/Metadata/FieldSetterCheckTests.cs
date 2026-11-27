@@ -102,22 +102,6 @@ public sealed class FieldSetterCheckTests
         [CmsField(Label = "X", Interface = FieldInterface.Text)] public string X { get; } = "";
     }
 
-    [CmsCollection("Fsc tr read only", Name = "fscTrReadOnly")]
-    private sealed class TrReadOnlyNoSetterParent
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        [CmsTranslations(typeof(TrReadOnlyNoSetter))]
-        [SugarColumn(IsIgnore = true)] public List<TrReadOnlyNoSetter> Translations { get; set; } = [];
-    }
-
-    private sealed class TrReadOnlyNoSetter
-    {
-        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
-        public Guid TrReadOnlyNoSetterParentId { get; set; }
-        public string Locale { get; set; } = "";
-        [CmsField(Label = "X", Interface = FieldInterface.Text, ReadOnly = true)] public string X { get; } = "";
-    }
-
     [CmsCollection("Fsc tr private", Name = "fscTrPrivate")]
     private sealed class TrPrivateSetterParent
     {
@@ -148,6 +132,154 @@ public sealed class FieldSetterCheckTests
         [CmsField(Label = "Private", Interface = FieldInterface.Text, ReadOnly = true)] public string Private { get; private set; } = "";
         [CmsField(Label = "Bare", Interface = FieldInterface.Text, ReadOnly = true)] public string Bare { get; } = "";
         [CmsField(Label = "Init", Interface = FieldInterface.Text)] public string Init { get; init; } = "";
+    }
+
+    private sealed class ChildReadOnlyPublic
+    {
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; set; } = "";
+    }
+
+    private sealed class ChildReadOnlyInit
+    {
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; init; } = "";
+    }
+
+    private sealed class ChildReadOnlyCtor
+    {
+        public ChildReadOnlyCtor(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; }
+    }
+
+    private sealed class ChildReadOnlyJsonInclude
+    {
+        [JsonInclude, CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Locked { get; private set; } = "x";
+    }
+
+    private sealed class ChildReadOnlyComputed
+    {
+        [CmsField(Label = "Qty", Interface = FieldInterface.Number)] public int Qty { get; set; }
+        [CmsField(Label = "Total", Interface = FieldInterface.Number, ReadOnly = true)] public int Total => Qty * 2;
+    }
+
+    private sealed class ChildReadOnlyNonPublic
+    {
+        [CmsField(Label = "Private", Interface = FieldInterface.Text, ReadOnly = true)] public string Private { get; private set; } = "x";
+        [CmsField(Label = "Internal", Interface = FieldInterface.Text, ReadOnly = true)] public string Internal { get; internal set; } = "x";
+    }
+
+    [CmsCollection("Fsc rep ro public", Name = "fscRepRoPublic")]
+    private sealed class RepeaterReadOnlyPublic
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyPublic> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep ro init", Name = "fscRepRoInit")]
+    private sealed class RepeaterReadOnlyInit
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyInit> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep ro ctor", Name = "fscRepRoCtor")]
+    private sealed class RepeaterReadOnlyCtor
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyCtor> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep ro json include", Name = "fscRepRoJsonInclude")]
+    private sealed class RepeaterReadOnlyJsonInclude
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyJsonInclude> Rows { get; set; } = [];
+    }
+
+    private sealed class ChildReadOnlyJsonCtorPublicBeside
+    {
+        public ChildReadOnlyJsonCtorPublicBeside() { } [JsonConstructor] public ChildReadOnlyJsonCtorPublicBeside(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; } = "x";
+    }
+
+    private sealed class ChildReadOnlyJsonCtorPrivateBeside
+    {
+        public ChildReadOnlyJsonCtorPrivateBeside() { } [JsonConstructor] private ChildReadOnlyJsonCtorPrivateBeside(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; } = "x";
+    }
+
+    private sealed class ChildReadOnlyJsonCtorPrivateOnly
+    {
+        [JsonConstructor] private ChildReadOnlyJsonCtorPrivateOnly(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; } = "x";
+    }
+
+    private sealed class ChildReadOnlyJsonCtorPrivateSetter
+    {
+        public ChildReadOnlyJsonCtorPrivateSetter() { } [JsonConstructor] public ChildReadOnlyJsonCtorPrivateSetter(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; private set; } = "x";
+    }
+
+    private sealed class ChildReadOnlyJsonCtorParameterlessMarked
+    {
+        [JsonConstructor] private ChildReadOnlyJsonCtorParameterlessMarked() { } public ChildReadOnlyJsonCtorParameterlessMarked(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; } = "x";
+    }
+
+    private sealed class ChildReadOnlyTwoPublic
+    {
+        public ChildReadOnlyTwoPublic() { } public ChildReadOnlyTwoPublic(string locked) => Locked = locked;
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)] public string Locked { get; } = "x";
+    }
+
+    [CmsCollection("Fsc RepeaterReadOnlyJsonCtorPublicBeside", Name = "fscRepeaterReadOnlyJsonCtorPublicBeside")]
+    private sealed class RepeaterReadOnlyJsonCtorPublicBeside
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyJsonCtorPublicBeside> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc RepeaterReadOnlyJsonCtorPrivateBeside", Name = "fscRepeaterReadOnlyJsonCtorPrivateBeside")]
+    private sealed class RepeaterReadOnlyJsonCtorPrivateBeside
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyJsonCtorPrivateBeside> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc RepeaterReadOnlyJsonCtorPrivateOnly", Name = "fscRepeaterReadOnlyJsonCtorPrivateOnly")]
+    private sealed class RepeaterReadOnlyJsonCtorPrivateOnly
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyJsonCtorPrivateOnly> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc RepeaterReadOnlyJsonCtorPrivateSetter", Name = "fscRepeaterReadOnlyJsonCtorPrivateSetter")]
+    private sealed class RepeaterReadOnlyJsonCtorPrivateSetter
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyJsonCtorPrivateSetter> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc RepeaterReadOnlyJsonCtorParameterlessMarked", Name = "fscRepeaterReadOnlyJsonCtorParameterlessMarked")]
+    private sealed class RepeaterReadOnlyJsonCtorParameterlessMarked
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyJsonCtorParameterlessMarked> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc RepeaterReadOnlyTwoPublic", Name = "fscRepeaterReadOnlyTwoPublic")]
+    private sealed class RepeaterReadOnlyTwoPublic
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyTwoPublic> Rows { get; set; } = [];
+    }
+
+    [CmsCollection("Fsc rep ro computed", Name = "fscRepRoComputed")]
+    private sealed class RepeaterReadOnlyComputed
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyComputed> Rows { get; set; } = [];
+        [CmsField(Label = "Others", Interface = FieldInterface.Repeater)] public List<ChildReadOnlyNonPublic> Others { get; set; } = [];
     }
 
     private class ChildProtectedInternal { [CmsField(Label = "X", Interface = FieldInterface.Text)] public string X { get; protected internal set; } = ""; }
@@ -500,10 +632,42 @@ public sealed class FieldSetterCheckTests
             "through a parameter of the row's one public constructor.");
     }
 
+    public static TheoryData<Type, string> ReadOnlyRowFieldsTheBodyCanSet() => new()
+    {
+        { typeof(RepeaterReadOnlyPublic), "ChildReadOnlyPublic.Locked" },
+        { typeof(RepeaterReadOnlyInit), "ChildReadOnlyInit.Locked" },
+        { typeof(RepeaterReadOnlyCtor), "ChildReadOnlyCtor.Locked" },
+        { typeof(RepeaterReadOnlyJsonInclude), "ChildReadOnlyJsonInclude.Locked" },
+        { typeof(RepeaterReadOnlyJsonCtorPublicBeside), "ChildReadOnlyJsonCtorPublicBeside.Locked" },
+        { typeof(RepeaterReadOnlyJsonCtorPrivateBeside), "ChildReadOnlyJsonCtorPrivateBeside.Locked" },
+        { typeof(RepeaterReadOnlyJsonCtorPrivateOnly), "ChildReadOnlyJsonCtorPrivateOnly.Locked" },
+        { typeof(RepeaterReadOnlyJsonCtorPrivateSetter), "ChildReadOnlyJsonCtorPrivateSetter.Locked" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ReadOnlyRowFieldsTheBodyCanSet))]
+    public void A_ReadOnly_row_field_the_body_can_still_set_is_refused(Type owner, string field)
+    {
+        var scan = () => MetadataScanner.ScanTypes([owner]);
+
+        scan.Should().Throw<MetadataException>().Which.Message.Should().Be(
+            $"Repeater field 'rows' sub-field '{field}' declares ReadOnly = true, but a request body can still set " +
+            "it: the value sent in a body is stored all the same. Remove ReadOnly = true, or, when the type " +
+            "computes the value, declare the property get-only, without a matching constructor parameter or " +
+            "[JsonInclude].");
+    }
+
+    [Fact]
+    public void A_ReadOnly_row_field_no_body_can_set_is_accepted()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(RepeaterReadOnlyComputed)]);
+
+        scan.Should().NotThrow();
+    }
+
     public static TheoryData<Type, string> RefusedTranslationFields() => new()
     {
         { typeof(TrNoSetterParent), "TrNoSetter.X" },
-        { typeof(TrReadOnlyNoSetterParent), "TrReadOnlyNoSetter.X" },
     };
 
     [Theory]
@@ -532,6 +696,9 @@ public sealed class FieldSetterCheckTests
         { typeof(ReadOnlyShapes) },
         { typeof(TrPrivateSetterParent) },
         { typeof(RepeaterReadOnly) },
+        { typeof(RepeaterReadOnlyComputed) },
+        { typeof(RepeaterReadOnlyJsonCtorParameterlessMarked) },
+        { typeof(RepeaterReadOnlyTwoPublic) },
         { typeof(RepeaterCtor) },
         { typeof(RepeaterCtorNonPublicSetters) },
         { typeof(OverrideWithJsonInclude) },

@@ -9,7 +9,9 @@ Every relation is declared on a navigation property carrying two attributes toge
 `[Navigate]` decides the join shape, and `[CmsRelation]` handles everything else CMS-specific.
 Both are required, on a public instance property. A `[Navigate]` without `[CmsRelation]` is not a
 relation and the scanner ignores it. A `[CmsRelation]` without `[Navigate]`, or on a property that
-is static or not public, stops startup with a message naming the property.
+is static or not public, stops startup with a message naming the property. So does an override, or
+a `new` member, of a base class navigation property that does not repeat `[CmsRelation]`: the
+attribute is not inherited.
 
 `RelationKind` has exactly three values — `ManyToOne`, `OneToMany`, `ManyToMany` — and the
 scanner infers which applies from the property's own shape: a scalar or nullable-scalar reference
@@ -40,6 +42,11 @@ properties of the junction type, and they are two different properties. A key pr
 in a column: one that carries `[SugarColumn(IsIgnore = true)]` is refused. When a declaration
 breaks one of these rules, startup fails with a message naming the relation, the key and the type
 to look in, and the property that differs only in case when there is one.
+
+A many-to-one foreign key may also carry `[CmsField]` with an interface other than `File` and
+`Image`. GraphQL lists such a key once in the create, update and filter inputs, with the type the
+field gives it (`Int` and `IntFilter` for an `int?` key with the `Number` interface) in place of
+`ID` and `IdFilter`.
 
 A key must have the type of the primary key it points at, each without `?`: `long?` matches `long`,
 and `int` against `long` does not. Four keys are compared:
@@ -180,6 +187,10 @@ The last two decide write and delete behavior:
 |---|---|---|---|
 | `OnDelete` | `OnDelete` | `Restrict` | many-to-one only |
 | `Editable` | `bool` | `true` | whether the admin picker accepts input |
+
+A many-to-one relation whose foreign key is a `ReadOnly` field or an audit field is reported as not
+editable in the schema whatever `Editable` says: the server does not write that key from a request
+(see [Chapter 6](06-field-types.md)).
 
 There is no per-relation depth setting. The one cap enforced for REST `deep` and relation paths is
 the global `Query:MaxRelationDepth`; see "Reading related data with `deep`" below. A GraphQL

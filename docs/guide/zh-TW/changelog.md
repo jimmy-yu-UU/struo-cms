@@ -30,8 +30,34 @@
   欄位要有 public 的 setter（`set` 或 `init`），或帶 `[JsonInclude]` 的非 public setter；
   Repeater 子型別的欄位要有 public 的 setter，或由該型別唯一的 public 建構式裡同名、同型別的參數
   設值；翻譯類別的欄位要有 setter。原本這種欄位照樣列為可寫，送來的值卻沒有存進去；翻譯類別沒有
-  setter 的欄位則在寫入時丟例外。加上 public 的 setter，或在伺服器自己算出這個值時標
-  `[CmsField(ReadOnly = true)]`（[第 5 章](05-collections.md)）。
+  setter 的欄位則在寫入時丟例外。加上 public 的 setter；不是翻譯類別的欄位，也可以在伺服器自己算出
+  這個值時標 `[CmsField(ReadOnly = true)]`（[第 5 章](05-collections.md)）。
+- 基底類別上帶 `[CmsRelation]` 的 navigation 屬性，被衍生類別覆寫而沒有重複標 `[CmsRelation]`，
+  或被沒有 `[CmsRelation]` 的 `new` 成員遮住，主機在啟動時失敗。`[CmsRelation]` 不會繼承，原本這個
+  關聯無聲地不存在：schema 沒有它，寫入不會建立連結，讀取時指名它會出錯（在 SQLite 上、HTTP 層之下
+  量到的）。在覆寫或 `new` 成員上重複標 `[CmsRelation(...)]`、`[Navigate(...)]` 與
+  `[SugarColumn(IsIgnore = true)]`；不想要這個關聯的集合，不要繼承宣告它的基底類別
+  （[第 8 章](08-relations.md)）。
+- 翻譯類別的欄位標 `[CmsField(ReadOnly = true)]`，主機在啟動時失敗。原本 `translations` 的 payload
+  在建立與更新時照樣把值寫進去，只有 GraphQL 的 input 型別不含它（在 SQLite 上、HTTP 層之下
+  量到的）。拿掉 `ReadOnly = true`；值由伺服器程式掌管時，把屬性宣告在上層 entity
+  （[第 7 章](07-i18n.md)）。
+- 建立時，集合類別的 `ReadOnly` 欄位存的是類別給這個屬性的值：
+  `public string Source { get; set; } = "import";` 存的是 `import`。原本只要型別可以是 `null`，
+  值就被換成 `null`，不可為 `null` 的 `string` 欄位因此在資料庫建立失敗（在 SQLite 上、HTTP 層
+  之下量到的）。寫入攔截器設定的值照樣生效。攔截器若以「是不是 `null`」判斷要不要填這種欄位，看到的
+  會是初始值：改成判斷那個初始值，或拿掉屬性的初始值（[第 6 章](06-field-types.md)）。
+- 帶 `[CmsField(ReadOnly = true)]`、同時又是多對一關聯外鍵的屬性，更新與還原都不會改到它，GraphQL
+  的建立與更新 input 也不列這個鍵。原本更新時 body 送這個鍵，可為 `null` 的外鍵被清成 `NULL`，
+  不可為 `null` 的被寫成送來的值；還原到舊版本時，可為 `null` 的外鍵也被清成 `NULL`（在 SQLite 上、
+  HTTP 層之下量到的）。要讓用戶端設定這個外鍵，拿掉 `ReadOnly = true`；值由伺服器掌管時，在寫入
+  攔截器裡設定（[第 6 章](06-field-types.md)）。拿稽核欄位（例如 `CreatedBy`）當多對一外鍵的關聯
+  也一樣：原本更新與還原都把它清成 `NULL`。這兩種關聯在 schema 裡回報為不可編輯，後台的關聯選擇器
+  因此停用（[第 8 章](08-relations.md)）。
+- Repeater 子欄位標了 `[CmsField(ReadOnly = true)]`，請求卻仍寫得進去時（有 public 的 `set` 或
+  `init`、有對應的建構式參數，或帶 `[JsonInclude]`），主機在啟動時失敗。原本 REST 的建立與更新照樣
+  把送來的值存進去，GraphQL 的項目輸入卻不列這個子欄位（在 SQLite 上、HTTP 層之下量到的）。拿掉
+  `ReadOnly = true`；值由型別自己算出時，把屬性改成只有 getter（[第 6 章](06-field-types.md)）。
 :::
 
 ### 變更
@@ -49,6 +75,10 @@
 
 ### 修正
 
+- 多對一的外鍵同時帶可寫的 `[CmsField]` 時，GraphQL 的建立、更新與篩選輸入只列這個鍵一次，型別照
+  欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
+  `The following field ... is declared multiple times`；量到的鍵型別是 `Guid?`、`int?`、`long?` 與
+  `string?`（[第 8 章](08-relations.md)）。
 - `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在
   連資料庫之前就啟動失敗，不套用任何 migration。先前是先套用 migration，主機才因為那個設定值
   啟動失敗；量到的鍵是 `RateLimiting:Login:PermitLimit`、

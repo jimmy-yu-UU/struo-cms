@@ -1,0 +1,525 @@
+using Struo.Tests.Support.Seeding;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using AwesomeAssertions;
+using SqlSugar;
+using Struo.Application.Configuration;
+using Struo.Application.Query;
+using Struo.Domain.Auditing;
+using Struo.Domain.Metadata.Attributes;
+using Struo.Domain.Metadata.Enums;
+using Struo.Infrastructure.Identity;
+using Struo.Infrastructure.Localization;
+using Struo.Infrastructure.Metadata;
+using Struo.Infrastructure.Persistence;
+using Struo.Infrastructure.Query;
+using Struo.Infrastructure.Revisions;
+using Struo.Infrastructure.Security;
+using Struo.Tests.Support;
+using Xunit;
+
+namespace Struo.Tests.Query;
+
+/// <summary>
+/// A create binds every non-system <c>ReadOnly</c> field to the value a new instance of the entity has,
+/// whatever the body carries; a <c>BeforeWrite</c> interceptor that sets one afterwards wins; an update
+/// and a revert never reach one, a ManyToOne foreign key included. Stored values are read through a row
+/// type without initialisers, because reading the entity type fills a NULL column with the initialiser.
+/// </summary>
+public sealed class ReadOnlyCreateValueTests : IDisposable
+{
+    private const string ItemCollection = "roCreateItem";
+    private const string RepeaterCollection = "roCreateRepeater";
+    private const string PlainBody = """{"name":"n"}""";
+    private const string RepeaterBody = """{"rows":[{"title":"t","locked":"c","qty":3,"total":99}]}""";
+
+    private static readonly Guid InitialGuid = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid InterceptorGuid = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid OtherGuid = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid StoredGuid = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
+    [SugarTable("ro_create_item")]
+    [CmsCollection("RoCreateItem", Name = ItemCollection, Revisions = true)]
+    public sealed class Item : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "NullableText", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string? NullableText { get; set; } = "x";
+
+        [CmsField(Label = "Text", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Text { get; set; } = "x";
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "NullableNumber", Interface = FieldInterface.Number, ReadOnly = true)]
+        public int? NullableNumber { get; set; } = 5;
+
+        [CmsField(Label = "Number", Interface = FieldInterface.Number, ReadOnly = true)]
+        public int Number { get; set; } = 5;
+
+        [CmsField(Label = "Flag", Interface = FieldInterface.Boolean, ReadOnly = true)]
+        public bool Flag { get; set; } = true;
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "Key", Interface = FieldInterface.Hidden, ReadOnly = true)]
+        public Guid? Key { get; set; } = InitialGuid;
+
+        [CmsField(Label = "Items", Interface = FieldInterface.Hidden, ReadOnly = true)]
+        public List<string> Items { get; set; } = ["a"];
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "Aliased", Interface = FieldInterface.Text, ReadOnly = true)]
+        [JsonPropertyName("alias")]
+        public string? Aliased { get; set; } = "x";
+
+        [SugarColumn(IsNullable = true, ColumnDataType = "text")]
+        [CmsField(Label = "Payload", Interface = FieldInterface.Json, ReadOnly = true)]
+        public string? Payload { get; set; } = """{"a":1}""";
+
+        [SugarColumn(IsNullable = true)]
+        [CmsField(Label = "OwnerId", Interface = FieldInterface.Hidden, ReadOnly = true)]
+        public Guid? OwnerId { get; set; } = InitialGuid;
+
+        [Navigate(NavigateType.ManyToOne, nameof(OwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        [SugarColumn(IsIgnore = true)]
+        public Role? Owner { get; set; }
+
+        [CmsField(Label = "RequiredOwnerId", Interface = FieldInterface.Hidden, ReadOnly = true)]
+        public Guid RequiredOwnerId { get; set; } = InitialGuid;
+
+        [Navigate(NavigateType.ManyToOne, nameof(RequiredOwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        [SugarColumn(IsIgnore = true)]
+        public Role? RequiredOwner { get; set; }
+    }
+
+    [SugarTable("ro_create_item")]
+    public sealed class StoredRow
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public string? NullableText { get; set; }
+        public string? Text { get; set; }
+        public int? NullableNumber { get; set; }
+        public int? Number { get; set; }
+        public bool? Flag { get; set; }
+        public Guid? Key { get; set; }
+        public string? Items { get; set; }
+        public string? Aliased { get; set; }
+        public string? Payload { get; set; }
+        public Guid? OwnerId { get; set; }
+        public Guid? RequiredOwnerId { get; set; }
+    }
+
+    [SugarTable("ro_create_required")]
+    [CmsCollection("RoCreateRequired", Name = "roCreateRequired")]
+    public sealed class RequiredMemberItem : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public required string Name { get; set; }
+
+        [CmsField(Label = "Text", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Text { get; set; } = "x";
+    }
+
+    [SugarTable("ro_create_jsonrequired")]
+    [CmsCollection("RoCreateJsonRequired", Name = "roCreateJsonRequired")]
+    public sealed class JsonRequiredItem : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [JsonRequired]
+        [CmsField(Label = "Name", Interface = FieldInterface.Text)] public string Name { get; set; } = "";
+
+        [CmsField(Label = "Text", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Text { get; set; } = "x";
+    }
+
+    public sealed class Row
+    {
+        [CmsField(Label = "Title", Interface = FieldInterface.Text)] public string Title { get; set; } = "";
+
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Locked { get; private set; } = "x";
+
+        [CmsField(Label = "Qty", Interface = FieldInterface.Number)] public int Qty { get; set; }
+
+        [CmsField(Label = "Total", Interface = FieldInterface.Number, ReadOnly = true)]
+        public int Total => Qty * 2;
+    }
+
+    [SugarTable("ro_create_repeater")]
+    [CmsCollection("RoCreateRepeater", Name = RepeaterCollection)]
+    public sealed class RepeaterItem : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)]
+        public List<Row> Rows { get; set; } = [];
+    }
+
+    [SugarTable("ro_create_repeater")]
+    public sealed class RawRepeaterRow
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public string? Rows { get; set; }
+    }
+
+    private sealed class SetsReadOnlyFields : IItemWriteInterceptor
+    {
+        public bool AppliesTo(string collection) => string.Equals(collection, ItemCollection, StringComparison.OrdinalIgnoreCase);
+
+        public Task BeforeWriteAsync(ItemWriteContext context, CancellationToken ct)
+        {
+            var item = (Item)context.Entity;
+            item.NullableText = "interceptor";
+            item.Text = "interceptor";
+            item.Items = ["interceptor"];
+            item.OwnerId = InterceptorGuid;
+            item.RequiredOwnerId = InterceptorGuid;
+            return Task.CompletedTask;
+        }
+    }
+
+    private const string HostileBody = """
+        {"name":"n","nullableText":"c","NULLABLETEXT":"c","text":"c","tExT":"c","nullableNumber":9,"number":9,
+         "flag":false,"key":"22222222-2222-2222-2222-222222222222","items":["z"],"alias":"c","aliased":"c","ALIAS":"c",
+         "payload":{"b":2},"PAYLOAD":{"b":2},"Payload":[1],"ownerId":"22222222-2222-2222-2222-222222222222","OWNERID":"22222222-2222-2222-2222-222222222222",
+         "requiredOwnerId":"22222222-2222-2222-2222-222222222222","REQUIREDOWNERID":"22222222-2222-2222-2222-222222222222"}
+        """;
+
+    private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
+    private readonly ISqlSugarClient _db;
+    private readonly SqlSugarItemRepository _repo;
+    private readonly ItemDeserializer _deserializer;
+    private readonly Struo.Domain.Metadata.Models.CollectionMetadata _meta;
+    private readonly Func<IEnumerable<IItemWriteInterceptor>?, ItemService> _service;
+
+    public ReadOnlyCreateValueTests()
+    {
+        _db = SqlSugarClientFactory.Create(_file.Options(), new TestCurrentUserAccessor(Guid.Empty));
+        _db.CodeFirst.InitTables<Item>();
+        _db.CodeFirst.InitTables<RequiredMemberItem>();
+        _db.CodeFirst.InitTables<JsonRequiredItem>();
+        _db.CodeFirst.InitTables<RepeaterItem>();
+        _db.CodeFirst.InitTables<Role>();
+        _db.CodeFirst.InitTables<Language>();
+        _db.CodeFirst.InitTables<Revision>();
+        LanguageSeeder.SeedAsync(_db, TestLocalization.Default).GetAwaiter().GetResult();
+
+        var types = new[] { typeof(Item), typeof(RequiredMemberItem), typeof(JsonRequiredItem), typeof(RepeaterItem), typeof(Role) };
+        var collections = MetadataScanner.ScanTypes(types);
+        var provider = new CachedMetadataProvider(collections);
+        var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
+        var graph = new RelationshipGraph(collections, new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ItemCollection] = typeof(Item),
+            ["roCreateRequired"] = typeof(RequiredMemberItem),
+            ["roCreateJsonRequired"] = typeof(JsonRequiredItem),
+            [RepeaterCollection] = typeof(RepeaterItem),
+            ["role"] = typeof(Role),
+        });
+        _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
+        _deserializer = new ItemDeserializer(registry, graph, new RichTextCleaner(new GanssHtmlSanitizer()));
+        _meta = provider.GetCollection(ItemCollection)!;
+        var expander = new RelationExpander(_repo, graph, new StruoQueryOptions());
+        var user = new TestCurrentUserAccessor(Guid.Empty);
+        var revisions = new SqlSugarRevisionStore(_db, user);
+        var snapshots = new RevisionSnapshotBuilder(_repo, provider, registry, graph);
+        _service = interceptors => TestItemService.Create(
+            _repo, provider, registry, graph, expander, graph, new LanguageProvider(_db), user, revisions, snapshots,
+            interceptors: interceptors);
+    }
+
+    public void Dispose() => _file.Dispose();
+
+    private static JsonElement Body(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+
+    private Item Bind(string json) => (Item)_deserializer.DeserializeForCreate(ItemCollection, Body(json), _meta);
+
+    // Reads the columns through a row type without initialisers, so a stored NULL stays NULL: reading the
+    // entity type fills a NULL column with the property initialiser.
+    private async Task<StoredRow> StoredAsync(IReadOnlyDictionary<string, object?> created)
+    {
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        return await _db.Queryable<StoredRow>().Where(r => r.Id == id).FirstAsync();
+    }
+
+    private static void AssertInitialColumns(StoredRow stored)
+    {
+        stored.NullableText.Should().Be("x");
+        stored.Text.Should().Be("x");
+        stored.NullableNumber.Should().Be(5);
+        stored.Number.Should().Be(5);
+        stored.Flag.Should().BeTrue();
+        stored.Key.Should().Be(InitialGuid);
+        stored.Items.Should().Be("[\"a\"]");
+        stored.Aliased.Should().Be("x");
+        stored.Payload.Should().Be("""{"a":1}""");
+    }
+
+    // Gives the stored keys a value that is neither the class initial value nor the one a body sends, so a
+    // write that reached them would show.
+    private async Task StoreKeysAsync(Guid id, Guid value)
+    {
+        await _db.Updateable<Item>()
+            .SetColumns(i => i.OwnerId == value)
+            .SetColumns(i => i.RequiredOwnerId == value)
+            .Where(i => i.Id == id)
+            .ExecuteCommandAsync();
+    }
+
+    private static void AssertInitialKeys(StoredRow stored)
+    {
+        stored.OwnerId.Should().Be(InitialGuid);
+        stored.RequiredOwnerId.Should().Be(InitialGuid);
+    }
+
+    public static TheoryData<string> InitialValueCases() =>
+        new(nameof(Item.NullableText), nameof(Item.Text), nameof(Item.NullableNumber), nameof(Item.Number),
+            nameof(Item.Flag), nameof(Item.Key), nameof(Item.Aliased), nameof(Item.Payload), nameof(Item.OwnerId),
+            nameof(Item.RequiredOwnerId));
+
+    private static bool HoldsInitialValue(Item item, string field) => field switch
+    {
+        nameof(Item.NullableText) => item.NullableText == "x",
+        nameof(Item.Text) => item.Text == "x",
+        nameof(Item.NullableNumber) => item.NullableNumber == 5,
+        nameof(Item.Number) => item.Number == 5,
+        nameof(Item.Flag) => item.Flag,
+        nameof(Item.Key) => item.Key == InitialGuid,
+        nameof(Item.Aliased) => item.Aliased == "x",
+        nameof(Item.Payload) => item.Payload == """{"a":1}""",
+        nameof(Item.OwnerId) => item.OwnerId == InitialGuid,
+        nameof(Item.RequiredOwnerId) => item.RequiredOwnerId == InitialGuid,
+        _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown case."),
+    };
+
+    [Theory]
+    [MemberData(nameof(InitialValueCases))]
+    public void A_create_binds_a_read_only_field_to_its_initial_value(string field)
+    {
+        HoldsInitialValue(Bind(PlainBody), field).Should().BeTrue(field);
+    }
+
+    [Theory]
+    [MemberData(nameof(InitialValueCases))]
+    public void A_body_that_names_a_read_only_field_in_any_casing_does_not_change_it(string field)
+    {
+        HoldsInitialValue(Bind(HostileBody), field).Should().BeTrue(field);
+    }
+
+    [Fact]
+    public async Task A_create_of_an_entity_with_a_required_member_succeeds()
+    {
+        var created = await _service(null).CreateAsync("roCreateRequired", Body("""{"name":"n","text":"c"}"""));
+
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var stored = await _db.Queryable<RequiredMemberItem>().Where(i => i.Id == id).Select(i => new { i.Name, i.Text }).FirstAsync();
+        stored.Name.Should().Be("n");
+        stored.Text.Should().Be("x");
+    }
+
+    [Fact]
+    public async Task A_create_of_an_entity_with_a_json_required_member_succeeds()
+    {
+        var created = await _service(null).CreateAsync("roCreateJsonRequired", Body("""{"name":"n","text":"c"}"""));
+
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var stored = await _db.Queryable<JsonRequiredItem>().Where(i => i.Id == id).Select(i => new { i.Name, i.Text }).FirstAsync();
+        stored.Name.Should().Be("n");
+        stored.Text.Should().Be("x");
+    }
+
+    [Fact]
+    public void A_create_binds_a_list_field_to_its_initial_items()
+    {
+        Bind(HostileBody).Items.Should().Equal("a");
+    }
+
+    [Fact]
+    public void Each_create_gets_its_own_instance_of_a_list_field()
+    {
+        var first = Bind(PlainBody);
+        var second = Bind(PlainBody);
+
+        first.Items.Should().NotBeSameAs(second.Items);
+    }
+
+    [Fact]
+    public async Task A_create_stores_the_initial_values_of_its_read_only_fields()
+    {
+        var created = await _service(null).CreateAsync(ItemCollection, Body(HostileBody));
+
+        var stored = await StoredAsync(created);
+        AssertInitialColumns(stored);
+        AssertInitialKeys(stored);
+    }
+
+    [Fact]
+    public async Task The_stored_row_reader_shows_a_database_null_as_null()
+    {
+        var created = await _service(null).CreateAsync(ItemCollection, Body(PlainBody));
+        var id = Guid.Parse(created["id"]!.ToString()!);
+
+        await _db.Updateable<Item>().SetColumns(i => i.OwnerId == null).Where(i => i.Id == id).ExecuteCommandAsync();
+
+        (await StoredAsync(created)).OwnerId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task The_entity_reader_fills_a_database_null_with_the_property_initialiser()
+    {
+        var created = await _service(null).CreateAsync(ItemCollection, Body(PlainBody));
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        await _db.Updateable<Item>().SetColumns(i => i.OwnerId == null).Where(i => i.Id == id).ExecuteCommandAsync();
+
+        var queried = await _db.Queryable<Item>().Where(i => i.Id == id).FirstAsync();
+        var fetched = (Item?)await _repo.GetByIdAsync(ItemCollection, id.ToString());
+
+        queried.OwnerId.Should().Be(InitialGuid);
+        fetched.Should().NotBeNull();
+        fetched.OwnerId.Should().Be(InitialGuid);
+    }
+
+    [Fact]
+    public async Task A_before_write_interceptor_that_sets_a_read_only_field_wins()
+    {
+        var created = await _service([new SetsReadOnlyFields()]).CreateAsync(ItemCollection, Body(HostileBody));
+
+        var stored = await StoredAsync(created);
+        stored.NullableText.Should().Be("interceptor");
+        stored.Text.Should().Be("interceptor");
+        stored.Items.Should().Be("[\"interceptor\"]");
+        stored.Number.Should().Be(5);
+        stored.OwnerId.Should().Be(InterceptorGuid);
+        stored.RequiredOwnerId.Should().Be(InterceptorGuid);
+    }
+
+    [Fact]
+    public async Task A_before_write_interceptor_that_sets_a_read_only_foreign_key_wins_on_update()
+    {
+        var created = await _service(null).CreateAsync(ItemCollection, Body(PlainBody));
+        var id = created["id"]!.ToString()!;
+
+        await _service([new SetsReadOnlyFields()]).UpdateAsync(ItemCollection, id, Body(HostileBody));
+
+        var stored = await StoredAsync(created);
+        stored.OwnerId.Should().Be(InterceptorGuid);
+        stored.RequiredOwnerId.Should().Be(InterceptorGuid);
+    }
+
+    [Theory]
+    [InlineData("ownerId")]
+    [InlineData("OWNERID")]
+    [InlineData("requiredOwnerId")]
+    [InlineData("REQUIREDOWNERID")]
+    public async Task An_update_body_cannot_change_a_read_only_foreign_key(string key)
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
+        var id = created["id"]!.ToString()!;
+        await StoreKeysAsync(Guid.Parse(id), StoredGuid);
+
+        await svc.UpdateAsync(ItemCollection, id, Body("{\"" + key + "\":\"" + OtherGuid + "\"}"));
+
+        var stored = await StoredAsync(created);
+        stored.OwnerId.Should().Be(StoredGuid);
+        stored.RequiredOwnerId.Should().Be(StoredGuid);
+    }
+
+    [Fact]
+    public async Task A_revert_does_not_change_a_read_only_foreign_key()
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        await StoreKeysAsync(id, OtherGuid);
+
+        var reverted = await svc.RevertAsync(ItemCollection, id.ToString(), 1);
+
+        reverted.Should().NotBeNull();
+        var stored = await StoredAsync(created);
+        stored.OwnerId.Should().Be(OtherGuid);
+        stored.RequiredOwnerId.Should().Be(OtherGuid);
+    }
+
+    [Fact]
+    public async Task An_update_never_reaches_a_read_only_field()
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
+        var id = created["id"]!.ToString()!;
+        await StoreKeysAsync(Guid.Parse(id), StoredGuid);
+
+        await svc.UpdateAsync(ItemCollection, id, Body(HostileBody));
+
+        var stored = await StoredAsync(created);
+        AssertInitialColumns(stored);
+        stored.OwnerId.Should().Be(StoredGuid);
+        stored.RequiredOwnerId.Should().Be(StoredGuid);
+    }
+
+    // The raw text of the stored rows column: a row type with initialisers, a private setter or a computed
+    // getter would show its own values whatever the column holds.
+    private async Task<string> StoredRowsTextAsync(object id)
+    {
+        var key = Guid.Parse(id.ToString()!);
+        var stored = await _db.Queryable<RawRepeaterRow>().Where(r => r.Id == key).FirstAsync();
+        return stored.Rows!;
+    }
+
+    private static JsonElement SingleRow(string rowsText)
+    {
+        using var document = JsonDocument.Parse(rowsText);
+        var rows = document.RootElement.EnumerateArray().ToList();
+        rows.Should().ContainSingle();
+        return rows[0].Clone();
+    }
+
+    private static string Field(JsonElement row, string name) =>
+        row.EnumerateObject().Single(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).Value.GetRawText();
+
+    [Fact]
+    public async Task A_create_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set()
+    {
+        var created = await _service(null).CreateAsync(RepeaterCollection, Body(RepeaterBody));
+
+        var row = SingleRow(await StoredRowsTextAsync(created["id"]!));
+
+        Field(row, "locked").Should().Be("\"x\"");
+        Field(row, "total").Should().Be("6");
+    }
+
+    [Fact]
+    public async Task An_update_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set()
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync(RepeaterCollection, Body(RepeaterBody));
+
+        await svc.UpdateAsync(
+            RepeaterCollection, created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u","qty":4,"total":99}]}"""));
+
+        var row = SingleRow(await StoredRowsTextAsync(created["id"]!));
+        Field(row, "locked").Should().Be("\"x\"");
+        Field(row, "total").Should().Be("8");
+    }
+
+    [Fact]
+    public async Task A_role_created_through_the_items_service_is_not_a_super_admin()
+    {
+        var created = await _service(null).CreateAsync("role", Body("""{"name":"editors","isSuperAdmin":true}"""));
+
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var isSuperAdmin = await _db.Queryable<Role>().Where(r => r.Id == id).Select(r => r.IsSuperAdmin).FirstAsync();
+        isSuperAdmin.Should().BeFalse();
+    }
+}

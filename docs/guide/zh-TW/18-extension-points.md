@@ -357,6 +357,7 @@ builder.Services.AddScoped<IItemChangeListener, MyChangeListener>();
 建立時，body 的檢查順序是：權限、`Creatable` 檢查、body 形狀、`MaxLength` 與各欄位的驗證器，然後是你
 的 `BeforeWriteAsync`，最後才是必填檢查。純量的必填欄位在你的掛鉤之後才檢查，所以掛鉤可以把它填起
 來，下面的 slug 範例靠的就是這點。列表型別的必填欄位在掛鉤之前就檢查了，攔截器填不了它。
+`ReadOnly` 欄位在掛鉤執行時是類別給它的初始值，掛鉤可以改掉它。
 
 掛鉤設進去的值不會再被 `MaxLength` 或欄位驗證器檢查，所以掛鉤得自己產出合法的值；只有純量必填檢查
 看得到它。

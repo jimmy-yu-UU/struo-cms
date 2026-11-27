@@ -402,11 +402,11 @@ written.
 
 Create and update bind the body only against the collection's own declared writable fields and
 its many-to-one foreign keys; every other key is silently dropped, with no error reported — that
-covers `id`, `version`, and any system-managed field. Neither create nor update lets the caller
-pick the item's `id`.
+covers `id`, `version`, a read-only field and any system-managed field, including one that is also
+a many-to-one foreign key. Neither create nor update lets the caller pick the item's `id`.
 
-Read-only and system fields are also cleared back to empty after binding, so even a body that
-deliberately reuses one of those key names to smuggle in a value can't reach that field.
+A read-only field stores the value the class gives the property on create and keeps its stored
+value on update (see [Chapter 6](06-field-types.md)).
 
 `translations` and a many-to-many relation's key sit outside this binding step but still take
 effect — the server reads them separately from the raw body and applies them inside the same

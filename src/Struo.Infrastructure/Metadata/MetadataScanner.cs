@@ -493,6 +493,8 @@ public static class MetadataScanner
     private static CollectionMetadata BuildCollection(Type type, CmsCollectionAttribute attr)
     {
         FieldDeclarationCheck.RequirePublicInstanceFields(type);
+        RelationDeclarationCheck.RequirePublicInstanceRelations(type);
+        RelationInheritanceCheck.Require(type);
         ColumnOverrideCheck.Require(type, primaryKeyRuleReports: true);
         FieldInheritanceCheck.Require(type);
         FieldSetterCheck.RequirePublicSetters(type);
@@ -551,9 +553,23 @@ public static class MetadataScanner
             SoftDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type),
             FieldGroups = groups,
             Fields = ordered,
-            Relations = ScanRelations(type),
+            Relations = WithServerOwnedKeysLocked(ScanRelations(type), ordered),
             Translation = translation
         };
+    }
+
+    // A ManyToOne relation whose foreign key is a ReadOnly or audit field is never written by the server,
+    // so it is reported as not editable.
+    private static List<RelationMetadata> WithServerOwnedKeysLocked(
+        IReadOnlyList<RelationMetadata> relations, IReadOnlyList<FieldMetadata> fields)
+    {
+        var serverOwned = fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return relations
+            .Select(r => r is { Kind: RelationKind.ManyToOne, ForeignKey: { } fk } && serverOwned.Contains(fk)
+                ? r with { Editable = false }
+                : r)
+            .ToList();
     }
 
     /// <summary>
@@ -574,6 +590,7 @@ public static class MetadataScanner
         FieldDeclarationCheck.RequirePublicInstanceFields(tType);
         ColumnOverrideCheck.Require(tType, primaryKeyRuleReports: false);
         FieldInheritanceCheck.Require(tType);
+        TranslationReadOnlyCheck.Require(tType);
         FieldSetterCheck.RequireSetters(tType);
         var tProps = tType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
@@ -779,6 +796,7 @@ public static class MetadataScanner
         FieldDeclarationCheck.RequirePublicInstanceFields(childType);
         FieldInheritanceCheck.Require(childType);
         FieldSetterCheck.RequireRowSetters(childType);
+        FieldSetterCheck.RequireReadOnlyRowFieldsUnbound(childType, Camel(prop.Name));
         var subProps = childType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Where(p => p.GetCustomAttribute<CmsFieldAttribute>() is not null)
             .ToList();
@@ -853,6 +871,7 @@ public static class MetadataScanner
     public static IReadOnlyList<RelationMetadata> ScanRelations(Type type)
     {
         RelationDeclarationCheck.RequirePublicInstanceRelations(type);
+        RelationInheritanceCheck.Require(type);
         var list = new List<RelationMetadata>();
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {

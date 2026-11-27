@@ -2,7 +2,7 @@
 
 ## Decision
 
-The metadata scan refuses, with a `MetadataException`, a `[CmsField]` declaration in three cases.
+The metadata scan refuses, with a `MetadataException`, a `[CmsField]` declaration in four cases.
 Each check runs for every type the scan reads fields from: a collection class, a translation class,
 a `Repeater` row type, and the base classes of each.
 
@@ -19,7 +19,13 @@ a `Repeater` row type, and the base classes of each.
   - on a `Repeater` row type, through a public setter, or through a parameter of the same name and
     type on the row type's one public constructor, unless another constructor carries
     `[JsonConstructor]`;
-  - on a translation class, through any setter the class can reach, whatever `ReadOnly` says.
+  - on a translation class, through any setter the class can reach.
+- **`ReadOnly = true` on a translation field** (`TranslationReadOnlyCheck`). A translations payload
+  writes every field of a translation class, so the flag is refused there.
+- **`ReadOnly = true` on a `Repeater` sub-field a request body can still set**
+  (`FieldSetterCheck`): one with a public setter, `[JsonInclude]`, or a matching parameter on the
+  constructor the binder uses (the one carrying `[JsonConstructor]`, public or not, else the one
+  public constructor). A sub-field no body can set keeps the flag.
 
 ## Why
 
@@ -31,7 +37,9 @@ A write binds a collection field and a `Repeater` row with System.Text.Json, whi
 non-public setter unless it carries `[JsonInclude]` and builds a row through its public constructor.
 A field it cannot bind is listed as writable and the value sent for it is dropped. A translation
 value is assigned by reflection, which calls a non-public setter of the class and throws when there
-is none.
+is none. That write does not look at `ReadOnly`, while the GraphQL input type leaves a `ReadOnly`
+field out and the schema reports it read-only: the flag holds on one path only. A value only server
+code sets belongs on the parent entity, where `ReadOnly` holds on every path.
 
 Refusing each declaration at start names the property while the fork is still editing it. The checks
 list the declared members of each class in the hierarchy (`DeclaredProperties`), so they see the
@@ -86,25 +94,88 @@ Setter, translation field: a `protected`, `internal` or `private` setter of the 
 stored the value; a field with no setter made the write throw `ArgumentException: Property set
 method not found`.
 
-`FieldDeclarationCheckTests`, `FieldInheritanceCheckTests` and `FieldSetterCheckTests` pin the
-refusals and the accepted shapes; `ItemServiceComputedFieldTests` creates an item with a `ReadOnly`
-computed field.
+`ReadOnly = true` on a translation field with a setter.
+
+| Path | The value sent for the field |
+|---|---|
+| `translations` payload on create and on update | stored |
+| GraphQL translations input type | the field is not in the type |
+| Schema | reported as read-only |
+
+`ReadOnly = true` on a collection field with a setter, on create, with no interceptor. "Initial" is
+the value the class gives the property.
+
+| Property | Stored at the commit before the rule | Stored with the rule |
+|---|---|---|
+| `string?`, `int?`, `Guid?`, a list, each with an initializer | `null` | initial |
+| `string` with an initializer, on a `NOT NULL` column | the insert failed | initial |
+| `int`, `bool` with an initializer | initial | initial |
+
+A key sent for a `ReadOnly` field that is not a foreign key reached the property in no spelling, on
+create or on update.
+
+`ReadOnly = true` on a collection field that is also the foreign key of a ManyToOne relation, with
+the key in the body. The stored value was the class initial value.
+
+| Operation | Property | Stored before the rule | Stored with the rule |
+|---|---|---|---|
+| update | `Guid?` | `NULL` | unchanged |
+| update | `Guid` | the value sent | unchanged |
+| revert to an earlier revision | `Guid?` | `NULL` | unchanged |
+| update, revert | audit field `CreatedBy` used as the key | `NULL` | unchanged |
+
+`AuditKeyRelationTests` pins the audit rows. A relation on such a key is scanned with
+`Editable = false` (`RelationKeyEditableTests`).
+
+The stored values are read through a row type without initializers: a `NULL` column read through
+the entity type comes back as the initial value of the property, so an assertion on the entity
+cannot see it (`The_stored_row_reader_shows_a_database_null_as_null`,
+`The_entity_reader_fills_a_database_null_with_the_property_initialiser`).
+
+`ReadOnly = true` on a Repeater sub-field, by how the property is declared. The body sent a value
+for the sub-field on create and on update.
+
+| Sub-field | Stored | The rule |
+|---|---|---|
+| get-only, computed | the computed value | accepted |
+| non-public setter, no `[JsonInclude]` | the value the type gives | accepted |
+| public `set` or `init` | the value sent | refused |
+| get-only with a matching parameter on the one public constructor | the value sent | refused |
+| get-only, bound by a `[JsonConstructor]` beside a public parameterless one | the value sent | refused |
+| get-only, bound by a non-public `[JsonConstructor]` | the value sent | refused |
+| get-only, two public constructors, none marked | the value the type gives | accepted |
+| non-public setter with `[JsonInclude]` | the value sent; a read returns the type's value | refused |
+
+The accepted rows are read from the raw stored column
+(`A_create_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set`,
+`An_update_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set`):
+a read through the row type shows the type's value whatever the column holds. The refused rows are
+measurements taken before the rule; `FieldSetterCheckTests` pins the refusals. A writable sub-field
+bound through a `[JsonConstructor]` beside a parameterless constructor stores the value and reads
+back the type's value, so the setter rule keeps refusing it.
+
+The GraphQL item input leaves a `ReadOnly` sub-field out in every row.
+
+`FieldDeclarationCheckTests`, `FieldInheritanceCheckTests`, `FieldSetterCheckTests` and
+`TranslationReadOnlyCheckTests` pin the refusals and the accepted shapes;
+`ItemServiceComputedFieldTests` creates an item with a `ReadOnly` computed field, and
+`ReadOnlyCreateValueTests` pins the value a create stores.
 
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
-- `ReadOnly = true` on a property that has a setter is cleared to `null` before the insert, so on a
-  non-nullable column the create fails unless server code sets the value. A stored get-only
-  `ReadOnly` property reads back its initializer. Both were measured and are not refused.
-- `ReadOnly = true` on a translation field does not stop a translation write.
+- A stored get-only `ReadOnly` property reads back its initializer. It was measured and is not
+  refused.
 - A row property with a non-public setter, `[JsonInclude]` and a matching constructor parameter is
   accepted through the constructor; that combination was not measured.
 - `[JsonIgnore]` or `[JsonPropertyName]` on a writable field was not measured.
-- `[CmsRelation]` has no such check: an override that does not repeat it is not a relation.
+- `[CmsRelation]` lost through an override or a `new` member is refused by
+  `RelationInheritanceCheck`: `docs/ai/decisions/relation-key-and-primary-key-declarations.md`.
 
 ## Referenced from
 
 - `src/Struo.Infrastructure/Metadata/FieldDeclarationCheck.cs`
 - `src/Struo.Infrastructure/Metadata/FieldInheritanceCheck.cs`
 - `src/Struo.Infrastructure/Metadata/FieldSetterCheck.cs`
+- `src/Struo.Infrastructure/Metadata/TranslationReadOnlyCheck.cs`
 - `docs/ai/conventions.md`

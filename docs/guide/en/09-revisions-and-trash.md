@@ -181,7 +181,8 @@ rejecting it as every other write path does.
 
 A revert restores only what the snapshot captured at the time — its own fields, relation state,
 and every locale's full translation. System-managed fields and the item's soft-delete state are
-not part of the snapshot, so a revert never touches them. A revert never changes any other item.
+not part of the snapshot, so a revert never touches them. A read-only field keeps the value it has,
+whatever the snapshot holds. A revert never changes any other item.
 
 A locale the item has now but the snapshot lacks did not exist at that version, so the revert
 deletes it. This covers the enabled non-default locales; the default locale and a disabled

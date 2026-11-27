@@ -12,36 +12,12 @@ namespace Struo.Infrastructure.Metadata;
 /// </summary>
 internal static class FieldInheritanceCheck
 {
-    private const BindingFlags PublicInstance = BindingFlags.Public | BindingFlags.Instance;
-
     /// <summary>
     /// Refuses a <c>[CmsField]</c> property of <paramref name="type"/>'s hierarchy that the scan does not
     /// read and whose name no scanned <c>[CmsField]</c> property carries.
     /// </summary>
-    public static void Require(Type type)
-    {
-        var served = type.GetProperties(PublicInstance);
-        foreach (var prop in DeclaredProperties.Hierarchy(type).SelectMany(DeclaredProperties.DeclaredOn))
-        {
-            if (!HasField(prop) || IsServed(prop, served)) continue;
-            throw Refusal(prop, Replacement(type, prop));
-        }
-    }
-
-    private static bool HasField(PropertyInfo prop) => prop.IsDefined(typeof(CmsFieldAttribute), inherit: false);
-
-    // Served: the scan reads this very declaration, or another that carries [CmsField] under the same name.
-    private static bool IsServed(PropertyInfo prop, PropertyInfo[] served) =>
-        Array.Exists(served, s => s.DeclaringType == prop.DeclaringType && s.Name == prop.Name)
-        || Array.Exists(served, s => s.Name == prop.Name && HasField(s));
-
-    // The nearest declaration in a more derived class that replaces the property: an override or a hiding
-    // member. A property the scan does not read is replaced by one, or the declaration check refused it.
-    private static PropertyInfo Replacement(Type type, PropertyInfo prop) =>
-        DeclaredProperties.Hierarchy(type)
-            .TakeWhile(t => t != prop.DeclaringType)
-            .SelectMany(DeclaredProperties.DeclaredOn)
-            .First(p => p.Name == prop.Name);
+    public static void Require(Type type) =>
+        InheritedAttributeCheck.Require(type, typeof(CmsFieldAttribute), Refusal);
 
     private static MetadataException Refusal(PropertyInfo prop, PropertyInfo replacement)
     {
