@@ -241,13 +241,18 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
     [Fact]
     public async Task A_relation_object_next_to_the_key_still_filters_through_its_own_name()
     {
-        var c = Cases[Int];
+        var c = Cases[Uuid];
         var tag = Tag();
-        await SeedAsync(c, tag);
+        var hitName = "hit" + tag;
+        var hitTarget = await EmittedGraphQlHost.CreateAsync(Client, "fkUuidTarget", new JsonObject { ["name"] = hitName });
+        var missTarget = await EmittedGraphQlHost.CreateAsync(Client, "fkUuidTarget", new JsonObject { ["name"] = "miss" + tag });
+        var hitOwner = await RestCreateAsync(c, tag, JsonValue.Create(hitTarget));
+        await RestCreateAsync(c, tag, JsonValue.Create(missTarget));
 
         var json = await GraphQlAsync(
-            $$"""{ {{c.Collection}}s(filter: { name: { eq: "{{tag}}" }, owner: { name: { eq: "none" } } }) { items { id } } }""");
+            $$"""{ {{c.Collection}}s(filter: { name: { eq: "{{tag}}" }, ownerId: { in: ["{{hitTarget}}", "{{missTarget}}"] }, owner: { name: { eq: "{{hitName}}" } } }) { items { id } } }""");
 
-        json["data"]![$"{c.Collection}s"]!["items"]!.AsArray().Should().BeEmpty();
+        var found = json["data"]![$"{c.Collection}s"]!["items"]!.AsArray().Select(n => n!["id"]!.GetValue<string>());
+        found.Should().Equal(hitOwner);
     }
 }
