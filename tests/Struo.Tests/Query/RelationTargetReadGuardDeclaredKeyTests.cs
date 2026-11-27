@@ -211,6 +211,14 @@ public sealed class RelationTargetReadGuardDeclaredKeyTests
     }
 
     [Fact]
+    public void A_no_value_spelling_of_a_key_still_needs_read_on_the_target()
+    {
+        var act = () => Guard.Require(Meta, Body("""{"textKey":"","intKey":0}"""));
+
+        act.Should().Throw<PermissionDeniedException>();
+    }
+
+    [Fact]
     public void A_revert_leaves_a_declared_key_out_whatever_its_value()
     {
         var keys = Guard.UnreadableKeys(Meta, Body($$"""{"uuidKey":"{{StoredGuid}}","intKey":10}"""));

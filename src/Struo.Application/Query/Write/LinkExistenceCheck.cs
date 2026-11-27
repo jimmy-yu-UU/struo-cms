@@ -17,8 +17,9 @@ internal sealed record PendingLink(string Key, string Target, IReadOnlyList<obje
 /// collection (many-to-many arrays are checked by <see cref="ItemWriteSideSync"/>). Only an id the write newly
 /// assigns is checked: on an update an id equal to the stored one passes, so an item that already holds a
 /// dangling or trashed reference stays saveable when the client sends the field back. A trashed row is not a
-/// valid new assignment. A key whose field is system or <c>ReadOnly</c> is never written from a body, so it is
-/// not checked. A revert is not checked. The ids of one target collection are looked up with one query.
+/// valid new assignment. An empty string, an empty Guid and the default value of a non-nullable key type mean
+/// no link and are not looked up. A key whose field is system or <c>ReadOnly</c> is never written from a body,
+/// so it is not checked. A revert is not checked. The ids of one target collection are looked up with one query.
 /// Why: docs/ai/decisions/a-link-write-needs-read-on-the-target.md
 /// </summary>
 internal sealed class LinkExistenceCheck(
@@ -38,8 +39,9 @@ internal sealed class LinkExistenceCheck(
         var links = new List<PendingLink>();
         foreach (var slot in Slots(meta, d).Where(slot => sent.Contains(slot.Key)))
         {
-            var storedIds = stored is null ? [] : IdsOf(Read(d, slot.Property, stored));
-            var added = IdsOf(Read(d, slot.Property, incoming)).Where(id => !storedIds.Any(known => SameId(known, id))).ToList();
+            var type = d.Properties.GetValueOrDefault(slot.Property)?.PropertyType ?? typeof(object);
+            var storedIds = stored is null ? [] : IdsOf(Read(d, slot.Property, stored), type);
+            var added = IdsOf(Read(d, slot.Property, incoming), type).Where(id => !storedIds.Any(known => SameId(known, id))).ToList();
             if (added.Count > 0) links.Add(new PendingLink(slot.Key, slot.Target, added, slot.IsList));
         }
         return links;
@@ -176,12 +178,18 @@ internal sealed class LinkExistenceCheck(
     private static object? Read(EntityDescriptor d, string property, object row) =>
         d.Properties.GetValueOrDefault(property)?.GetValue(row);
 
-    // The ids a value holds: none for null or an empty Guid, the elements of a list, else the value itself.
-    private static List<object> IdsOf(object? value) => value switch
+    // The ids a value holds: none for null, an empty Guid, an empty string, or the default value of a type that
+    // cannot hold null (such a key uses it for "no link"); the elements of a list; else the value itself.
+    private static List<object> IdsOf(object? value, Type propertyType) => value switch
     {
         null => [],
         Guid guid => guid == Guid.Empty ? [] : [guid],
-        System.Collections.IEnumerable list and not string => list.Cast<object>().Where(id => id is not Guid g || g != Guid.Empty).ToList(),
-        _ => [value],
+        string text => text.Length == 0 ? [] : [text],
+        System.Collections.IEnumerable list => list.Cast<object>().Where(id => id is not Guid g || g != Guid.Empty).ToList(),
+        _ => IsNoLink(value, propertyType) ? [] : [value],
     };
+
+    private static bool IsNoLink(object value, Type propertyType) =>
+        propertyType.IsValueType && Nullable.GetUnderlyingType(propertyType) is null
+        && value.Equals(Activator.CreateInstance(propertyType));
 }
