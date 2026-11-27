@@ -148,13 +148,20 @@ public static class MetadataScanner
         if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB))) return;
 
         var owned = new[] { fkA, fkB }.Where(key => serverOwned.Contains(Camel(key))).ToList();
-        var reason = owned.Count == 0 ? "" :
-            $" {string.Join(" and ", owned.Select(key => $"'{junctionType.Name}.{key}'"))} {(owned.Count == 1 ? "is" : "are")} ReadOnly, " +
-            "an audit field or a soft-delete column, so a request body never sets it; declare the key as a writable [CmsField] instead.";
         throw new MetadataException(
             $"Junction collection '{junction.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare its foreign keys " +
             $"'{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created " +
-            "through the API store empty keys." + reason);
+            "through the API store empty keys." + ServerOwnedKeyReason(junctionType, owned));
+    }
+
+    // Names the junction keys a request body never sets; empty when the keys are only undeclared.
+    private static string ServerOwnedKeyReason(Type junctionType, List<string> owned)
+    {
+        if (owned.Count == 0) return "";
+        var names = string.Join(" and ", owned.Select(key => $"'{junctionType.Name}.{key}'"));
+        var verb = owned.Count == 1 ? "is" : "are";
+        return $" {names} {verb} ReadOnly, an audit field or a soft-delete column, which a request body never sets; " +
+               "use a property a body can set as the key.";
     }
 
     /// <summary>

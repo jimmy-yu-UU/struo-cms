@@ -160,7 +160,7 @@ public sealed class JunctionServerOwnedKeyTests
         var scan = () => MetadataScanner.ScanTypes(TypesOf(junctionClass));
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
-        message.Should().Contain($"Junction collection '{junction}'").And.Contain($"'{key}'")
+        message.Should().Contain($"Junction collection '{junction}'").And.Contain($"'{junctionClass}.{key}'")
             .And.Contain("a request body never sets").And.Contain("writable [CmsField]");
     }
 

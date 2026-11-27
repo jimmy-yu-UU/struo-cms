@@ -106,7 +106,7 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var partner = await h.SeedGlossaryAsync();
         var ledger = await LedgerWithPartnerAsync(partner);
 
-        var outcome = await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = string.Format(format, partner) });
+        var outcome = await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = string.Format(System.Globalization.CultureInfo.InvariantCulture, format, partner) });
 
         AssertRefusedAlike([outcome], channel, Glossary);
         (await h.StoredLedgerAsync(ledger)).Partner.Should().Be(partner);

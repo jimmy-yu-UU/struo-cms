@@ -79,8 +79,8 @@
   ([Chapter 6](06-field-types.md)).
 - A junction collection whose key is `ReadOnly`, an audit field or a soft-delete column stops the
   host at start. Such a key passed the startup check when a many-to-one relation of the junction
-  named it, although a request body never sets it. Declare both keys as writable `[CmsField]`s
-  ([Chapter 8](08-relations.md)).
+  named it, although a request body never sets it. Use properties a body can set as the two keys,
+  declared as writable `[CmsField]`s ([Chapter 8](08-relations.md)).
 - A `[CmsField]` on `DeletedAt` or `DeletedBy` of a soft-deletable class stops the host at start:
   the delete and restore operations own those columns. Remove `[CmsField]`
   ([Chapter 9](09-revisions-and-trash.md)).
@@ -90,9 +90,9 @@
   `folderId` on an upload. Without it the write is refused with `403` and
   `Read not permitted on '{target}'.`, before any id is looked at. A link write needed the write
   grant only, so a caller could link and unlink rows of a collection they could not read. On update,
-  a file field, a junction key or a foreign key that is also a declared field, sent with the value
-  it already holds, is let through; a `ReadOnly` or system key is not checked, as the server does
-  not write it. A revert
+  a file field, a junction key or a foreign key that is also a declared field and not `Hidden`,
+  sent with the value it already holds, is let through; a key the server does not write (a
+  `ReadOnly` or system field, a soft-delete column) is not checked. A revert
   leaves out the links the caller could not write and applies the rest; the admin's confirmation
   lists the fields that are left out. Give read on the target to a
   role that writes such links; assigning roles to a user needs read on `role`
