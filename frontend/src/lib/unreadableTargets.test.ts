@@ -84,6 +84,14 @@ describe('fieldsLeftByRevert', () => {
     ])
     expect(fieldsLeftByRevert(shown, () => false)).toEqual(['Category', 'Tags'])
   })
+  it('leaves out a relation that is not editable, as the server never writes its key', () => {
+    const locked = meta([], [
+      rel({ name: 'owner', label: 'Owner', editable: false }),
+      rel({ name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', foreignKey: null, editable: false }),
+      rel({ name: 'category', label: 'Category' }),
+    ])
+    expect(fieldsLeftByRevert(locked, () => false)).toEqual(['Category'])
+  })
   it('leaves out a many-to-one without a foreign key and a one-to-many, as the server does', () => {
     const other = meta([], [
       rel({ name: 'parent', label: 'Parent', foreignKey: null }),

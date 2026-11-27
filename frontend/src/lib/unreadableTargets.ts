@@ -27,17 +27,18 @@ export function isFileFieldUnreadable(field: FieldMeta, canRead?: CanReadCollect
   return FILE_INTERFACES.has(field.interface) && !canRead(FILE_COLLECTION)
 }
 
-// A relation of a kind the server checks on a write, whatever interface shows it: a many-to-one with a
-// foreign key, or a many-to-many. Its target is one the caller cannot read.
+// A relation a revert writes and the server checks, whatever interface shows it: a many-to-one with a
+// foreign key, or a many-to-many, that is editable (a read-only or audit key is never written, so a revert
+// leaves it as it is for every caller). Its target is one the caller cannot read.
 export function isRelationLeftByRevert(rel: RelationMeta, canRead?: CanReadCollection): boolean {
   if (!canRead) return false
-  const linked = (rel.kind === 'manyToOne' && !!rel.foreignKey) || rel.kind === 'manyToMany'
+  const linked = rel.editable !== false && ((rel.kind === 'manyToOne' && !!rel.foreignKey) || rel.kind === 'manyToMany')
   return linked && !canRead(rel.targetCollection)
 }
 
-// The labels of the fields a revert leaves as they are for this caller: the file fields (shared and
-// translatable) and the relations, chosen by kind as the server chooses them, whose target the caller
-// cannot read. A read-only field never changes on a write, so it is not listed.
+// The labels of the fields a revert writes for other callers and leaves as they are for this one: the
+// file fields (shared and translatable) and the editable relations, chosen by kind as the server chooses
+// them, whose target the caller cannot read. A read-only field or relation is never written, so it is not listed.
 export function fieldsLeftByRevert(meta: CollectionMeta, canRead?: CanReadCollection): string[] {
   const { shared, translatable } = splitFields(meta)
   const fields = [...shared, ...translatable].filter((f) => !f.readOnly && isFileFieldUnreadable(f, canRead))
