@@ -62,9 +62,9 @@
   into one that cannot be `null`; a revert to an earlier revision cleared a nullable foreign key to
   `NULL` too (measured on SQLite below the HTTP layer). Remove `ReadOnly = true` when clients are
   meant to set the key; set it in a write interceptor when the server owns the value
-  ([Chapter 6](06-field-types.md)). The same holds for a relation whose foreign key is an audit field
-  such as `CreatedBy`: an update and a revert cleared it to `NULL`, and the GraphQL inputs listed
-  the key. Both kinds of relation are reported as not editable in the schema, so the admin relation
+  ([Chapter 6](06-field-types.md)). The same holds for a relation whose foreign key is an audit
+  field such as `CreatedBy`: an update and a revert cleared it to `NULL`, and the GraphQL inputs
+  listed the key. Both kinds of relation are reported as not editable in the schema, so the admin relation
   picker is disabled ([Chapter 8](08-relations.md)).
 :::
 
