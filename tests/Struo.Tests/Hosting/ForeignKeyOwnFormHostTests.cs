@@ -45,7 +45,7 @@ public sealed class ForeignKeyOwnFormHostTests(ForeignKeyOwnFormHostTests.HostFi
 
     public static TheoryData<string> AllKinds() => new(Kinds);
 
-    private static JsonNode Id(int n) => JsonValue.Create($"00000000-0000-0000-0000-00000000000{n}");
+    private static JsonValue Id(int n) => JsonValue.Create($"00000000-0000-0000-0000-00000000000{n}");
 
     [SugarTable("fkUuidOwner")]
     public sealed class UuidRow { [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; } public Guid? OwnerId { get; set; } }

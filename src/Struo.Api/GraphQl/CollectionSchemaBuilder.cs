@@ -431,7 +431,7 @@ internal sealed class CollectionSchemaBuilder(
     // cyclic input types resolve like and/or (no build loop).
     private static void AddRelationFilterField(
         InputObjectTypeConfiguration config, CollectionMetadata meta, RelationMetadata rel,
-        IReadOnlyList<M2MDescriptor> payloadRelations, IReadOnlySet<string> declared)
+        IReadOnlyList<M2MDescriptor> payloadRelations, HashSet<string> declared)
     {
         string? targetFilter = null;
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)

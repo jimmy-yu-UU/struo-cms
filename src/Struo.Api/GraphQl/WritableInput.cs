@@ -98,7 +98,7 @@ internal static class WritableInput
     // field declares; a ReadOnly or audit key is not written, as for the field itself.
     private static IEnumerable<InputField> RelationFields(
         CollectionMetadata meta, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations,
-        IReadOnlySet<string> declared)
+        HashSet<string> declared)
     {
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
         {

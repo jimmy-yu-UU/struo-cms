@@ -20,7 +20,7 @@ namespace Struo.Tests.GraphQl;
 /// key without <c>[CmsField]</c>, or one the field rule leaves out, keeps the relation form (<c>ID</c> and
 /// <c>IdFilter</c>). The schema is built through the real scanner and <c>StruoTypeModule</c>.
 /// </summary>
-public sealed class ForeignKeyOwnFormSchemaTests
+public sealed partial class ForeignKeyOwnFormSchemaTests
 {
     [SugarTable("fk_schema_guid_target")]
     [CmsCollection("FkSchemaGuidTarget", Name = "fkSchemaGuidTarget")]
@@ -214,6 +214,9 @@ public sealed class ForeignKeyOwnFormSchemaTests
         return SchemaFormatter.FormatAsString(executor.Schema);
     }
 
+    [GeneratedRegex(@"^\s+(?<name>\w+):\s*(?<type>\S+)\s*$", RegexOptions.Multiline)]
+    private static partial Regex FieldLine();
+
     // The fields of one input type in the printed schema, name to type text.
     private static async Task<Dictionary<string, string>> InputAsync(string typeName)
     {
@@ -221,7 +224,7 @@ public sealed class ForeignKeyOwnFormSchemaTests
         var block = Regex.Match(sdl, $@"input {typeName} \{{(?<body>.*?)\n\}}", RegexOptions.Singleline);
         block.Success.Should().BeTrue($"the schema has input {typeName}");
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (Match line in Regex.Matches(block.Groups["body"].Value, @"^\s+(?<name>\w+):\s*(?<type>\S+)\s*$", RegexOptions.Multiline))
+        foreach (Match line in FieldLine().Matches(block.Groups["body"].Value))
             fields.Add(line.Groups["name"].Value, line.Groups["type"].Value);
         return fields;
     }
