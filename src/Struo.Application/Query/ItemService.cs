@@ -266,10 +266,10 @@ public sealed class ItemService(
     }
 
     // Merge update: overlays ONLY the fields the client actually sent (writable, non-readonly,
-    // non-system) and the M2O foreign keys onto `existing`, and returns the body keys. This preserves
-    // server-managed columns the client never sends — e.g. a File's StorageKey/FileName/Size — so a
-    // partial PUT (status + translations only) cannot wipe NOT NULL metadata. Relations and
-    // translations are synced separately by persist.
+    // non-system) and the M2O foreign keys that are not ReadOnly or system fields onto `existing`, and
+    // returns the body keys. This preserves server-managed columns the client never sends — e.g. a
+    // File's StorageKey/FileName/Size — so a partial PUT (status + translations only) cannot wipe NOT
+    // NULL metadata. Relations and translations are synced separately by persist.
     private HashSet<string> MergeBody(
         string collection, CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {

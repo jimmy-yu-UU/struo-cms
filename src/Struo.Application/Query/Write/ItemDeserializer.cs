@@ -144,14 +144,14 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         return stripNames;
     }
 
-    // Allowlist everything else: only declared, writable [CmsField]s and declared ManyToOne
-    // foreign keys may bind directly into the CLR entity. Without this, deserializing straight
-    // into the whole entity type lets a client set anything the CLR type exposes but metadata
-    // never declared — the primary key, the optimistic-concurrency Version, the soft-delete
-    // markers, or a fork's own undeclared property — none of which carry [CmsField] and so none
-    // of which are covered by the IsSystem/ReadOnly strip loop below. This mirrors the allowlist
-    // ItemService.UpdateCoreAsync already applies on update (fields + M2O FKs actually present in
-    // the body); unknown keys are silently ignored here too, not rejected with a 400.
+    // Allowlist everything else: only declared, writable [CmsField]s and the foreign keys of
+    // declared ManyToOne relations that are not ReadOnly or system fields may bind directly into
+    // the CLR entity. Without this, deserializing straight into the whole entity type lets a
+    // client set anything the CLR type exposes but metadata never declared — the primary key, the
+    // optimistic-concurrency Version, the soft-delete markers, or a fork's own undeclared property —
+    // none of which carry [CmsField] and so none of which are covered by the IsSystem/ReadOnly
+    // strip loop below. This mirrors the allowlist ItemService.UpdateCoreAsync already applies on
+    // update (fields + M2O FKs actually present in the body); unknown keys are silently ignored here too, not rejected with a 400.
     private static HashSet<string> ComputeAllowedKeys(CollectionMetadata meta, IReadOnlySet<string>? onlyFields)
     {
         var locked = ServerOwnedFieldNames(meta);
