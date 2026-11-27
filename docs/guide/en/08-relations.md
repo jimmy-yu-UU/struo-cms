@@ -327,15 +327,18 @@ all get the same answer. A key the body does not carry is not checked and the st
 it is. A super-admin reads every collection.
 
 On update, a `File`, `Image` or `Files` field sent with the value it already holds is let through,
-inside `translations` as well: an item read returns those ids, and a form sends them back as they
-were. A `Hidden` file field has no such allowance, and neither has a create.
+inside `translations` as well, and so is a key of a junction row: an item read returns those ids,
+and a form sends them back as they were. A `Hidden` field has no such allowance, and neither has a
+create. Removing a whole locale with `null` removes the file links it holds and needs no read grant
+on `file`: nothing is linked.
 
 For a caller who can read the target, the row must also exist. A many-to-many id is checked as
 described above. A many-to-one foreign key, a junction key or a file id that names no row, or a
 row in the trash, is refused with `400`: `The id in '{key}' does not exist in '{target}'.`, and for
 a `Files` list `One or more ids in '{field}' do not exist in 'file'.` On create every id sent is
 checked; on update only an id the stored value does not already hold, so an item that already holds
-a dangling id can still be saved. An all-zero GUID is not checked.
+a dangling id can still be saved. An all-zero GUID is not checked. A revert does not check a foreign
+key or a file id either; see [Chapter 9](09-revisions-and-trash.md).
 
 The admin form shows a relation or file field whose target the signed-in user cannot read as a
 disabled input with a note, and leaves it out of what it saves.

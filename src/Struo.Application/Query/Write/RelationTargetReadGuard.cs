@@ -22,8 +22,10 @@ internal readonly record struct SentLink(string Target, string Key, bool InTrans
 /// existing, a missing and a malformed id.
 /// <para>
 /// An update whose file field carries the value the item already stores needs no read on <c>file</c>: the item
-/// read returns that id to every reader of the collection (<see cref="RequireFilesAsync"/>).
+/// read returns that id to every reader of the collection (<see cref="RequireFilesAsync"/>). The same holds
+/// for a junction key sent with the stored value (<see cref="RequireJunctionKeys"/>).
 /// </para>
+/// Why: docs/ai/decisions/a-link-write-needs-read-on-the-target.md
 /// </summary>
 public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPermissionService permissions)
 {

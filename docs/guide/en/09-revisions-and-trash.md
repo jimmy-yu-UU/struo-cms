@@ -100,6 +100,11 @@ removed:
 - Any hidden payload key inside a payload-carrying many-to-many relation's `{ id, ...payload }`
   elements — a bare-id element has no payload to redact in the first place.
 
+The copy also shows no more of the item's links than an item read shows the caller. A many-to-many
+relation, and a many-to-one foreign key that is not a declared field, are left out when the caller
+cannot read the relation's target. A payload-carrying relation is reduced to bare ids when the
+caller cannot read the junction collection.
+
 Everything else passes through unchanged.
 
 This redaction applies only to the external single-revision read path; a revert reads the raw,
@@ -179,6 +184,14 @@ write: it also needs the junction collection's own write grant, as
 a many-to-many target trashed after the snapshot was captured, restoring the reference rather than
 rejecting it as every other write path does.
 
+A revert writes only the links the caller could write directly. A relation or a file field whose
+target collection the caller cannot read is left out, and the item keeps the link it has; the rest
+of the snapshot is applied
+([Chapter 8](08-relations.md#what-a-link-write-requires)). The admin's revert confirmation lists
+the fields that stay as they are. A many-to-one foreign key or a file id is stored as the snapshot
+holds it, also when the row it names has been purged since; a many-to-many id whose target has been
+purged refuses the revert with `400`.
+
 A revert restores only what the snapshot captured at the time — its own fields, relation state,
 and every locale's full translation. System-managed fields and the item's soft-delete state are
 not part of the snapshot, so a revert never touches them. A revert never changes any other item.
@@ -186,7 +199,8 @@ not part of the snapshot, so a revert never touches them. A revert never changes
 A locale the item has now but the snapshot lacks did not exist at that version, so the revert
 deletes it. This covers the enabled non-default locales; the default locale and a disabled
 locale's translation are left as they are. The delete goes through the `null` locale value that
-[Chapter 7](07-i18n.md) describes.
+[Chapter 7](07-i18n.md) describes, and removes the file links the locale holds without a read grant
+on `file`.
 
 Because a revert goes through exactly the same path as an ordinary update, reverting an item that
 is currently in the trash gets a plain 404 — the update path's read of the current row already

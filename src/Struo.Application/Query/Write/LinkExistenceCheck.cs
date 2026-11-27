@@ -18,6 +18,7 @@ internal sealed record PendingLink(string Key, string Target, IReadOnlyList<obje
 /// assigns is checked: on an update an id equal to the stored one passes, so an item that already holds a
 /// dangling or trashed reference stays saveable when the client sends the field back. A trashed row is not a
 /// valid new assignment. A revert is not checked. The ids of one target collection are looked up with one query.
+/// Why: docs/ai/decisions/a-link-write-needs-read-on-the-target.md
 /// </summary>
 internal sealed class LinkExistenceCheck(
     IItemRepository repository, IEntityRegistry registry, IM2MDescriptorSource m2mSource)

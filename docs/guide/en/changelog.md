@@ -43,14 +43,22 @@
   `folderId` on an upload. Without it the write is refused with `403` and
   `Read not permitted on '{target}'.`, before any id is looked at. A link write needed the write
   grant only, so a caller could link and unlink rows of a collection they could not read. On update,
-  a file field sent with the value it already holds is let through. Give read on the target to a
+  a file field or a junction key sent with the value it already holds is let through. A revert
+  leaves out the links the caller could not write and applies the rest; the admin's confirmation
+  lists the fields that stay as they are. Give read on the target to a
   role that writes such links; assigning roles to a user needs read on `role`
   ([Chapter 8](08-relations.md#what-a-link-write-requires)).
 - A many-to-one foreign key, a junction key or a file id that names no row, or a row in the trash,
   is refused with `400` `BAD_USER_INPUT`: `The id in '{key}' does not exist in '{target}'.` Such an
-  id was stored. On update only an id the stored value does not already hold is checked. A client
-  that writes the id of a row it creates afterwards creates that row first
-  ([Chapter 8](08-relations.md#what-a-link-write-requires)).
+  id was stored. On update only an id the stored value does not already hold is checked, and a
+  revert is not checked. A client that writes the id of a row it creates afterwards creates that
+  row first ([Chapter 8](08-relations.md#what-a-link-write-requires)).
+- `GET /api/items/{collection}/{id}/revisions/{n}` and the GraphQL revision query show no more links
+  than an item read shows the caller: a many-to-many relation, and a many-to-one foreign key that is
+  not a declared field, are left out when the caller cannot read the target, and a payload-carrying
+  relation is reduced to ids when the caller cannot read the junction collection. The snapshot was
+  returned whole. Give read on the target to a role that reviews revisions
+  ([Chapter 9](09-revisions-and-trash.md)).
 :::
 
 ### Changed
