@@ -59,11 +59,35 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
     public static void AssertWritten(WriteOutcome outcome) =>
         outcome.Code.Should().BeNull($"the write should succeed: {outcome.Body}");
 
-    public async Task<HttpClient> CallerAsync(string[] read, string[] write) =>
-        (await factory.CreateEditorClientAsync(read, write)).client;
+    // The callers a host has handed out, by permission set. The cache is owned by the host, so no caller crosses
+    // hosts, and a caller is a client whose only state is its auth cookie.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<StruoApiFactory, Dictionary<string, (HttpClient client, Guid userId)>> Callers = new();
 
-    /// <summary>A caller with the given grants, and the id of its user.</summary>
-    public Task<(HttpClient client, Guid userId)> CallerWithIdAsync(string[] read, string[] write) =>
+    private static string PermissionSet(string[] read, string[] write) =>
+        string.Join(",", read.Order(StringComparer.Ordinal)) + "|" + string.Join(",", write.Order(StringComparer.Ordinal));
+
+    /// <summary>
+    /// A signed-in caller with exactly these read and write grants (order does not matter). One caller is
+    /// created per distinct permission set for the life of the host and handed out again; a test that changes a
+    /// role or a user after this call uses <see cref="FreshCallerAsync"/>.
+    /// </summary>
+    public async Task<HttpClient> CallerAsync(string[] read, string[] write) => (await CallerWithIdAsync(read, write)).client;
+
+    /// <summary>The cached caller of <see cref="CallerAsync"/> and the id of its user.</summary>
+    public async Task<(HttpClient client, Guid userId)> CallerWithIdAsync(string[] read, string[] write)
+    {
+        var cache = Callers.GetValue(factory, _ => new(StringComparer.Ordinal));
+        var key = PermissionSet(read, write);
+        if (!cache.TryGetValue(key, out var caller))
+        {
+            caller = await factory.CreateEditorClientAsync(read, write);
+            cache[key] = caller;
+        }
+        return caller;
+    }
+
+    /// <summary>A new role, user and login with these grants, never shared: for a test that changes them afterwards.</summary>
+    public Task<(HttpClient client, Guid userId)> FreshCallerAsync(string[] read, string[] write) =>
         factory.CreateEditorClientAsync(read, write);
 
     private async Task<T> WithDbAsync<T>(Func<ISqlSugarClient, Task<T>> work)
