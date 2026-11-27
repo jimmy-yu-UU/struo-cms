@@ -184,13 +184,13 @@ write: it also needs the junction collection's own write grant, as
 a many-to-many target trashed after the snapshot was captured, restoring the reference rather than
 rejecting it as every other write path does.
 
-A revert writes only the links the caller could write directly. A relation or a file field whose
-target collection the caller cannot read is left out, and the item keeps the link it has; the rest
-of the snapshot is applied
+A revert does not write a link whose target collection the caller cannot read. Such a relation or
+file field is left out and the item keeps the link it has, unless the revert removes the locale
+that holds it (below); the rest of the snapshot is applied
 ([Chapter 8](08-relations.md#what-a-link-write-requires)). The admin's revert confirmation lists
-the fields that stay as they are. A many-to-one foreign key or a file id is stored as the snapshot
-holds it, also when the row it names has been purged since; a many-to-many id whose target has been
-purged refuses the revert with `400`.
+the fields that are left out. A many-to-one foreign key, a junction key or a file id is stored as
+the snapshot holds it, also when the row it names has been purged since; a many-to-many id whose
+target has been purged refuses the revert with `400`.
 
 A revert restores only what the snapshot captured at the time — its own fields, relation state,
 and every locale's full translation. System-managed fields and the item's soft-delete state are
@@ -202,9 +202,8 @@ locale's translation are left as they are. The delete goes through the `null` lo
 [Chapter 7](07-i18n.md) describes, and removes the file links the locale holds without a read grant
 on `file`.
 
-Because a revert goes through exactly the same path as an ordinary update, reverting an item that
-is currently in the trash gets a plain 404 — the update path's read of the current row already
-excludes trashed data. The right order is restore first, then revert; the reverse does not work.
+A revert reads the current row the way an ordinary update does, so reverting an item that is
+currently in the trash gets a plain 404 — that read already excludes trashed data. The right order is restore first, then revert; the reverse does not work.
 
 ## Soft delete: `ISoftDeletable`
 

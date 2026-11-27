@@ -286,8 +286,8 @@ junction 列的鍵也一樣：項目讀取會回傳這些 id，表單存檔時�
 外鍵、junction 的鍵、檔案 id 指向不存在的列或垃圾桶裡的列，回 `400`：
 `The id in '{key}' does not exist in '{target}'.`；`Files` 清單則是
 `One or more ids in '{field}' do not exist in 'file'.`。建立時檢查送來的每一個 id；更新時只檢查已存
-的值裡沒有的 id，所以原本就存著懸空 id 的項目仍然存得了檔。全為零的 GUID 不檢查。還原也不檢查外鍵
-與檔案 id，見[第 9 章](09-revisions-and-trash.md)。
+的值裡沒有的 id，所以原本就存著懸空 id 的項目仍然存得了檔。全為零的 GUID 不檢查。還原也不檢查外鍵、
+junction 的鍵與檔案 id，見[第 9 章](09-revisions-and-trash.md)。
 
 後台表單遇到登入者讀不到目標的關聯或檔案欄位，會顯示停用的輸入框與一句說明，存檔時不送出這個欄位。
 

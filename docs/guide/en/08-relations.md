@@ -338,7 +338,7 @@ row in the trash, is refused with `400`: `The id in '{key}' does not exist in '{
 a `Files` list `One or more ids in '{field}' do not exist in 'file'.` On create every id sent is
 checked; on update only an id the stored value does not already hold, so an item that already holds
 a dangling id can still be saved. An all-zero GUID is not checked. A revert does not check a foreign
-key or a file id either; see [Chapter 9](09-revisions-and-trash.md).
+key, a junction key or a file id either; see [Chapter 9](09-revisions-and-trash.md).
 
 The admin form shows a relation or file field whose target the signed-in user cannot read as a
 disabled input with a note, and leaves it out of what it saves.
