@@ -48,7 +48,9 @@ update and filter inputs, with the type the field gives it (`Int` and `IntFilter
 key with the `Number` interface) in place of `ID` and `IdFilter`. A key whose field is
 `Hidden = true` is not listed at all (see [Chapter 6](06-field-types.md)). A one-to-many relation
 whose child key is hidden that way needs a many-to-one relation back to the parent on that key,
-which the admin list of the relation filters through; without one, startup fails. A `File` or
+which the admin list of the relation filters through; without one, startup fails. That relation
+behaves like any other many-to-one: its `OnDelete` defaults to `Restrict`, which refuses to purge a
+parent that still has children, and the child's form shows it as an input. A `File` or
 `Image` field cannot be a relation key: the field already resolves to the file, and startup fails
 with a message that names the relation and the key.
 

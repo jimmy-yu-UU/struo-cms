@@ -34,7 +34,8 @@ internal static class HiddenChildKeyCheck
             $"key '{childKey}', but that key sets Hidden = true, so a reader cannot filter '{child.Name}' by it: the " +
             "admin list of the relation answers 400 Unknown field. " +
             $"Declare a many-to-one [CmsRelation] on '{childKey}' that points at '{parentName}', which the list " +
-            $"filters through, or remove Hidden = true from '{childKey}'.");
+            $"filters through, or remove Hidden = true from '{childKey}'. The relation is an ordinary many-to-one: " +
+            "its OnDelete defaults to Restrict.");
     }
 
     private static bool HasRelationBack(

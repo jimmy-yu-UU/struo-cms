@@ -135,8 +135,8 @@
   為外鍵的多對一關聯，建立或更新時送來的值會被存進去（在 SQLite 上、經 HTTP 管線量到的）。這種關聯
   在 schema 裡回報為不可編輯，GraphQL 的 input 也不列這個鍵
   （[第 9 章](09-revisions-and-trash.md)）。
-- 多對一的外鍵同時帶可寫的 `[CmsField]` 時，GraphQL 的建立、更新與篩選輸入只列這個鍵一次，型別照
-  欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
+- 多對一的外鍵同時帶可寫、且沒有標 `Hidden = true` 的 `[CmsField]` 時，GraphQL 的建立、更新與篩選
+  輸入只列這個鍵一次，型別照欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
   `The following field ... is declared multiple times`；量到的鍵型別是 `Guid?`、`int?`、`long?` 與
   `string?`（[第 8 章](08-relations.md)）。
 - `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在
