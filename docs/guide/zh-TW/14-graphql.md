@@ -170,8 +170,8 @@ query { articles(filter: { status: { eq: "published" } }, sort: ["-publishedAt"]
 多對一關聯在篩選輸入裡貢獻兩個欄位：自己的外鍵當 `IdFilter`（產生出來的純量篩選輸入型別之一，id 型
 欄位專用），加上目標型別的巢狀篩選輸入；一對多或
 多對多關聯則只貢獻巢狀篩選輸入這一個。同時帶 `[CmsField]` 的鍵用欄位自己的篩選型別，欄位標了
-`Hidden = true` 的鍵不列（[第 8 章](08-relations.md)）。跨關聯的巢狀篩選攤平成 REST 用的同一條帶點號路徑，兩邊收斂到
-同一棵過濾樹。GraphQL 沒有自己的排序文法，`sort: [String!]` 收的是 REST `sort=` 同一套 `-field` 字
+`Hidden = true` 的鍵不列（[第 8 章](08-relations.md)）。跨關聯的巢狀篩選攤平成 REST 用的同一條帶
+點號路徑，兩邊收斂到同一棵過濾樹。GraphQL 沒有自己的排序文法，`sort: [String!]` 收的是 REST `sort=` 同一套 `-field` 字
 串。
 
 `some`／`none` 是每個篩選輸入都帶的保留字：只在關聯自己的內層篩選裡才有意義，直接用在 root 或巢狀

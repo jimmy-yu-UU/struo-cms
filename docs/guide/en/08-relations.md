@@ -466,8 +466,8 @@ the admin SPA wires each one to its own input component:
   relation.
 - `RelatedList`: a read-only, paginated, lazily loaded list of the target collection, filtered
   through the target's many-to-one relation back to this collection when it declares one and by the
-  reverse foreign key otherwise; each row navigates to that row's own edit page, and the list appears only
-  once the parent row has been saved.
+  reverse foreign key otherwise; each row navigates to that row's own edit page, and the list
+  appears only once the parent row has been saved.
 - `TagSelect`: splits into two looks depending on whether the junction carries a visible payload or
   a `SortField` — see below.
 
