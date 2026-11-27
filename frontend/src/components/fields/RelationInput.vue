@@ -14,6 +14,7 @@ const props = defineProps<{
   modelValue: unknown
   disabled?: boolean
   parentId?: string
+  parentCollection?: string
   excludeId?: string
   optionHint?: (raw: Record<string, unknown>) => string | null
   // Unparsable payload text of the links editor; no other input of a relation parses its own text.
@@ -63,7 +64,7 @@ function update(v: unknown): void { emit('update:modelValue', v) }
   <RelatedList
     v-else-if="kind === 'relatedList'"
     v-bind="$attrs"
-    :relation="relation" :parent-id="parentId"
+    :relation="relation" :parent-id="parentId" :parent-collection="parentCollection"
   />
   <span v-else v-bind="$attrs" class="readonly-relation">{{ relation.label }} (read-only)</span>
 </template>

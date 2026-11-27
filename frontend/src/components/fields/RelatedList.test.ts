@@ -77,6 +77,39 @@ describe('RelatedList', () => {
     expect((w.vm as any).total).toBe(1)
   })
 
+  it('filters through the relation back to the parent when the child declares one', async () => {
+    const { schema } = setupStores()
+    schema.get = vi.fn().mockReturnValue({
+      ...targetMeta,
+      relations: [{
+        name: 'category', label: 'Category', kind: 'manyToOne', targetCollection: 'category', interface: 'dropdown',
+        foreignKey: 'categoryId', editable: true, selfReferencing: false,
+      }],
+    }) as never
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mount(RelatedList, {
+      props: { relation, parentId: 'p1', parentCollection: 'category' }, global: { stubs, plugins: [i18n] },
+    })
+    await (w.vm as any).load()
+    expect(listSpy).toHaveBeenCalledWith(
+      'article',
+      expect.objectContaining({ filter: { 'category.id': { op: '_eq', value: 'p1' } } }),
+    )
+  })
+
+  it('filters by the key when the child declares no relation back to the parent', async () => {
+    setupStores()
+    const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })
+    const w = mount(RelatedList, {
+      props: { relation, parentId: 'p1', parentCollection: 'category' }, global: { stubs, plugins: [i18n] },
+    })
+    await (w.vm as any).load()
+    expect(listSpy).toHaveBeenCalledWith(
+      'article',
+      expect.objectContaining({ filter: { categoryId: { op: '_eq', value: 'p1' } } }),
+    )
+  })
+
   it('does not query when parentId is absent (create mode)', async () => {
     setupStores()
     const listSpy = vi.spyOn(itemsApi, 'list').mockResolvedValue({ data: [], total: 0 })

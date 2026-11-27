@@ -125,10 +125,12 @@ describe('RelationInput', () => {
         relation: rel({ interface: 'relatedList', kind: 'oneToMany', editable: false }),
         modelValue: null,
         parentId: 'p1',
+        parentCollection: 'article',
       },
       global: { plugins: [i18n], stubs },
     })
     expect(w.findComponent(RelatedList).exists()).toBe(true)
+    expect(w.findComponent(RelatedList).props('parentCollection')).toBe('article')
   })
 
   it('falls back to read-only span for an unknown interface', () => {

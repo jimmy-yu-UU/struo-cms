@@ -19,10 +19,11 @@ public sealed record EmittedProperty(
     bool GetOnly = false, bool Nullable = false);
 
 /// <summary>
-/// A many-to-one relation to the emitted entity <paramref name="Target"/> (declared earlier in the same
-/// build), through the key property <paramref name="KeyProperty"/> of the owner.
+/// A many-to-one relation to the emitted entity <paramref name="Target"/>, through the key property
+/// <paramref name="KeyProperty"/> of the owner. With <paramref name="ToMany"/> the relation is one-to-many and
+/// <paramref name="KeyProperty"/> is the key property of <paramref name="Target"/>, the child.
 /// </summary>
-public sealed record EmittedRelation(string Name, string Target, string KeyProperty);
+public sealed record EmittedRelation(string Name, string Target, string KeyProperty, bool ToMany = false);
 
 /// <summary>A class used as a Repeater child or as a structured value; a plain one declares no <c>[CmsField]</c>.</summary>
 public sealed record EmittedChild(string Name, IReadOnlyList<EmittedProperty> Properties, bool Plain = false);
@@ -63,6 +64,7 @@ public static class EmittedEntities
             builder.CreateType();
         }
 
+        var sealedTypes = new List<TypeBuilder>();
         foreach (var entity in entities)
         {
             var lower = char.ToLowerInvariant(entity.Name[0]) + entity.Name[1..];
@@ -74,10 +76,15 @@ public static class EmittedEntities
             AddProperty(
                 builder, new EmittedProperty("Id", entity.IdType ?? typeof(Guid), FieldInterface.Text), children, new PropertyShape(IsKey: true));
             foreach (var property in entity.Properties) AddProperty(builder, property, children);
-            foreach (var relation in entity.Relations ?? []) AddRelation(builder, relation, entityTypes[relation.Target], children);
             if (entity.Translations is { } translated) AddSidecar(module, builder, entity.Name, translated, children);
-            builder.CreateType();
+            sealedTypes.Add(builder);
         }
+
+        // Relations are added once every entity type is defined, so two entities may point at each other.
+        foreach (var entity in entities)
+            foreach (var relation in entity.Relations ?? [])
+                AddRelation(entityTypes[entity.Name], relation, entityTypes[relation.Target], children);
+        foreach (var builder in sealedTypes) builder.CreateType();
 
         using var stream = new MemoryStream();
         assembly.Save(stream);
@@ -115,13 +122,15 @@ public static class EmittedEntities
     {
         var navigate = new CustomAttributeBuilder(
             typeof(Navigate).GetConstructor([typeof(NavigateType), typeof(string), typeof(string[])])!,
-            [NavigateType.ManyToOne, relation.KeyProperty, Array.Empty<string>()]);
+            [relation.ToMany ? NavigateType.OneToMany : NavigateType.ManyToOne, relation.KeyProperty, Array.Empty<string>()]);
         var cmsRelation = Attribute(
-            typeof(CmsRelationAttribute), [], Named(nameof(CmsRelationAttribute.Interface), RelationInterface.Dropdown));
+            typeof(CmsRelationAttribute), [], Named(nameof(CmsRelationAttribute.Interface), relation.ToMany ? RelationInterface.RelatedList : RelationInterface.Dropdown));
         var ignored = Attribute(typeof(SugarColumn), [], Named(nameof(SugarColumn.IsIgnore), true));
         AddProperty(
             owner, new EmittedProperty(relation.Name, typeof(object), FieldInterface.Text), children,
-            new PropertyShape(Plain: true, AsType: target, Extra: [navigate, cmsRelation, ignored]));
+            new PropertyShape(
+                Plain: true, AsType: relation.ToMany ? null : target, ListOf: relation.ToMany ? target : null,
+                Extra: [navigate, cmsRelation, ignored]));
     }
 
     private static TypeBuilder DefineClass(ModuleBuilder module, string name, CustomAttributeBuilder[]? attributes)

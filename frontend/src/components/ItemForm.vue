@@ -265,6 +265,7 @@ defineExpose({ activeLocale, focusBanner, revealErrors })
           v-model="model.relations[rel.name]"
           :disabled="disabled"
           :parent-id="itemId"
+          :parent-collection="meta.name"
           :drafts="drafts"
           :exclude-id="rel.selfReferencing ? itemId : undefined"
           :option-hint="optionHintFor(rel.name)"
