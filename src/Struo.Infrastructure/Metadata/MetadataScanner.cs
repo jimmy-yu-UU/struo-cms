@@ -553,9 +553,23 @@ public static class MetadataScanner
             SoftDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type),
             FieldGroups = groups,
             Fields = ordered,
-            Relations = ScanRelations(type),
+            Relations = WithServerOwnedKeysLocked(ScanRelations(type), ordered),
             Translation = translation
         };
+    }
+
+    // A ManyToOne relation whose foreign key is a ReadOnly or audit field is never written by the server,
+    // so it is reported as not editable.
+    private static List<RelationMetadata> WithServerOwnedKeysLocked(
+        IReadOnlyList<RelationMetadata> relations, IReadOnlyList<FieldMetadata> fields)
+    {
+        var serverOwned = fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return relations
+            .Select(r => r is { Kind: RelationKind.ManyToOne, ForeignKey: { } fk } && serverOwned.Contains(fk)
+                ? r with { Editable = false }
+                : r)
+            .ToList();
     }
 
     /// <summary>
