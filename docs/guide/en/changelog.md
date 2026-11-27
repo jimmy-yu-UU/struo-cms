@@ -57,15 +57,16 @@
   the initial value: test for that value, or remove the initializer
   ([Chapter 6](06-field-types.md)).
 - A property with `[CmsField(ReadOnly = true)]` that is also the foreign key of a many-to-one
-  relation is not changed by an update or a revert, and the GraphQL inputs do not list the key. An
+  relation is not changed by an update or a revert, and the GraphQL create and update inputs do not
+  list the key. An
   update body that named the key cleared a nullable foreign key to `NULL` and wrote the value sent
   into one that cannot be `null`; a revert to an earlier revision cleared a nullable foreign key to
   `NULL` too (measured on SQLite below the HTTP layer). Remove `ReadOnly = true` when clients are
   meant to set the key; set it in a write interceptor when the server owns the value
   ([Chapter 6](06-field-types.md)). The same holds for a relation whose foreign key is an audit
-  field such as `CreatedBy`: an update and a revert cleared it to `NULL`, and the GraphQL inputs
-  listed the key. Both kinds of relation are reported as not editable in the schema, so the admin
-  relation picker is disabled ([Chapter 8](08-relations.md)).
+  field such as `CreatedBy`: an update and a revert cleared it to `NULL`. Both kinds of relation
+  are reported as not editable in the schema, so the admin relation picker is disabled
+  ([Chapter 8](08-relations.md)).
 - `[CmsField(ReadOnly = true)]` on a Repeater sub-field that a request body can still set stops the
   host at start: one with a public setter (`set` or `init`), a matching constructor parameter, or
   `[JsonInclude]`. A REST create and update stored the value sent for it, while the GraphQL item

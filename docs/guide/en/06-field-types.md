@@ -500,8 +500,8 @@ structural check, those errors are reported first instead.
 
 A `ReadOnly` field of a collection class can be read but not written: a key sent for it is dropped
 on create, on update and on a revert, also when the field is the foreign key of a many-to-one
-relation, and the GraphQL inputs do not list the key. On create the field stores the value the class
-gives the property —
+relation, and the GraphQL create and update inputs do not list the key. On create the field stores
+the value the class gives the property —
 `public string Source { get; set; } = "import";` stores `import`, and a property with no
 initializer stores the default of its type — unless a write interceptor sets it. The admin input
 is disabled as well.

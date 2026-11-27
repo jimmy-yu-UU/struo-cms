@@ -23,8 +23,9 @@ a `Repeater` row type, and the base classes of each.
 - **`ReadOnly = true` on a translation field** (`TranslationReadOnlyCheck`). A translations payload
   writes every field of a translation class, so the flag is refused there.
 - **`ReadOnly = true` on a `Repeater` sub-field a request body can still set**
-  (`FieldSetterCheck`): one with a public setter, a matching constructor parameter or
-  `[JsonInclude]`. A sub-field no body can set keeps the flag.
+  (`FieldSetterCheck`): one with a public setter, `[JsonInclude]`, or a matching parameter on the
+  constructor the binder uses (the one carrying `[JsonConstructor]`, public or not, else the one
+  public constructor). A sub-field no body can set keeps the flag.
 
 ## Why
 
@@ -139,8 +140,19 @@ for the sub-field on create and on update.
 | get-only, computed | the computed value | accepted |
 | non-public setter, no `[JsonInclude]` | the value the type gives | accepted |
 | public `set` or `init` | the value sent | refused |
-| get-only with a matching constructor parameter | the value sent | refused |
+| get-only with a matching parameter on the one public constructor | the value sent | refused |
+| get-only, bound by a `[JsonConstructor]` beside a public parameterless one | the value sent | refused |
+| get-only, bound by a non-public `[JsonConstructor]` | the value sent | refused |
+| get-only, two public constructors, none marked | the value the type gives | accepted |
 | non-public setter with `[JsonInclude]` | the value sent; a read returns the type's value | refused |
+
+The accepted rows are read from the raw stored column
+(`A_create_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set`,
+`An_update_stores_what_the_row_type_gives_a_ReadOnly_sub_field_a_body_cannot_set`):
+a read through the row type shows the type's value whatever the column holds. The refused rows are
+measurements taken before the rule; `FieldSetterCheckTests` pins the refusals. A writable sub-field
+bound through a `[JsonConstructor]` beside a parameterless constructor stores the value and reads
+back the type's value, so the setter rule keeps refusing it.
 
 The GraphQL item input leaves a `ReadOnly` sub-field out in every row.
 

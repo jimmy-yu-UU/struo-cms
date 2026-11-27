@@ -20,6 +20,10 @@ service cannot serve:
 - `SortField` is declared on a many-to-many only; its property has a column and a setter, is neither
   junction key nor the junction's primary key, and has one of the types measured to keep the order.
 - `OnDelete` other than the default is declared on a many-to-one only.
+- A many-to-one foreign key that also carries `[CmsField]` is declared once in each GraphQL input
+  type, in the form the field gives it; the relation adds the key only when the field did not
+  (`ForeignKeyOwnFormSchemaTests`, `ForeignKeyOwnFormHostTests`). A `ReadOnly` or audit key is in
+  the filter input and in neither write input.
 - A target or element type is resolved by collection name to the scanned collection class, for the
   key-type comparison and for the one-to-many child key.
 
