@@ -490,4 +490,111 @@ export default {
     opNeq: 'does not equal',
     opContains: 'contains',
   },
+  core: {
+    groups: { System: 'System' },
+    collections: {
+      file: {
+        label: 'File',
+        fields: {
+          fileName: 'File Name',
+          title: 'Title',
+          contentType: 'Content Type',
+          alt: 'Alt',
+          size: 'Size',
+          width: 'Width',
+          height: 'Height',
+          status: 'Status',
+          createdAt: 'CreatedAt',
+          createdBy: 'CreatedBy',
+          updatedAt: 'UpdatedAt',
+          updatedBy: 'UpdatedBy',
+        },
+        relations: {
+          folder: 'Folder',
+        },
+        options: {
+          status: { draft: 'Draft', published: 'Published' },
+        },
+      },
+      language: {
+        label: 'Language',
+        fields: {
+          code: 'Code',
+          name: 'Name',
+          isDefault: 'Default',
+          enabled: 'Enabled',
+          sort: 'Sort',
+          createdAt: 'CreatedAt',
+          createdBy: 'CreatedBy',
+          updatedAt: 'UpdatedAt',
+          updatedBy: 'UpdatedBy',
+        },
+      },
+      mediaFolder: {
+        label: 'MediaFolder',
+        fields: {
+          name: 'Name',
+          createdAt: 'CreatedAt',
+          updatedAt: 'UpdatedAt',
+          createdBy: 'CreatedBy',
+          updatedBy: 'UpdatedBy',
+        },
+        relations: {
+          parent: 'Parent',
+        },
+      },
+      permission: {
+        label: 'Permission',
+        fields: {
+          roleId: 'Role',
+          collection: 'Collection',
+          canRead: 'Can Read',
+          canWrite: 'Can Write',
+          canDelete: 'Can Delete',
+          createdAt: 'CreatedAt',
+          createdBy: 'CreatedBy',
+          updatedAt: 'UpdatedAt',
+          updatedBy: 'UpdatedBy',
+        },
+      },
+      role: {
+        label: 'Role',
+        fields: {
+          name: 'Name',
+          isSuperAdmin: 'Super Admin',
+          description: 'Description',
+          createdAt: 'CreatedAt',
+          createdBy: 'CreatedBy',
+          updatedAt: 'UpdatedAt',
+          updatedBy: 'UpdatedBy',
+        },
+      },
+      user: {
+        label: 'User',
+        fields: {
+          email: 'Email',
+          name: 'Name',
+          isActive: 'Active',
+          createdAt: 'CreatedAt',
+          createdBy: 'CreatedBy',
+          updatedAt: 'UpdatedAt',
+          updatedBy: 'UpdatedBy',
+        },
+        relations: {
+          roles: 'Roles',
+        },
+      },
+      userRole: {
+        label: 'UserRole',
+        fields: {
+          userId: 'User',
+          roleId: 'Role',
+          createdAt: 'CreatedAt',
+          createdBy: 'CreatedBy',
+          updatedAt: 'UpdatedAt',
+          updatedBy: 'UpdatedBy',
+        },
+      },
+    },
+  },
 }
