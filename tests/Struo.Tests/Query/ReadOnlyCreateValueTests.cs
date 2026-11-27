@@ -78,6 +78,31 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
         [SugarColumn(IsIgnore = true)]
         public Role? Owner { get; set; }
+
+        [CmsField(Label = "RequiredOwnerId", Interface = FieldInterface.Hidden, ReadOnly = true)]
+        public Guid RequiredOwnerId { get; set; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        [Navigate(NavigateType.ManyToOne, nameof(RequiredOwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown, DisplayTemplate = "{Name}")]
+        [SugarColumn(IsIgnore = true)]
+        public Role? RequiredOwner { get; set; }
+    }
+
+    [SugarTable("ro_create_item")]
+    public sealed class StoredRow
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public string? NullableText { get; set; }
+        public string? Text { get; set; }
+        public int? NullableNumber { get; set; }
+        public int? Number { get; set; }
+        public bool? Flag { get; set; }
+        public Guid? Key { get; set; }
+        public string? Items { get; set; }
+        public string? Aliased { get; set; }
+        public string? Payload { get; set; }
+        public Guid? OwnerId { get; set; }
+        public Guid? RequiredOwnerId { get; set; }
     }
 
     [SugarTable("ro_create_required")]
@@ -122,7 +147,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     private const string HostileBody = """
         {"name":"n","nullableText":"c","NULLABLETEXT":"c","text":"c","tExT":"c","nullableNumber":9,"number":9,
          "flag":false,"key":"22222222-2222-2222-2222-222222222222","items":["z"],"alias":"c","aliased":"c","ALIAS":"c",
-         "payload":{"b":2},"PAYLOAD":{"b":2},"Payload":[1],"ownerId":"22222222-2222-2222-2222-222222222222","OWNERID":"22222222-2222-2222-2222-222222222222"}
+         "payload":{"b":2},"PAYLOAD":{"b":2},"Payload":[1],"ownerId":"22222222-2222-2222-2222-222222222222","OWNERID":"22222222-2222-2222-2222-222222222222",
+         "requiredOwnerId":"22222222-2222-2222-2222-222222222222","REQUIREDOWNERID":"22222222-2222-2222-2222-222222222222"}
         """;
 
     private readonly ITestDatabase _file = TestBackend.CreateUnitDatabase();
@@ -176,12 +202,37 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
     private Item Bind(string json) => (Item)_deserializer.DeserializeForCreate("roCreateItem", Body(json), _meta);
 
-    private async Task<Item> StoredAsync(IReadOnlyDictionary<string, object?> created) =>
-        (Item)(await _repo.GetByIdAsync("roCreateItem", created["id"]!.ToString()!))!;
+    // Reads the columns through a row type without initialisers, so a stored NULL stays NULL: reading the
+    // entity type fills a NULL column with the property initialiser.
+    private async Task<StoredRow> StoredAsync(IReadOnlyDictionary<string, object?> created)
+    {
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        return await _db.Queryable<StoredRow>().Where(r => r.Id == id).FirstAsync();
+    }
+
+    private static void AssertInitialColumns(StoredRow stored)
+    {
+        stored.NullableText.Should().Be("x");
+        stored.Text.Should().Be("x");
+        stored.NullableNumber.Should().Be(5);
+        stored.Number.Should().Be(5);
+        stored.Flag.Should().BeTrue();
+        stored.Key.Should().Be(InitialGuid);
+        stored.Items.Should().Be("[\"a\"]");
+        stored.Aliased.Should().Be("x");
+        stored.Payload.Should().Be("""{"a":1}""");
+    }
+
+    private static void AssertInitialKeys(StoredRow stored)
+    {
+        stored.OwnerId.Should().Be(InitialGuid);
+        stored.RequiredOwnerId.Should().Be(InitialGuid);
+    }
 
     public static TheoryData<string> InitialValueCases() =>
         new(nameof(Item.NullableText), nameof(Item.Text), nameof(Item.NullableNumber), nameof(Item.Number),
-            nameof(Item.Flag), nameof(Item.Key), nameof(Item.Aliased), nameof(Item.Payload), nameof(Item.OwnerId));
+            nameof(Item.Flag), nameof(Item.Key), nameof(Item.Aliased), nameof(Item.Payload), nameof(Item.OwnerId),
+            nameof(Item.RequiredOwnerId));
 
     private static bool HoldsInitialValue(Item item, string field) => field switch
     {
@@ -194,6 +245,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         nameof(Item.Aliased) => item.Aliased == "x",
         nameof(Item.Payload) => item.Payload == """{"a":1}""",
         nameof(Item.OwnerId) => item.OwnerId == InitialGuid,
+        nameof(Item.RequiredOwnerId) => item.RequiredOwnerId == InitialGuid,
         _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown case."),
     };
 
@@ -216,7 +268,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     {
         var created = await _service(null).CreateAsync("roCreateRequired", Body("""{"name":"n","text":"c"}"""));
 
-        var stored = (RequiredMemberItem)(await _repo.GetByIdAsync("roCreateRequired", created["id"]!.ToString()!))!;
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var stored = await _db.Queryable<RequiredMemberItem>().Where(i => i.Id == id).Select(i => new { i.Name, i.Text }).FirstAsync();
         stored.Name.Should().Be("n");
         stored.Text.Should().Be("x");
     }
@@ -226,7 +279,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     {
         var created = await _service(null).CreateAsync("roCreateJsonRequired", Body("""{"name":"n","text":"c"}"""));
 
-        var stored = (JsonRequiredItem)(await _repo.GetByIdAsync("roCreateJsonRequired", created["id"]!.ToString()!))!;
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var stored = await _db.Queryable<JsonRequiredItem>().Where(i => i.Id == id).Select(i => new { i.Name, i.Text }).FirstAsync();
         stored.Name.Should().Be("n");
         stored.Text.Should().Be("x");
     }
@@ -252,16 +306,19 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         var created = await _service(null).CreateAsync("roCreateItem", Body(HostileBody));
 
         var stored = await StoredAsync(created);
-        stored.NullableText.Should().Be("x");
-        stored.Text.Should().Be("x");
-        stored.NullableNumber.Should().Be(5);
-        stored.Number.Should().Be(5);
-        stored.Flag.Should().BeTrue();
-        stored.Key.Should().Be(InitialGuid);
-        stored.Items.Should().Equal("a");
-        stored.Aliased.Should().Be("x");
-        stored.Payload.Should().Be("""{"a":1}""");
-        stored.OwnerId.Should().Be(InitialGuid);
+        AssertInitialColumns(stored);
+        AssertInitialKeys(stored);
+    }
+
+    [Fact]
+    public async Task The_stored_row_reader_shows_a_database_null_as_null()
+    {
+        var created = await _service(null).CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var id = Guid.Parse(created["id"]!.ToString()!);
+
+        await _db.Updateable<Item>().SetColumns(i => i.OwnerId == null).Where(i => i.Id == id).ExecuteCommandAsync();
+
+        (await StoredAsync(created)).OwnerId.Should().BeNull();
     }
 
     [Fact]
@@ -272,7 +329,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         var stored = await StoredAsync(created);
         stored.NullableText.Should().Be("interceptor");
         stored.Text.Should().Be("interceptor");
-        stored.Items.Should().Equal("interceptor");
+        stored.Items.Should().Be("[\"interceptor\"]");
         stored.Number.Should().Be(5);
     }
 
@@ -285,18 +342,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
         await svc.UpdateAsync("roCreateItem", id, Body(HostileBody));
 
-        var stored = await StoredAsync(created);
-        stored.Name.Should().Be("n");
-        stored.NullableText.Should().Be("x");
-        stored.Text.Should().Be("x");
-        stored.NullableNumber.Should().Be(5);
-        stored.Number.Should().Be(5);
-        stored.Flag.Should().BeTrue();
-        stored.Key.Should().Be(InitialGuid);
-        stored.Items.Should().Equal("a");
-        stored.Aliased.Should().Be("x");
-        stored.Payload.Should().Be("""{"a":1}""");
-        stored.OwnerId.Should().Be(InitialGuid);
+        AssertInitialColumns(await StoredAsync(created));
     }
 
     [Fact]
@@ -304,7 +350,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     {
         var created = await _service(null).CreateAsync("role", Body("""{"name":"editors","isSuperAdmin":true}"""));
 
-        var stored = (Role)(await _repo.GetByIdAsync("role", created["id"]!.ToString()!))!;
-        stored.IsSuperAdmin.Should().BeFalse();
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var isSuperAdmin = await _db.Queryable<Role>().Where(r => r.Id == id).Select(r => r.IsSuperAdmin).FirstAsync();
+        isSuperAdmin.Should().BeFalse();
     }
 }
