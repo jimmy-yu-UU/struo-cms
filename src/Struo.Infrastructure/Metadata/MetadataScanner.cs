@@ -504,6 +504,7 @@ public static class MetadataScanner
         ColumnOverrideCheck.Require(type, primaryKeyRuleReports: true);
         FieldInheritanceCheck.Require(type);
         FieldSetterCheck.RequirePublicSetters(type);
+        SoftDeleteFieldCheck.Require(type);
         var groups = type.GetCustomAttributes<CmsFieldGroupAttribute>()
             .Select(g => new FieldGroupMetadata(g.Name, g.Label, g.Sort))
             .ToList();
