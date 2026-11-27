@@ -53,10 +53,14 @@ internal sealed partial class RelationWriteHarness
         translations = new { en = new { title = links.Title, seoOgImageId = links.OgImage } },
     };
 
+    // One name per row: a facet on category.name counts every article by name, whatever category a
+    // test filters on, so rows that share a name would add up in the facet tests of this collection.
+    private static string CategoryName(Guid id) => $"category-{id:N}";
+
     public async Task<Guid> SeedCategoryAsync() => await WithDbAsync(async db =>
     {
         var id = Guid.CreateVersion7();
-        await db.Insertable(new FxCategory { Id = id, Name = "category" }).ExecuteCommandAsync();
+        await db.Insertable(new FxCategory { Id = id, Name = CategoryName(id) }).ExecuteCommandAsync();
         return id;
     });
 
@@ -79,7 +83,7 @@ internal sealed partial class RelationWriteHarness
     public async Task<Guid> SeedCategoryAsync(Guid? parent) => await WithDbAsync(async db =>
     {
         var id = Guid.CreateVersion7();
-        await db.Insertable(new FxCategory { Id = id, Name = "category", ParentId = parent }).ExecuteCommandAsync();
+        await db.Insertable(new FxCategory { Id = id, Name = CategoryName(id), ParentId = parent }).ExecuteCommandAsync();
         return id;
     });
 
