@@ -54,9 +54,10 @@
   changes, the list is cleared and loaded again.
 - With the admin UI in `zh-TW`, the names of the seven core collections (`file`, `language`,
   `mediaFolder`, `permission`, `role`, `user`, `userRole`), the labels of their fields and
-  relations, the options of `file.status` and the `System` group name are shown in Chinese; they
-  were always shown in the English the server sends. A core label the fork changed and the fork's
-  own collections are shown as the server sends them. API responses are unchanged
+  relations, the options of `file.status` and the `System` group name are shown in Chinese, and so
+  are the four audit fields of every collection; they were always shown in the English the server
+  sends. A label the fork changed and the other labels of the fork's own collections are shown as
+  the server sends them. API responses are unchanged
   ([Chapter 19](19-admin-customization.md#ui-language)).
 
 ### Fixed

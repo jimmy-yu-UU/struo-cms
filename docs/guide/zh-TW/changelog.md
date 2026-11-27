@@ -43,8 +43,9 @@
 - 表單裡的關聯清單在第一次拿到總筆數之前不顯示筆數範圍；上層項目換了之後，清單先清空再重新載入。
 - 後台介面語言是 `zh-TW` 時，七個核心集合（`file`、`language`、`mediaFolder`、`permission`、
   `role`、`user`、`userRole`）的名稱、欄位與關聯的標籤、`file.status` 的選項與 `System` 群組名稱
-  顯示中文；原本這些一律顯示伺服器送來的英文。fork 改過的核心標籤與 fork 自己的集合，照伺服器送來的
-  文字顯示。API 的回應不變（[第 19 章](19-admin-customization.md#ui-語言)）。
+  顯示中文，每個集合的四個稽核欄位也是；原本這些一律顯示伺服器送來的英文。fork 改過的標籤與 fork
+  自己集合的其他標籤，照伺服器送來的文字顯示。API 的回應不變
+  （[第 19 章](19-admin-customization.md#ui-語言)）。
 
 ### 修正
 
