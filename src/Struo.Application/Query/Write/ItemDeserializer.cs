@@ -151,7 +151,8 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // optimistic-concurrency Version, the soft-delete markers, or a fork's own undeclared property —
     // none of which carry [CmsField] and so none of which are covered by the IsSystem/ReadOnly
     // strip loop below. This mirrors the allowlist ItemService.UpdateCoreAsync already applies on
-    // update (fields + M2O FKs actually present in the body); unknown keys are silently ignored here too, not rejected with a 400.
+    // update (fields + M2O FKs actually present in the body); unknown keys are silently ignored
+    // here too, not rejected with a 400.
     private static HashSet<string> ComputeAllowedKeys(CollectionMetadata meta, IReadOnlySet<string>? onlyFields)
     {
         var locked = ServerOwnedFieldNames(meta);
