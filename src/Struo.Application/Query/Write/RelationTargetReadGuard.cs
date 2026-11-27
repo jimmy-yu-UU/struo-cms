@@ -24,7 +24,7 @@ internal readonly record struct SentLink(string Target, string Key, bool InTrans
 /// <para>
 /// An update whose file field carries the value the item already stores needs no read on <c>file</c>: the item
 /// read returns that id to every reader of the collection (<see cref="RequireFilesAsync"/>). The same holds
-/// for a junction key sent with the stored value (<see cref="RequireJunctionKeys"/>).
+/// for a junction key or a declared, visible foreign key sent with the stored value (<see cref="RequireStoredKeys"/>).
 /// </para>
 /// Why: docs/ai/decisions/a-link-write-needs-read-on-the-target.md
 /// </summary>
@@ -52,24 +52,28 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
         RequireReadable(SentLinks(meta, body), body);
 
     /// <summary>
-    /// The many-to-many and many-to-one keys of an update. Its junction keys are checked by
-    /// <see cref="RequireJunctionKeys"/> once the stored row is loaded.
+    /// The keys of an update that are refused whatever the stored row holds: the many-to-many arrays and the
+    /// many-to-one keys an item read does not return (not a declared field, or a <c>Hidden</c> one). The keys
+    /// that need the stored row are checked by <see cref="RequireStoredKeys"/> once it is loaded.
     /// </summary>
     internal void RequireRelationLinks(CollectionMetadata meta, JsonElement body)
     {
         var sent = WritableNames(meta, body);
-        RequireReadable(ManyToManyLinks(meta, body).Concat(ManyToOneLinks(meta, sent)), body);
+        RequireReadable(ManyToManyLinks(meta, body).Concat(ManyToOneLinks(meta, sent, returnedByRead: false)), body);
     }
 
     /// <summary>
-    /// The junction keys of an update. A caller who cannot read a key's target may send the key back with the
-    /// value <paramref name="existing"/> stores (nothing new is linked); a <c>Hidden</c> key is never exempt, as the
-    /// item read does not return it. Any other value is refused like on a create.
+    /// The junction keys and the declared many-to-one keys of an update. A caller who cannot read a key's target
+    /// may send the key back with the value <paramref name="existing"/> stores (nothing new is linked, and the
+    /// item read returns that value to this caller anyway); a <c>Hidden</c> key is never exempt. Any other value
+    /// is refused like on a create.
     /// </summary>
-    internal void RequireJunctionKeys(CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
+    internal void RequireStoredKeys(CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         if (body.ValueKind != JsonValueKind.Object) return;
-        var refused = JunctionLinks(meta, WritableNames(meta, body))
+        var sent = WritableNames(meta, body);
+        var refused = JunctionLinks(meta, sent)
+            .Concat(ManyToOneLinks(meta, sent, returnedByRead: true))
             .Where(link => !permissions.CanRead(link.Target) && !HoldsStoredKey(meta, d, body, existing, link.Key))
             .Select(link => link.Target)
             .FirstOrDefault();
@@ -162,10 +166,17 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
             .Where(desc => JsonBodyUtil.TryGetRelationArray(body, desc.RelationName, out _))
             .Select(desc => new SentLink(desc.TargetCollection, desc.RelationName, false));
 
-    private static IEnumerable<SentLink> ManyToOneLinks(CollectionMetadata meta, HashSet<string> sent) =>
+    // The foreign keys the body names: all of them, or only those that are a declared visible field (an item
+    // read returns those), or only the others.
+    private static IEnumerable<SentLink> ManyToOneLinks(
+        CollectionMetadata meta, HashSet<string> sent, bool? returnedByRead = null) =>
         meta.Relations
             .Where(rel => rel is { Kind: RelationKind.ManyToOne, ForeignKey: { } key } && sent.Contains(key))
+            .Where(rel => returnedByRead is null || returnedByRead == IsVisibleField(meta, rel.ForeignKey!))
             .Select(rel => new SentLink(rel.TargetCollection, rel.ForeignKey!, false));
+
+    private static bool IsVisibleField(CollectionMetadata meta, string key) =>
+        meta.Fields.Any(f => !f.Hidden && string.Equals(f.Name, key, StringComparison.OrdinalIgnoreCase));
 
     // The keys of a junction collection are plain fields, not relations; each links the collection it points at.
     private IEnumerable<SentLink> JunctionLinks(CollectionMetadata meta, HashSet<string> sent)

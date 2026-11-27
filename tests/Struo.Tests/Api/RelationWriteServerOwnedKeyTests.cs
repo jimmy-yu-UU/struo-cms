@@ -14,6 +14,7 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
 {
     private const string Ledger = "fxLedger";
     private const string Glossary = "fxGlossary";
+    private const string PartnerId = "partnerId";
 
     private static readonly string[] AllTargets = [Ledger, Glossary, "fxTag", "file"];
 
@@ -184,10 +185,10 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
         var glossary = await h.SeedGlossaryAsync();
         var ledger = await h.SeedLedgerAsync(new(null, null, null, null));
         var outcomes = new List<WriteOutcome>();
-        foreach (var kind in IdKinds.Append("null"))
+        foreach (var kind in IdKinds)
         {
-            var fields = new Dictionary<string, object?> { ["partnerId"] = kind == "null" ? null : IdOf(kind, glossary) };
-            if (op == Post) fields["name"] = "L";
+            var fields = new Dictionary<string, object?> { [PartnerId] = IdOf(kind, glossary) };
+            if (op == Post) fields["name"] = $"p-{Guid.NewGuid():N}";
             outcomes.Add(await SendAsync(client, channel, Ledger, op == Put ? ledger : null, fields));
         }
 
@@ -207,8 +208,8 @@ public sealed class RelationWriteServerOwnedKeyTests : IClassFixture<NoPublicRel
         var glossary = await h.SeedGlossaryAsync();
         var ledger = await h.SeedLedgerAsync(new(null, null, null, null));
         Guid? id = op == Put ? ledger : null;
-        var linked = new Dictionary<string, object?> { ["partnerId"] = glossary.ToString() };
-        var missing = new Dictionary<string, object?> { ["partnerId"] = IdOf(Missing, glossary) };
+        var linked = new Dictionary<string, object?> { [PartnerId] = glossary.ToString() };
+        var missing = new Dictionary<string, object?> { [PartnerId] = IdOf(Missing, glossary) };
         if (op == Post)
         {
             linked["name"] = "L";

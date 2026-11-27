@@ -53,7 +53,7 @@ public sealed class JunctionUnchangedKeyGuardTests
     {
         var guard = new RelationTargetReadGuard(new Source(), new Permissions());
         using var body = JsonDocument.Parse(json);
-        guard.RequireJunctionKeys(Meta(hiddenTarget), Descriptor, body.RootElement, stored);
+        guard.RequireStoredKeys(Meta(hiddenTarget), Descriptor, body.RootElement, stored);
     }
 
     private static string Body(string owner, Guid target) => $$"""{"ownerId":"{{owner}}","targetId":"{{target}}"}""";

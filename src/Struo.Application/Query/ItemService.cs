@@ -243,10 +243,10 @@ public sealed class ItemService(
         var loaded = await LoadForUpdateAsync(collection, id, meta, ct);
         if (loaded is null) return null;
         var (existing, preMerge) = loaded.Value;
-        // After the 404, and before the merge overwrites the stored values the junction keys and file fields are compared with.
+        // After the 404, and before the merge overwrites the stored values the junction keys, declared foreign keys and file fields are compared with.
         var parentId = IdOf(d, existing);
         var translations = meta.Translation is { } tm ? new StoredTranslations(repository, tm, parentId) : null;
-        relationTargets.RequireJunctionKeys(meta, d, body, existing);
+        relationTargets.RequireStoredKeys(meta, d, body, existing);
         await relationTargets.RequireFilesAsync(
             meta, body, () => StoredFileLinks.LoadAsync(meta, d, existing, translations, ct));
 
