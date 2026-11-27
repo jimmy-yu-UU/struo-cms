@@ -675,6 +675,15 @@ leaves the image at `32m`: an upload of 31,000,000 bytes goes through, one of 40
 the nginx page. Raising only `CLIENT_MAX_BODY_SIZE` lets a larger upload reach the API, which
 refuses a file over its own key.
 
+Through the image, nginx receives the whole request body before it passes the request on, so the
+`408` the API answers when a body arrives too slowly (see [Chapter 12](12-rest-conventions.md))
+does not occur on this path. When a caller declares a `Content-Length` and stops sending, nginx
+closes the connection after 60 seconds without a status line or a body, and writes `408` to its own
+access log only; 60 seconds is the default of nginx's `client_body_timeout`, which the template
+leaves alone. A body that keeps arriving in small pieces less than 60 seconds apart is not cut off:
+nginx hands it to the API once it is complete. Sent straight to the API, the same requests get `408`
+with `BAD_USER_INPUT` within about ten seconds, from the API's minimum data rate.
+
 `NGINX_RESOLVER` (defaulting to `127.0.0.11`, Docker's built-in DNS, with a 5-second timeout) only
 means anything on a user-defined Docker network; on the default bridge network, every `/api/*`
 request gets a 502 after the resolution times out. On Kubernetes, set it to the cluster DNS, for

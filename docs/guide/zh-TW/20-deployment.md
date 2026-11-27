@@ -553,6 +553,13 @@ API，由 nginx 以自己的 HTML 頁面回 `413`。
 40,000,000 bytes 的上傳拿到 nginx 的頁面。只調高 `CLIENT_MAX_BODY_SIZE`，較大的上傳會到達 API，
 由 API 依自己的鍵拒絕超過的檔案。
 
+經映像的請求，本文由 nginx 先收完才轉給 API，所以 API 在本文來得太慢時回的 `408`
+（見[第 12 章](12-rest-conventions.md)）不會出現在這條路徑上。呼叫端宣告了 `Content-Length` 卻停止
+送出時，nginx 在 60 秒後直接關閉連線，不回狀態列也不回本文，只在自己的 access log 記一筆 `408`；
+60 秒是 nginx `client_body_timeout` 的預設值，範本沒有改它。本文一小段一小段持續送來、每次間隔短於
+60 秒時，nginx 不會中斷它，收齊之後才交給 API。同樣的請求直接送到 API，API 依最低資料速率在十秒
+左右之內回 `408`／`BAD_USER_INPUT`。
+
 `NGINX_RESOLVER`（預設 `127.0.0.11`，Docker 內建 DNS，5 秒逾時）只有在使用者自訂的 Docker
 network 上才有意義；掛在預設的 bridge network 上，每一個 `/api/*` 請求都會在解析逾時之後收
 到 502。在 Kubernetes 上要設成叢集的 DNS，例如 `NGINX_RESOLVER=kube-dns.kube-system.svc.cluster.local`；
