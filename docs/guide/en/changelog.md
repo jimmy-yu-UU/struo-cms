@@ -94,8 +94,8 @@
   is refused with `400` `BAD_USER_INPUT`: `The id in '{key}' does not exist in '{target}'.` Such an
   id was stored. On update only an id the stored value does not already hold is checked, and a
   revert is not checked. An all-zero GUID, an empty string and `0` in a key that cannot hold `null`
-  mean "no link" and are not checked. A client that writes the id of a row it creates afterwards creates that
-  row first ([Chapter 8](08-relations.md#what-a-link-write-requires)).
+  mean "no link" and are not checked. A client that writes the id of a row it creates afterwards
+  creates that row first ([Chapter 8](08-relations.md#what-a-link-write-requires)).
 - `GET /api/items/{collection}/{id}/revisions/{n}` and the GraphQL revision query show no more links
   than an item read shows the caller: a many-to-many relation, and a many-to-one foreign key that is
   not a declared field, are left out when the caller cannot read the target, and a payload-carrying

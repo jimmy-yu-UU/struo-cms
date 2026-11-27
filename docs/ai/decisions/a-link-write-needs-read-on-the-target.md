@@ -24,8 +24,8 @@ What is let through:
   system stored.
 - A key whose field is `ReadOnly` or system (an audit key such as `createdBy`), and `deletedAt` or
   `deletedBy` on a soft-deletable collection (`CollectionMetadata.ServerOwnedKeyNames`), is not a
-  link write: the binder drops it, so neither check looks at it and a revert does not list it. An item read
-  returns an audit field, and a client that sends the item back names it
+  link write: the binder drops it, so neither check looks at it and a revert does not list it. An
+  item read returns an audit field, and a client that sends the item back names it
   (`RelationWriteServerOwnedKeyTests`).
 - An all-zero GUID, an empty string, and the default value of a key type that cannot hold null are
   not checked for existence: a key that cannot hold null uses them for "none". `0` in an `int?` key
@@ -48,8 +48,9 @@ read the caller was allowed to make, and writing it back links nothing. A `Hidde
 returned by a read, so equality with the stored value would be observable only through the write.
 
 The existence check runs inside the write transaction and takes no lock on the row it finds, so a
-row purged between the check and the commit can still leave a dangling id. That is accepted: the check is for
-client mistakes, and the foreign-key columns carry no database constraint to race against.
+row purged between the check and the commit can still leave a dangling id. That is accepted: the
+check is for client mistakes, and the foreign-key columns carry no database constraint to race
+against.
 
 ## Evidence
 

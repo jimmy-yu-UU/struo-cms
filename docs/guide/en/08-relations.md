@@ -343,8 +343,8 @@ On update, a `File`, `Image` or `Files` field sent with the value it already hol
 inside `translations` as well, and so are a key of a junction row and a many-to-one foreign key
 that is also a declared field: an item read returns those ids, and a form sends them back as they
 were. Every spelling of the key in the body must hold the stored value. A `Hidden` field has no
-such allowance, and neither has a create. Removing a whole locale with `null` removes the file links it holds and needs no read grant
-on `file`: nothing is linked.
+such allowance, and neither has a create. Removing a whole locale with `null` removes the file
+links it holds and needs no read grant on `file`: nothing is linked.
 
 For a caller who can read the target, the row must also exist. A many-to-many id is checked as
 described above. A many-to-one foreign key, a junction key or a file id that names no row, or a
