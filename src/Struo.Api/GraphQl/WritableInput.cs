@@ -67,8 +67,7 @@ internal static class WritableInput
     private static List<FieldMetadata> Translatable(CollectionMetadata meta) =>
         meta.Fields.Where(f => f.Translatable && !f.IsSystem).ToList();
 
-    private static bool IsServerOwned(CollectionMetadata meta, string name) =>
-        meta.Fields.Any(f => (f.IsSystem || f.ReadOnly) && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+    private static bool IsServerOwned(CollectionMetadata meta, string name) => meta.ServerOwnedKeyNames().Contains(name);
 
     internal static IEnumerable<InputField> Fields(
         CollectionMetadata meta, EntityDescriptor? desc, IReadOnlyList<M2MDescriptor> payloadRelations)

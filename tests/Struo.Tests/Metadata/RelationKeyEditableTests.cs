@@ -75,6 +75,21 @@ public sealed class RelationKeyEditableTests
         public Target? LockedDeclined { get; set; }
     }
 
+    [SugarTable("key_editable_soft_owner")]
+    [CmsCollection("KeyEditableSoftOwner", Name = "keyEditableSoftOwner")]
+    public sealed class SoftOwner : AuditableEntity, ISoftDeletable
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [SugarColumn(IsNullable = true)] public DateTime? DeletedAt { get; set; }
+        [SugarColumn(IsNullable = true)] public Guid? DeletedBy { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(DeletedBy))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)]
+        public Target? Remover { get; set; }
+    }
+
     private static Dictionary<string, RelationMetadata> ScannedRelations() =>
         MetadataScanner.ScanTypes([typeof(Owner), typeof(Target)])
             .Single(c => c.Name == "keyEditableOwner")
@@ -96,6 +111,23 @@ public sealed class RelationKeyEditableTests
     public void A_relation_on_an_audit_key_is_not_editable()
     {
         ScannedRelations()["creator"].Editable.Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_relation_on_a_soft_delete_key_is_not_editable()
+    {
+        var soft = MetadataScanner.ScanTypes([typeof(SoftOwner), typeof(Target)]).Single(c => c.Name == "keyEditableSoftOwner");
+
+        soft.Relations.Single(r => r.Name == "remover").Editable.Should().BeFalse();
+        soft.ServerOwnedKeyNames().Should().BeEquivalentTo("createdAt", "createdBy", "updatedAt", "updatedBy", "deletedAt", "deletedBy");
+    }
+
+    [Fact]
+    public void A_collection_that_is_not_soft_deletable_owns_no_soft_delete_name()
+    {
+        var owner = MetadataScanner.ScanTypes([typeof(Owner), typeof(Target)]).Single(c => c.Name == "keyEditableOwner");
+
+        owner.ServerOwnedKeyNames().Should().NotContain(["deletedAt", "deletedBy"]);
     }
 
     [Fact]

@@ -539,6 +539,7 @@ public static class MetadataScanner
             throw new MetadataException(
                 $"Collection '{name}' DefaultDisplayField '{attr.DefaultDisplayField}' is not a known field.");
 
+        var softDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type);
         return new CollectionMetadata
         {
             Name = name,
@@ -550,21 +551,20 @@ public static class MetadataScanner
             Hidden = attr.Hidden,
             Creatable = attr.Creatable,
             Revisions = attr.Revisions,
-            SoftDelete = typeof(Struo.Domain.Auditing.ISoftDeletable).IsAssignableFrom(type),
+            SoftDelete = softDelete,
             FieldGroups = groups,
             Fields = ordered,
-            Relations = WithServerOwnedKeysLocked(ScanRelations(type), ordered),
+            Relations = WithServerOwnedKeysLocked(ScanRelations(type), ordered, softDelete),
             Translation = translation
         };
     }
 
-    // A ManyToOne relation whose foreign key is a ReadOnly or audit field is never written by the server,
-    // so it is reported as not editable.
+    // A ManyToOne relation whose foreign key is a ReadOnly or audit field, or a soft-delete column, is never
+    // written by the server, so it is reported as not editable.
     private static List<RelationMetadata> WithServerOwnedKeysLocked(
-        IReadOnlyList<RelationMetadata> relations, IReadOnlyList<FieldMetadata> fields)
+        IReadOnlyList<RelationMetadata> relations, IReadOnlyList<FieldMetadata> fields, bool softDelete)
     {
-        var serverOwned = fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var serverOwned = CollectionMetadata.ServerOwnedKeyNames(fields, softDelete);
         return relations
             .Select(r => r is { Kind: RelationKind.ManyToOne, ForeignKey: { } fk } && serverOwned.Contains(fk)
                 ? r with { Editable = false }
