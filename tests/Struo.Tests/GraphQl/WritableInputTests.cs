@@ -121,7 +121,8 @@ public sealed class WritableInputTests
             "cannot be built. None of its fields counts: 'secret' (Interface = Hidden, which is never written), " +
             "'hiddenText' (Hidden = true). Add a [CmsField] property that GraphQL can write: it must not set Hidden = true " +
             "or ReadOnly = true, and its interface must not be Hidden, Divider or Password. " +
-            "A many-to-many relation, or a many-to-one relation whose foreign key is not ReadOnly, also counts.");
+            "A many-to-many relation, or a many-to-one relation whose foreign key is neither ReadOnly nor an audit field, " +
+            "also counts.");
     }
 
     private static CollectionMetadata WithOwner(FieldMetadata ownerId, params FieldMetadata[] others) =>
