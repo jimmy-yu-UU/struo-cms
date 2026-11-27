@@ -118,10 +118,15 @@ the key in the body. The stored value was the class initial value.
 | update | `Guid?` | `NULL` | unchanged |
 | update | `Guid` | the value sent | unchanged |
 | revert to an earlier revision | `Guid?` | `NULL` | unchanged |
+| update, revert | audit field `CreatedBy` used as the key | `NULL` | unchanged |
+
+`AuditKeyRelationTests` pins the audit rows. A relation on such a key is scanned with
+`Editable = false` (`RelationKeyEditableTests`).
 
 The stored values are read through a row type without initializers: a `NULL` column read through
 the entity type comes back as the initial value of the property, so an assertion on the entity
-cannot see it (`The_stored_row_reader_shows_a_database_null_as_null`).
+cannot see it (`The_stored_row_reader_shows_a_database_null_as_null`,
+`The_entity_reader_fills_a_database_null_with_the_property_initialiser`).
 
 `ReadOnly = true` on a Repeater sub-field with a setter does not stop a REST write: a create and an
 update store the value sent:

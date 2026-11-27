@@ -48,7 +48,9 @@
   的 input 也不列這個鍵。原本更新時 body 送這個鍵，可為 `null` 的外鍵被清成 `NULL`，不可為 `null`
   的被寫成送來的值；還原到舊版本時，可為 `null` 的外鍵也被清成 `NULL`（在 SQLite 上、HTTP 層之下
   量到的）。要讓用戶端設定這個外鍵，拿掉 `ReadOnly = true`；值由伺服器掌管時，在寫入攔截器裡設定
-  （[第 6 章](06-field-types.md)）。
+  （[第 6 章](06-field-types.md)）。拿稽核欄位（例如 `CreatedBy`）當多對一外鍵的關聯也一樣：原本更新
+  與還原都把它清成 `NULL`，GraphQL 的 input 列著這個鍵。這兩種關聯在 schema 裡回報為不可編輯，後台
+  的關聯選擇器因此停用（[第 8 章](08-relations.md)）。
 :::
 
 ### 變更

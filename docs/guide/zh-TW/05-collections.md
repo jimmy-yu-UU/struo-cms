@@ -101,7 +101,7 @@ GraphQL 有三種輸入型別，各自至少要有一個計入的項目，否則
 
 | 輸入型別 | 計入的欄位 | 計入的關聯 | 啟動回報 |
 |---|---|---|---|
-| 集合的建立輸入 | 不可翻譯的可寫欄位 | 多對一外鍵、多對多關聯 | `Collection '<name>' has nothing GraphQL can write ...` |
+| 集合的建立輸入 | 不可翻譯的可寫欄位 | 可寫的多對一外鍵、多對多關聯 | `Collection '<name>' has nothing GraphQL can write ...` |
 | 翻譯輸入（有翻譯 sidecar） | 可翻譯的可寫欄位 | 無 | `Collection '<name>' has a translation sidecar, ...` |
 | `Repeater` 的項目輸入 | 可寫的子欄位，`Repeater` 自己設 `Hidden = true` 也要有 | 無 | `Repeater '<collection>.<field>' has no sub-field ...` |
 

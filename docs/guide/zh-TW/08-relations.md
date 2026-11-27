@@ -157,6 +157,9 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 | `OnDelete` | `OnDelete` | `Restrict` | 僅多對一 |
 | `Editable` | `bool` | `true` | 後台 picker 是否接受輸入 |
 
+多對一關聯的外鍵是 `ReadOnly` 欄位或稽核欄位時，不論 `Editable` 怎麼設，schema 都把這個關聯回報成
+不可編輯：伺服器不會從請求寫入這個鍵（見[第 6 章](06-field-types.md)）。
+
 沒有逐關聯設定深度的欄位。REST 的 `deep` 與關聯路徑，唯一生效的上限是全域的
 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」一節；GraphQL 的選擇集另外受
 [第 14 章](14-graphql.md#深度上限)列出的上限限制。

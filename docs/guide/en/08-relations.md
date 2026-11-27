@@ -183,6 +183,10 @@ The last two decide write and delete behavior:
 | `OnDelete` | `OnDelete` | `Restrict` | many-to-one only |
 | `Editable` | `bool` | `true` | whether the admin picker accepts input |
 
+A many-to-one relation whose foreign key is a `ReadOnly` field or an audit field is reported as not
+editable in the schema whatever `Editable` says: the server does not write that key from a request
+(see [Chapter 6](06-field-types.md)).
+
 There is no per-relation depth setting. The one cap enforced for REST `deep` and relation paths is
 the global `Query:MaxRelationDepth`; see "Reading related data with `deep`" below. A GraphQL
 selection set is also bound by the limits in [Chapter 14](14-graphql.md#depth-caps).

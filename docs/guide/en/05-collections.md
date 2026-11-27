@@ -115,7 +115,7 @@ interface is not `Hidden`, `Divider` or `Password`:
 
 | Input type | Fields that count | Relations that count | Startup message |
 |---|---|---|---|
-| The collection's create input | Writable, non-translatable field | Many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
+| The collection's create input | Writable, non-translatable field | Writable many-to-one key, many-to-many relation | `Collection '<name>' has nothing GraphQL can write ...` |
 | Translations input (translation sidecar) | Writable, translatable field | None | `Collection '<name>' has a translation sidecar, ...` |
 | A `Repeater`'s item input | Writable sub-field, even if the `Repeater` is `Hidden = true` | None | `Repeater '<collection>.<field>' has no sub-field ...` |
 
