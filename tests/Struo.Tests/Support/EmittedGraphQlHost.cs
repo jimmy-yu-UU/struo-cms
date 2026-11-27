@@ -16,11 +16,15 @@ namespace Struo.Tests.Support;
 /// </summary>
 internal static class EmittedGraphQlHost
 {
+    public static Task<(ForkHost Host, HttpClient Client)> StartAsync(
+        EmittedEntity entity, string assemblyPrefix, bool createTables = true) =>
+        StartAsync([entity], assemblyPrefix, createTables);
+
+    /// <summary>Starts the host with several emitted collections; a relation target is listed before its owner.</summary>
     public static async Task<(ForkHost Host, HttpClient Client)> StartAsync(
-        EmittedEntity entity, string assemblyPrefix, bool createTables = true)
+        IReadOnlyList<EmittedEntity> entities, string assemblyPrefix, bool createTables = true)
     {
-        var collection = char.ToLowerInvariant(entity.Name[0]) + entity.Name[1..];
-        var assembly = EmittedEntities.Build(EmittedEntities.UniqueName(assemblyPrefix), [entity]);
+        var assembly = EmittedEntities.Build(EmittedEntities.UniqueName(assemblyPrefix), entities);
         var host = await ForkHost.StartAsync(
             mutate: s =>
             {
@@ -32,7 +36,9 @@ internal static class EmittedGraphQlHost
             environment: "Production", onSelectedBackend: true);
         try
         {
-            if (createTables) CreateTables(host, collection);
+            if (createTables)
+                foreach (var entity in entities)
+                    CreateTables(host, char.ToLowerInvariant(entity.Name[0]) + entity.Name[1..]);
             return (host, await LoginAsync(host));
         }
         catch

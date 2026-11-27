@@ -73,24 +73,36 @@ internal static class WritableInput
     internal static IEnumerable<InputField> Fields(
         CollectionMetadata meta, EntityDescriptor? desc, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
-        foreach (var f in meta.Fields)
-            if (OwnField(meta, f, desc) is { Sdl: { } sdl })
-                yield return new InputField(f.Name, sdl);
+        var own = OwnFields(meta, desc);
+        foreach (var field in own)
+            yield return field;
 
-        foreach (var field in meta.Relations.SelectMany(rel => RelationFields(meta, rel, payloadRelations)))
+        var declared = own.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var field in meta.Relations.SelectMany(rel => RelationFields(meta, rel, payloadRelations, declared)))
             yield return field;
 
         if (meta.Translation is not null && Translatable(meta).Any(f => TranslatedField(f, desc).Sdl is not null))
             yield return new InputField("translations", $"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]");
     }
 
+    private static List<InputField> OwnFields(CollectionMetadata meta, EntityDescriptor? desc)
+    {
+        var own = new List<InputField>();
+        foreach (var f in meta.Fields)
+            if (OwnField(meta, f, desc) is { Sdl: { } sdl })
+                own.Add(new InputField(f.Name, sdl));
+        return own;
+    }
+
+    // A foreign key that is also a writable [CmsField] is already in the input as that field, in the form the
+    // field declares; a ReadOnly or audit key is not written, as for the field itself.
     private static IEnumerable<InputField> RelationFields(
-        CollectionMetadata meta, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations)
+        CollectionMetadata meta, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations,
+        IReadOnlySet<string> declared)
     {
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
         {
-            // A foreign key that is a ReadOnly or audit field is not written, as for the field itself.
-            if (!IsServerOwned(meta, fk))
+            if (!declared.Contains(fk) && !IsServerOwned(meta, fk))
                 yield return new InputField(fk, "ID");
         }
         else if (rel.Kind == RelationKind.ManyToMany)
