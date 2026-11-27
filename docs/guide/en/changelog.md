@@ -77,10 +77,26 @@
   input left the sub-field out (measured on SQLite below the HTTP layer). Remove `ReadOnly = true`,
   or make the property get-only when the type computes the value
   ([Chapter 6](06-field-types.md)).
+- A foreign key whose field is `[CmsField(Hidden = true)]` cannot be named by a reader: `filter`,
+  `sort`, `fields`, `facets` and `aggregate` answer `400` `Unknown field '{key}' on collection
+  '{collection}'.`, and the GraphQL create, update and filter inputs do not list it. It was accepted
+  everywhere, unlike a hidden field that is not a key (measured on SQLite through the HTTP
+  pipeline). A collection whose only GraphQL input was such a key does not start. Query through the
+  relation (`filter[relation.field]`, `facets=relation`), or remove `Hidden = true`
+  ([Chapter 6](06-field-types.md)).
 :::
+
+### Added
+
+- `CollectionMetadata.OffersForeignKey(relation)`: whether a reader may name the foreign key of a
+  many-to-one relation, which is not the case when a `Hidden = true` field carries that name.
 
 ### Changed
 
+- A `File` or `Image` field that is also the key of a relation stops the host at start with a
+  `MetadataException` that names the relation and the key, and says to remove the relation or to
+  give the key another interface. The host stopped with the GraphQL library's
+  `The following field ... is declared multiple times` ([Chapter 8](08-relations.md)).
 - A request to `/graphql` that fails on the server before it reaches the GraphQL server (for
   example, the credential store cannot be reached during authentication) answers HTTP `500` in the
   GraphQL `errors` shape, with `INTERNAL_SERVER_ERROR` and the masked message; it answered in the

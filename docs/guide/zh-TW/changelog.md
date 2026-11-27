@@ -58,10 +58,24 @@
   `init`、有對應的建構式參數，或帶 `[JsonInclude]`），主機在啟動時失敗。原本 REST 的建立與更新照樣
   把送來的值存進去，GraphQL 的項目輸入卻不列這個子欄位（在 SQLite 上、HTTP 層之下量到的）。拿掉
   `ReadOnly = true`；值由型別自己算出時，把屬性改成只有 getter（[第 6 章](06-field-types.md)）。
+- 欄位標了 `[CmsField(Hidden = true)]` 的外鍵，讀取端不能用名稱指到它：`filter`、`sort`、`fields`、
+  `facets`、`aggregate` 回 `400` `Unknown field '{key}' on collection '{collection}'.`，GraphQL 的
+  建立、更新與篩選輸入也不列它。原本這些地方都接受它，跟不是外鍵的隱藏欄位不一樣（在 SQLite 上、經
+  HTTP 管線量到的）。唯一的 GraphQL 輸入就是這種鍵的集合，主機會啟動失敗。改成經關聯查詢
+  （`filter[relation.field]`、`facets=relation`），或拿掉 `Hidden = true`
+  （[第 6 章](06-field-types.md)）。
 :::
+
+### 新增
+
+- `CollectionMetadata.OffersForeignKey(relation)`：讀取端能不能用名稱指到多對一關聯的外鍵；有
+  `Hidden = true` 的欄位用這個名稱時不能。
 
 ### 變更
 
+- `File` 或 `Image` 欄位同時又是關聯的鍵時，主機在啟動時失敗，丟出 `MetadataException`，訊息點名
+  那個關聯與鍵，並說明要拿掉關聯、或把鍵改成別的介面。原本主機是因為 GraphQL 函式庫的
+  `The following field ... is declared multiple times` 而停下（[第 8 章](08-relations.md)）。
 - `/graphql` 的請求在進到 GraphQL 伺服器之前、伺服器自己出錯時（例如認證階段查不到憑證儲存），回
   HTTP `500` 與 GraphQL 的 `errors` 形狀，代碼是 `INTERNAL_SERVER_ERROR`，訊息是遮罩過的那一句；
   原本回的是 REST 的錯誤信封。狀態、代碼、訊息與 error 等級的記錄都不變

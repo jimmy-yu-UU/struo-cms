@@ -520,6 +520,12 @@ query DSL's known-field allowlist and searchable whitelist, and any externally r
 snapshot, and it also drops the field from the collection's `translation.fields` list — the raw
 snapshot row still keeps the value.
 
+A hidden field that is also the foreign key of a many-to-one relation is not offered by name
+either: the GraphQL create, update and filter inputs do not list it, and `filter`, `sort`,
+`fields`, `facets` and `aggregate` answer `Unknown field` for it. The relation itself is
+unaffected (`deep`, a filter or a sort through `relation.field`, a facet on the relation), and
+`GET /api/schema` still names the key in the relation's `foreignKey`.
+
 It isn't an RBAC boundary: the update field-overlay logic never checks `Hidden` at all, so a
 caller that already knows the field name can still write it; pairing it with `ReadOnly` is what
 actually blocks the write.

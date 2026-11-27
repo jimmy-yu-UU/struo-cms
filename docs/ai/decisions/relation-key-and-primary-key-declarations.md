@@ -24,6 +24,13 @@ service cannot serve:
   type, in the form the field gives it; the relation adds the key only when the field did not
   (`ForeignKeyOwnFormSchemaTests`, `ForeignKeyOwnFormHostTests`). A `ReadOnly` or audit key is in
   the filter input and in neither write input.
+- A foreign key whose field is `Hidden = true` is not offered to a reader by name
+  (`CollectionMetadata.OffersForeignKey`): not in the GraphQL create, update and filter inputs, and
+  not as a filter, sort, field, facet or aggregate name. The relation object, a write that names the
+  key, and `Interface = Hidden` without the flag are unaffected
+  (`ForeignKeyHiddenFlagHostTests`).
+- A `File` or `Image` field is not the key of a relation (`FileFieldRelationKeyCheck`): the field
+  already resolves to the file, and the two declarations collide in the GraphQL output type.
 - A target or element type is resolved by collection name to the scanned collection class, for the
   key-type comparison and for the one-to-many child key.
 
@@ -127,6 +134,20 @@ An override or a `new` member of a base class navigation property that carries `
 | `[CmsRelation]` only | refused: no `[Navigate]` |
 | both | the relation |
 
+A `Hidden = true` foreign key `ownerId` next to a hidden field `secret` that is not a key, measured
+on SQLite through the HTTP pipeline on 2026-11-27, at the commit before the rule:
+
+| Surface | `secret` | `ownerId` |
+|---|---|---|
+| GraphQL create, update and filter inputs | absent | `ID`, `ID`, `IdFilter` |
+| REST `filter`, `sort`, `fields`, `facets`, `aggregate` | `400` `Unknown field` | `200` |
+| item read, revision read | not returned | not returned |
+| `GET /api/schema` | not in `fields` | not in `fields`; the relation's `foreignKey` names it |
+| REST write that names it | stored | stored |
+
+An `Image` field `CoverId` with a relation `Cover` on it: the scan passed and the GraphQL schema
+build threw `The following field 'cover' is declared multiple times`, so the host did not start.
+
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
@@ -146,5 +167,6 @@ An override or a `new` member of a base class navigation property that carries `
 - `src/Struo.Infrastructure/Metadata/KeyLookup.cs`
 - `src/Struo.Infrastructure/Metadata/NavigateShape.cs`
 - `src/Struo.Infrastructure/Metadata/RelationInheritanceCheck.cs`
+- `src/Struo.Infrastructure/Metadata/FileFieldRelationKeyCheck.cs`
 - `tests/Struo.Tests/Metadata/NavigateForeignKeyTests.cs`
 - `docs/ai/conventions.md`

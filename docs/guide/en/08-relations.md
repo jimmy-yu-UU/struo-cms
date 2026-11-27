@@ -43,10 +43,12 @@ in a column: one that carries `[SugarColumn(IsIgnore = true)]` is refused. When 
 breaks one of these rules, startup fails with a message naming the relation, the key and the type
 to look in, and the property that differs only in case when there is one.
 
-A many-to-one foreign key may also carry `[CmsField]` with an interface other than `File` and
-`Image`. GraphQL lists such a key once in the create, update and filter inputs, with the type the
-field gives it (`Int` and `IntFilter` for an `int?` key with the `Number` interface) in place of
-`ID` and `IdFilter`.
+A many-to-one foreign key may also carry `[CmsField]`. GraphQL lists such a key once in the create,
+update and filter inputs, with the type the field gives it (`Int` and `IntFilter` for an `int?`
+key with the `Number` interface) in place of `ID` and `IdFilter`. A key whose field is
+`Hidden = true` is not listed at all (see [Chapter 6](06-field-types.md)). A `File` or `Image`
+field cannot be a relation key: the field already resolves to the file, and startup fails with a
+message that names the relation and the key.
 
 A key must have the type of the primary key it points at, each without `?`: `long?` matches `long`,
 and `int` against `long` does not. Four keys are compared:
