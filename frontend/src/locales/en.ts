@@ -490,4 +490,89 @@ export default {
     opNeq: 'does not equal',
     opContains: 'contains',
   },
+  core: {
+    groups: { System: 'System' },
+    audit: {
+      createdAt: 'CreatedAt',
+      createdBy: 'CreatedBy',
+      updatedAt: 'UpdatedAt',
+      updatedBy: 'UpdatedBy',
+    },
+    collections: {
+      file: {
+        label: 'File',
+        fields: {
+          fileName: 'File Name',
+          title: 'Title',
+          contentType: 'Content Type',
+          alt: 'Alt',
+          size: 'Size',
+          width: 'Width',
+          height: 'Height',
+          status: 'Status',
+        },
+        relations: {
+          folder: 'Folder',
+        },
+        options: {
+          status: { draft: 'Draft', published: 'Published' },
+        },
+      },
+      language: {
+        label: 'Language',
+        fields: {
+          code: 'Code',
+          name: 'Name',
+          isDefault: 'Default',
+          enabled: 'Enabled',
+          sort: 'Sort',
+        },
+      },
+      mediaFolder: {
+        label: 'MediaFolder',
+        fields: {
+          name: 'Name',
+        },
+        relations: {
+          parent: 'Parent',
+        },
+      },
+      permission: {
+        label: 'Permission',
+        fields: {
+          roleId: 'Role',
+          collection: 'Collection',
+          canRead: 'Can Read',
+          canWrite: 'Can Write',
+          canDelete: 'Can Delete',
+        },
+      },
+      role: {
+        label: 'Role',
+        fields: {
+          name: 'Name',
+          isSuperAdmin: 'Super Admin',
+          description: 'Description',
+        },
+      },
+      user: {
+        label: 'User',
+        fields: {
+          email: 'Email',
+          name: 'Name',
+          isActive: 'Active',
+        },
+        relations: {
+          roles: 'Roles',
+        },
+      },
+      userRole: {
+        label: 'UserRole',
+        fields: {
+          userId: 'User',
+          roleId: 'Role',
+        },
+      },
+    },
+  },
 }
