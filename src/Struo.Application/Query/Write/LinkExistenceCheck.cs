@@ -37,7 +37,7 @@ internal sealed class LinkExistenceCheck(
         foreach (var slot in Slots(meta, d).Where(slot => sent.Contains(slot.Key)))
         {
             var storedIds = stored is null ? [] : IdsOf(Read(d, slot.Property, stored));
-            var added = IdsOf(Read(d, slot.Property, incoming)).Where(id => !storedIds.Contains(id)).ToList();
+            var added = IdsOf(Read(d, slot.Property, incoming)).Where(id => !storedIds.Any(known => SameId(known, id))).ToList();
             if (added.Count > 0) links.Add(new PendingLink(slot.Key, slot.Target, added, slot.IsList));
         }
         return links;
@@ -100,7 +100,7 @@ internal sealed class LinkExistenceCheck(
         });
 
     // The field name a body and the error messages use for a CLR property.
-    private static string FieldNameOf(EntityDescriptor d, string property) =>
+    internal static string FieldNameOf(EntityDescriptor d, string property) =>
         d.FieldToProperty.FirstOrDefault(kv => string.Equals(kv.Value, property, StringComparison.OrdinalIgnoreCase)).Key
         ?? property;
 
@@ -167,6 +167,11 @@ internal sealed class LinkExistenceCheck(
         }
         return stored;
     }
+
+    // The database matched a string key by its own collation, which can ignore case.
+    private static bool SameId(object stored, object sent) => stored is string text
+        ? sent is string other && string.Equals(text, other, StringComparison.OrdinalIgnoreCase)
+        : stored.Equals(sent);
 
     private static object? Read(EntityDescriptor d, string property, object row) =>
         d.Properties.GetValueOrDefault(property)?.GetValue(row);

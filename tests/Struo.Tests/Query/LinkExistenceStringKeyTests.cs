@@ -3,6 +3,7 @@ using System.Text.Json;
 using AwesomeAssertions;
 using Struo.Application.Metadata;
 using Struo.Application.Query;
+using Struo.Domain.Metadata.Enums;
 using Struo.Domain.Metadata.Models;
 using Struo.Domain.Query;
 using Xunit;
@@ -79,5 +80,37 @@ public sealed class LinkExistenceStringKeyTests
         var act = () => Ensure(typeof(Numbered), new Numbered { Id = 7 }, 8L);
 
         await Assert.ThrowsAsync<QueryException>(act);
+    }
+
+    private sealed class Host
+    {
+        public string CodeId { get; set; } = "";
+    }
+
+    private static IReadOnlyList<PendingLink> Assigned(string stored, string sent)
+    {
+        var meta = Meta() with
+        {
+            Relations =
+            [
+                new RelationMetadata
+                {
+                    Name = "code", Label = "Code", Kind = RelationKind.ManyToOne, TargetCollection = "target",
+                    Interface = RelationInterface.Dropdown, ForeignKey = "codeId",
+                },
+            ],
+        };
+        var d = new EntityDescriptor(typeof(Host), new Dictionary<string, string>(), "CodeId");
+        var check = new LinkExistenceCheck(null!, new Registry(typeof(Host)), new NoJunctions());
+        return check.RootLinks(
+            meta, d, new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "codeId" },
+            new Host { CodeId = stored }, new Host { CodeId = sent });
+    }
+
+    [Fact]
+    public void A_string_key_sent_back_in_another_case_assigns_nothing_new()
+    {
+        Assigned("ABC", "abc").Should().BeEmpty();
+        Assigned("ABC", "xyz").Should().ContainSingle();
     }
 }

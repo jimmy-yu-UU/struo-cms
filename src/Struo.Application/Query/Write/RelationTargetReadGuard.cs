@@ -45,14 +45,63 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
     }
 
     /// <summary>The many-to-many, many-to-one and junction keys of <see cref="Require"/>, without the file fields.</summary>
-    internal void RequireLinks(CollectionMetadata meta, JsonElement body)
+    internal void RequireLinks(CollectionMetadata meta, JsonElement body) =>
+        RequireReadable(SentLinks(meta, body), body);
+
+    /// <summary>
+    /// The many-to-many and many-to-one keys of an update. Its junction keys are checked by
+    /// <see cref="RequireJunctionKeys"/> once the stored row is loaded.
+    /// </summary>
+    internal void RequireRelationLinks(CollectionMetadata meta, JsonElement body)
+    {
+        var sent = ItemDeserializer.PresentNames(body);
+        RequireReadable(ManyToManyLinks(meta, body).Concat(ManyToOneLinks(meta, sent)), body);
+    }
+
+    /// <summary>
+    /// The junction keys of an update. A caller who cannot read a key's target may send the key back with the
+    /// value <paramref name="existing"/> stores (nothing new is linked); a <c>Hidden</c> key is never exempt, as the
+    /// item read does not return it. Any other value is refused like on a create.
+    /// </summary>
+    internal void RequireJunctionKeys(CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
         if (body.ValueKind != JsonValueKind.Object) return;
-        foreach (var link in SentLinks(meta, body))
+        foreach (var link in JunctionLinks(meta, ItemDeserializer.PresentNames(body)))
+        {
+            if (permissions.CanRead(link.Target) || HoldsStoredKey(meta, d, body, existing, link.Key)) continue;
+            throw ReadDenied(link.Target);
+        }
+    }
+
+    private void RequireReadable(IEnumerable<SentLink> links, JsonElement body)
+    {
+        if (body.ValueKind != JsonValueKind.Object) return;
+        foreach (var link in links)
         {
             if (!permissions.CanRead(link.Target)) throw ReadDenied(link.Target);
         }
     }
+
+    private static bool HoldsStoredKey(
+        CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing, string property)
+    {
+        var name = LinkExistenceCheck.FieldNameOf(d, property);
+        if (meta.Fields.Any(f => f.Hidden && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)))
+            return false;
+        var sent = body.EnumerateObject().First(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).Value;
+        return SameKey(d.Properties.GetValueOrDefault(property)?.GetValue(existing), sent);
+    }
+
+    // Equal the way the database matched the key: a Guid by value, a string ignoring case, a number as written.
+    private static bool SameKey(object? stored, JsonElement sent) => stored switch
+    {
+        null => sent.ValueKind == JsonValueKind.Null,
+        Guid id => sent.ValueKind == JsonValueKind.String && Guid.TryParse(sent.GetString(), out var parsed) && parsed == id,
+        string text => sent.ValueKind == JsonValueKind.String
+                       && string.Equals(text, sent.GetString(), StringComparison.OrdinalIgnoreCase),
+        _ => sent.ValueKind == JsonValueKind.Number
+             && sent.GetRawText() == Convert.ToString(stored, System.Globalization.CultureInfo.InvariantCulture),
+    };
 
     /// <summary>
     /// The file fields of an update. A caller who cannot read <c>file</c> may send a field back only with the
