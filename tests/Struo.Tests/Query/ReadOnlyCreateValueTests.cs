@@ -36,6 +36,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     private static readonly Guid InitialGuid = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid InterceptorGuid = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid OtherGuid = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid StoredGuid = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     [SugarTable("ro_create_item")]
     [CmsCollection("RoCreateItem", Name = ItemCollection, Revisions = true)]
@@ -253,6 +254,17 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         stored.Payload.Should().Be("""{"a":1}""");
     }
 
+    // Gives the stored keys a value that is neither the class initial value nor the one a body sends, so a
+    // write that reached them would show.
+    private async Task StoreKeysAsync(Guid id, Guid value)
+    {
+        await _db.Updateable<Item>()
+            .SetColumns(i => i.OwnerId == value)
+            .SetColumns(i => i.RequiredOwnerId == value)
+            .Where(i => i.Id == id)
+            .ExecuteCommandAsync();
+    }
+
     private static void AssertInitialKeys(StoredRow stored)
     {
         stored.OwnerId.Should().Be(InitialGuid);
@@ -352,6 +364,21 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     }
 
     [Fact]
+    public async Task The_entity_reader_fills_a_database_null_with_the_property_initialiser()
+    {
+        var created = await _service(null).CreateAsync(ItemCollection, Body(PlainBody));
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        await _db.Updateable<Item>().SetColumns(i => i.OwnerId == null).Where(i => i.Id == id).ExecuteCommandAsync();
+
+        var queried = await _db.Queryable<Item>().Where(i => i.Id == id).FirstAsync();
+        var fetched = (Item?)await _repo.GetByIdAsync(ItemCollection, id.ToString());
+
+        queried.OwnerId.Should().Be(InitialGuid);
+        fetched.Should().NotBeNull();
+        fetched.OwnerId.Should().Be(InitialGuid);
+    }
+
+    [Fact]
     public async Task A_before_write_interceptor_that_sets_a_read_only_field_wins()
     {
         var created = await _service([new SetsReadOnlyFields()]).CreateAsync(ItemCollection, Body(HostileBody));
@@ -387,10 +414,14 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
     {
         var svc = _service(null);
         var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
+        var id = created["id"]!.ToString()!;
+        await StoreKeysAsync(Guid.Parse(id), StoredGuid);
 
-        await svc.UpdateAsync(ItemCollection, created["id"]!.ToString()!, Body("{\"" + key + "\":\"" + OtherGuid + "\"}"));
+        await svc.UpdateAsync(ItemCollection, id, Body("{\"" + key + "\":\"" + OtherGuid + "\"}"));
 
-        AssertInitialKeys(await StoredAsync(created));
+        var stored = await StoredAsync(created);
+        stored.OwnerId.Should().Be(StoredGuid);
+        stored.RequiredOwnerId.Should().Be(StoredGuid);
     }
 
     [Fact]
@@ -399,12 +430,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         var svc = _service(null);
         var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
         var id = Guid.Parse(created["id"]!.ToString()!);
-        var other = OtherGuid;
-        await _db.Updateable<Item>()
-            .SetColumns(i => i.OwnerId == other)
-            .SetColumns(i => i.RequiredOwnerId == other)
-            .Where(i => i.Id == id)
-            .ExecuteCommandAsync();
+        await StoreKeysAsync(id, OtherGuid);
 
         var reverted = await svc.RevertAsync(ItemCollection, id.ToString(), 1);
 
@@ -420,12 +446,14 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         var svc = _service(null);
         var created = await svc.CreateAsync(ItemCollection, Body(PlainBody));
         var id = created["id"]!.ToString()!;
+        await StoreKeysAsync(Guid.Parse(id), StoredGuid);
 
         await svc.UpdateAsync(ItemCollection, id, Body(HostileBody));
 
         var stored = await StoredAsync(created);
         AssertInitialColumns(stored);
-        AssertInitialKeys(stored);
+        stored.OwnerId.Should().Be(StoredGuid);
+        stored.RequiredOwnerId.Should().Be(StoredGuid);
     }
 
     private async Task<List<Row>> StoredRowsAsync(object id)
