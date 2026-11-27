@@ -64,8 +64,8 @@
   meant to set the key; set it in a write interceptor when the server owns the value
   ([Chapter 6](06-field-types.md)). The same holds for a relation whose foreign key is an audit
   field such as `CreatedBy`: an update and a revert cleared it to `NULL`, and the GraphQL inputs
-  listed the key. Both kinds of relation are reported as not editable in the schema, so the admin relation
-  picker is disabled ([Chapter 8](08-relations.md)).
+  listed the key. Both kinds of relation are reported as not editable in the schema, so the admin
+  relation picker is disabled ([Chapter 8](08-relations.md)).
 :::
 
 ### Changed
