@@ -102,6 +102,34 @@ public sealed class RelationInheritanceCheckTests
         [SugarColumn(IsIgnore = true)] public new Target? Link { get; set; }
     }
 
+    [CmsCollection("Ric hide private", Name = "ricHidePrivate")]
+    private sealed class HidePrivate : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        private new Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric hide internal", Name = "ricHideInternal")]
+    private sealed class HideInternal : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        internal new Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric hide protected", Name = "ricHideProtected")]
+    private class HideProtected : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        protected new Target? Link { get; set; }
+    }
+
+    [CmsCollection("Ric hide static", Name = "ricHideStatic")]
+    private sealed class HideStatic : RelationBase
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+        public static new Target? Link { get; set; }
+    }
+
     // ── a class that inherits the declaration unchanged, and a chain ──
 
     [CmsCollection("Ric inherits", Name = "ricInherits")]
@@ -283,6 +311,9 @@ public sealed class RelationInheritanceCheckTests
         { typeof(HideNeither), HidingMessage("HideNeither") },
         { typeof(HideNavigateOnly), HidingMessage("HideNavigateOnly") },
         { typeof(BareHide), HidingMessage("BareHide") },
+        { typeof(HidePrivate), HidingMessage("HidePrivate") },
+        { typeof(HideInternal), HidingMessage("HideInternal") },
+        { typeof(HideProtected), HidingMessage("HideProtected") },
         { typeof(LeafOfHidingMiddle), HidingMessage("MiddleHides") },
     };
 
@@ -331,6 +362,7 @@ public sealed class RelationInheritanceCheckTests
         { typeof(AbstractRepeats) },
         { typeof(ImplementsInterface) },
         { typeof(GenericRepeats) },
+        { typeof(HideStatic) },
     };
 
     [Theory]

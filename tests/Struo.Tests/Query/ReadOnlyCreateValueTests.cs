@@ -132,6 +132,24 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         public string Text { get; set; } = "x";
     }
 
+    public sealed class Row
+    {
+        [CmsField(Label = "Title", Interface = FieldInterface.Text)] public string Title { get; set; } = "";
+
+        [CmsField(Label = "Locked", Interface = FieldInterface.Text, ReadOnly = true)]
+        public string Locked { get; set; } = "x";
+    }
+
+    [SugarTable("ro_create_repeater")]
+    [CmsCollection("RoCreateRepeater", Name = "roCreateRepeater")]
+    public sealed class RepeaterItem : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [CmsField(Label = "Rows", Interface = FieldInterface.Repeater)]
+        public List<Row> Rows { get; set; } = [];
+    }
+
     private sealed class SetsReadOnlyFields : IItemWriteInterceptor
     {
         public bool AppliesTo(string collection) => string.Equals(collection, "roCreateItem", StringComparison.OrdinalIgnoreCase);
@@ -168,12 +186,13 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         _db.CodeFirst.InitTables<Item>();
         _db.CodeFirst.InitTables<RequiredMemberItem>();
         _db.CodeFirst.InitTables<JsonRequiredItem>();
+        _db.CodeFirst.InitTables<RepeaterItem>();
         _db.CodeFirst.InitTables<Role>();
         _db.CodeFirst.InitTables<Language>();
         _db.CodeFirst.InitTables<Revision>();
         LanguageSeeder.SeedAsync(_db, TestLocalization.Default).GetAwaiter().GetResult();
 
-        var types = new[] { typeof(Item), typeof(RequiredMemberItem), typeof(JsonRequiredItem), typeof(Role) };
+        var types = new[] { typeof(Item), typeof(RequiredMemberItem), typeof(JsonRequiredItem), typeof(RepeaterItem), typeof(Role) };
         var collections = MetadataScanner.ScanTypes(types);
         var provider = new CachedMetadataProvider(collections);
         var registry = new EntityRegistry(MetadataScanner.ScanDescriptors(types));
@@ -182,6 +201,7 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
             ["roCreateItem"] = typeof(Item),
             ["roCreateRequired"] = typeof(RequiredMemberItem),
             ["roCreateJsonRequired"] = typeof(JsonRequiredItem),
+            ["roCreateRepeater"] = typeof(RepeaterItem),
             ["role"] = typeof(Role),
         });
         _repo = new SqlSugarItemRepository(_db, registry, graph, provider, new StruoQueryOptions());
@@ -400,6 +420,34 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         var stored = await StoredAsync(created);
         AssertInitialColumns(stored);
         AssertInitialKeys(stored);
+    }
+
+    private async Task<List<Row>> StoredRowsAsync(object id)
+    {
+        var key = Guid.Parse(id.ToString()!);
+        return await _db.Queryable<RepeaterItem>().Where(i => i.Id == key).Select(i => i.Rows).FirstAsync();
+    }
+
+    [Fact]
+    public async Task A_create_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater()
+    {
+        var created = await _service(null).CreateAsync("roCreateRepeater", Body("""{"rows":[{"title":"t","locked":"c"}]}"""));
+
+        var rows = await StoredRowsAsync(created["id"]!);
+
+        rows.Should().ContainSingle().Which.Locked.Should().Be("c");
+    }
+
+    [Fact]
+    public async Task An_update_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater()
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync("roCreateRepeater", Body("""{"rows":[{"title":"t","locked":"c"}]}"""));
+
+        await svc.UpdateAsync("roCreateRepeater", created["id"]!.ToString()!, Body("""{"rows":[{"title":"t","locked":"u"}]}"""));
+
+        var rows = await StoredRowsAsync(created["id"]!);
+        rows.Should().ContainSingle().Which.Locked.Should().Be("u");
     }
 
     [Fact]
