@@ -434,6 +434,8 @@ one is refused by `FieldDeclarationCheck.RequirePublicInstanceFields`: the scan 
 instance properties only. `FieldInheritanceCheck` refuses a `[CmsField]` declaration lost through
 an override or a `new` member that carries none, and `FieldSetterCheck` a writable field no write
 can bind (`docs/ai/decisions/cmsfield-is-a-public-instance-property.md` has the accepted shapes).
+`TranslationReadOnlyCheck` refuses `ReadOnly = true` on a translation class field, which a
+translations payload writes all the same.
 `ColumnOverrideCheck` refuses an override that does not repeat a base declaration's
 `[SugarColumn]`, on collection, translation and junction types
 (`docs/ai/decisions/an-override-repeats-sugarcolumn.md`). A
@@ -441,7 +443,8 @@ can bind (`docs/ai/decisions/cmsfield-is-a-public-instance-property.md` has the 
 scan, and each refusal is a `MetadataException` that names the relation by the class declaring it
 and says what to declare. `MetadataScanner.ScanRelations` refuses one that is static or not public
 (`RelationDeclarationCheck.RequirePublicInstanceRelations`) and one with no `[Navigate]`;
-`NavigateShape` refuses an unsupported `[Navigate]` form and a many-to-one or one-to-one
+`RelationInheritanceCheck` refuses one lost through an override or a `new` member that does not
+repeat it; `NavigateShape` refuses an unsupported `[Navigate]` form and a many-to-one or one-to-one
 foreign-key name that is no property of the declaring entity.
 `MetadataScanner.ValidateJunctionKeyProperties` requires both key names of a many-to-many to be
 properties of the junction type and runs before the other junction checks.
@@ -711,7 +714,8 @@ none is ever surfaced client-side.
   "The search provider: `ISearchProvider`".
 - **Write bodies**: `ItemDeserializer` (`src/Struo.Application/Query/Write/ItemDeserializer.cs`)
   parses the request JSON against the collection's metadata (unknown/`ReadOnly`/system fields are
-  stripped, not silently trusted) and sanitizes non-translatable `RichText` values via
+  stripped, not silently trusted, so a `ReadOnly` field keeps its class initial value on create)
+  and sanitizes non-translatable `RichText` values via
   `RichTextCleaner` (a wrapper around `IHtmlSanitizer`,
   `src/Struo.Application/Query/Write/RichTextCleaner.cs`) before required-field checks run;
   translatable `RichText` values go through the same `RichTextCleaner` separately, per locale, in

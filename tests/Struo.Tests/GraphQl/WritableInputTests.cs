@@ -121,7 +121,53 @@ public sealed class WritableInputTests
             "cannot be built. None of its fields counts: 'secret' (Interface = Hidden, which is never written), " +
             "'hiddenText' (Hidden = true). Add a [CmsField] property that GraphQL can write: it must not set Hidden = true " +
             "or ReadOnly = true, and its interface must not be Hidden, Divider or Password. " +
-            "A many-to-one or many-to-many relation also counts.");
+            "A many-to-many relation, or a many-to-one relation whose foreign key is neither ReadOnly nor an audit field, " +
+            "also counts.");
+    }
+
+    private static CollectionMetadata WithOwner(FieldMetadata ownerId, params FieldMetadata[] others) =>
+        Collection([ownerId, ..others]) with
+        {
+            Relations =
+            [
+                new RelationMetadata
+                {
+                    Name = "owner", Label = "Owner", Kind = RelationKind.ManyToOne, TargetCollection = "role",
+                    Interface = RelationInterface.Dropdown, ForeignKey = "ownerId",
+                },
+            ],
+        };
+
+    [Fact]
+    public void A_foreign_key_that_is_a_writable_field_is_an_input_field()
+    {
+        var collection = WithOwner(Field("ownerId", FieldInterface.Hidden), Field("name", FieldInterface.Text));
+
+        WritableInput.Fields(collection, null, []).Select(f => f.Name).Should().Equal("name", "ownerId");
+    }
+
+    [Fact]
+    public void A_foreign_key_that_is_a_read_only_or_system_field_is_not_an_input_field()
+    {
+        foreach (var owner in new[]
+                 {
+                     Field("ownerId", FieldInterface.Hidden) with { ReadOnly = true },
+                     Field("ownerId", FieldInterface.Hidden) with { IsSystem = true },
+                 })
+        {
+            var collection = WithOwner(owner, Field("name", FieldInterface.Text));
+
+            WritableInput.Fields(collection, null, []).Select(f => f.Name).Should().Equal("name");
+        }
+    }
+
+    [Fact]
+    public void A_collection_whose_only_input_is_a_read_only_foreign_key_is_rejected()
+    {
+        var collection = WithOwner(Field("ownerId", FieldInterface.Hidden) with { ReadOnly = true });
+
+        FluentActions.Invoking(() => WritableInput.RequireAny(collection, null, []))
+            .Should().Throw<MetadataException>().Which.Message.Should().Contain("None of its fields counts: 'ownerId' (ReadOnly = true).");
     }
 
     [Fact]
@@ -190,7 +236,7 @@ public sealed class WritableInputTests
             "Collection 'vault' has a translation sidecar, but none of its translatable fields can be written through " +
             "GraphQL, so its translations input type would be empty and the schema cannot be built. " +
             "None of them counts: 'title' (Hidden = true), 'note' (Interface = Password, which is never written). " +
-            "Make at least one translatable field writable: it must not set Hidden = true or ReadOnly = true, and its " +
+            "Make at least one translatable field writable: it must not set Hidden = true, and its " +
             "interface must not be Hidden, Divider or Password.");
     }
 

@@ -67,29 +67,52 @@ internal static class WritableInput
     private static List<FieldMetadata> Translatable(CollectionMetadata meta) =>
         meta.Fields.Where(f => f.Translatable && !f.IsSystem).ToList();
 
+    private static bool IsServerOwned(CollectionMetadata meta, string name) =>
+        meta.Fields.Any(f => (f.IsSystem || f.ReadOnly) && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+
     internal static IEnumerable<InputField> Fields(
         CollectionMetadata meta, EntityDescriptor? desc, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
-        foreach (var f in meta.Fields)
-            if (OwnField(meta, f, desc) is { Sdl: { } sdl })
-                yield return new InputField(f.Name, sdl);
+        var own = OwnFields(meta, desc);
+        foreach (var field in own)
+            yield return field;
 
-        foreach (var rel in meta.Relations)
-        {
-            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
-                yield return new InputField(fk, "ID");
-            else if (rel.Kind == RelationKind.ManyToMany)
-            {
-                yield return new InputField(rel.Name, "[ID!]");
-                if (CollectionSchemaBuilder.DescriptorFor(payloadRelations, rel.Name) is not null)
-                    yield return new InputField(
-                        SchemaTypeMapper.LinksFieldName(rel.Name),
-                        $"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]");
-            }
-        }
+        var declared = own.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
+        foreach (var field in meta.Relations.SelectMany(rel => RelationFields(meta, rel, payloadRelations, declared)))
+            yield return field;
 
         if (meta.Translation is not null && Translatable(meta).Any(f => TranslatedField(f, desc).Sdl is not null))
             yield return new InputField("translations", $"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]");
+    }
+
+    private static List<InputField> OwnFields(CollectionMetadata meta, EntityDescriptor? desc)
+    {
+        var own = new List<InputField>();
+        foreach (var f in meta.Fields)
+            if (OwnField(meta, f, desc) is { Sdl: { } sdl })
+                own.Add(new InputField(f.Name, sdl));
+        return own;
+    }
+
+    // A foreign key that is also a writable [CmsField] is already in the input as that field, in the form the
+    // field declares; a ReadOnly or audit key is not written, as for the field itself.
+    private static IEnumerable<InputField> RelationFields(
+        CollectionMetadata meta, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations,
+        HashSet<string> declared)
+    {
+        if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
+        {
+            if (!declared.Contains(fk) && !IsServerOwned(meta, fk))
+                yield return new InputField(fk, "ID");
+        }
+        else if (rel.Kind == RelationKind.ManyToMany)
+        {
+            yield return new InputField(rel.Name, "[ID!]");
+            if (CollectionSchemaBuilder.DescriptorFor(payloadRelations, rel.Name) is not null)
+                yield return new InputField(
+                    SchemaTypeMapper.LinksFieldName(rel.Name),
+                    $"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]");
+        }
     }
 
     /// <summary>
@@ -113,7 +136,8 @@ internal static class WritableInput
             $"Collection '{meta.Name}' has nothing GraphQL can write, so its create input type would be empty and the " +
             $"schema cannot be built. {listed} " +
             "Add a [CmsField] property that GraphQL can write: it must not set Hidden = true or ReadOnly = true, and its " +
-            "interface must not be Hidden, Divider or Password. A many-to-one or many-to-many relation also counts.");
+            "interface must not be Hidden, Divider or Password. A many-to-many relation, or a many-to-one relation " +
+            "whose foreign key is neither ReadOnly nor an audit field, also counts.");
     }
 
     private static void RequireTranslatedField(CollectionMetadata meta, EntityDescriptor? desc)
@@ -127,7 +151,7 @@ internal static class WritableInput
             $"Collection '{meta.Name}' has a translation sidecar, but none of its translatable fields can be written " +
             "through GraphQL, so its translations input type would be empty and the schema cannot be built. " +
             $"None of them counts: {Bounded(skipped)}. " +
-            "Make at least one translatable field writable: it must not set Hidden = true or ReadOnly = true, and its " +
+            "Make at least one translatable field writable: it must not set Hidden = true, and its " +
             "interface must not be Hidden, Divider or Password.");
     }
 

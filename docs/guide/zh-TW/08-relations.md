@@ -7,7 +7,9 @@
 每個關聯宣告在一個 navigation 屬性上，要同時掛兩個 attribute：SqlSugar 的 `[Navigate]` 決定 join 的
 形狀，`[CmsRelation]` 負責其餘 CMS 的設定。兩個都要有，而且要掛在 public 的 instance 屬性上。只有
 `[Navigate]`、沒有 `[CmsRelation]` 的不是關聯，掃描器不理它；只有 `[CmsRelation]`、沒有
-`[Navigate]`，或掛在 static 或非 public 的屬性上，啟動就失敗，訊息點名那個屬性。
+`[Navigate]`，或掛在 static 或非 public 的屬性上，啟動就失敗，訊息點名那個屬性。覆寫基底類別的
+navigation 屬性、或用 `new` 遮住它，而沒有重複標 `[CmsRelation]`，啟動同樣失敗：這個 attribute
+不會繼承。
 `RelationKind` 只有三個值——`ManyToOne`、`OneToMany`、`ManyToMany`——掃描器依屬性的形狀自己推斷：
 純量或可為 `null` 的純量參照是多對一；清單屬性預設是一對多，只有當 `[Navigate]` 的第一個參數是一個型
 別時才算多對多。
@@ -30,6 +32,10 @@
 宣告這個關聯的實體上的屬性；一對多，對到目標集合的類別上的屬性；多對多的兩個鍵，對到 junction 型別
 上的屬性，而且是兩個不同的屬性。鍵屬性要有自己的欄位：帶 `[SugarColumn(IsIgnore = true)]` 的不行。
 違反任何一條，啟動就失敗，訊息點名關聯、鍵名與該找的型別；有屬性只差大小寫時，也點名那個屬性。
+
+多對一的外鍵也可以同時帶 `[CmsField]`，介面不是 `File` 或 `Image` 就行。這時 GraphQL 的建立、
+更新與篩選輸入只列這個鍵一次，型別照欄位的宣告（`Number` 介面的 `int?` 鍵是 `Int` 與
+`IntFilter`），而不是 `ID` 與 `IdFilter`。
 
 鍵的型別要等於它所指向的主鍵的型別，兩邊各自去掉 `?` 再比：`long?` 對得上 `long`，`int` 對 `long`
 就對不上。要比的鍵有四個：
@@ -153,6 +159,9 @@ junction 主鍵，不會整批砍掉重建。三種情況各自的處理是：
 |---|---|---|---|
 | `OnDelete` | `OnDelete` | `Restrict` | 僅多對一 |
 | `Editable` | `bool` | `true` | 後台 picker 是否接受輸入 |
+
+多對一關聯的外鍵是 `ReadOnly` 欄位或稽核欄位時，不論 `Editable` 怎麼設，schema 都把這個關聯回報成
+不可編輯：伺服器不會從請求寫入這個鍵（見[第 6 章](06-field-types.md)）。
 
 沒有逐關聯設定深度的欄位。REST 的 `deep` 與關聯路徑，唯一生效的上限是全域的
 `Query:MaxRelationDepth`，見「用 `deep` 讀取關聯資料」一節；GraphQL 的選擇集另外受

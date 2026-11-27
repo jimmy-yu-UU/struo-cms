@@ -423,7 +423,9 @@ it for cache invalidation and similar work, and keep it from throwing.
 On create, the body is checked in this order: permission, the `Creatable` check, body shape,
 `MaxLength` and per-field validators, then your `BeforeWriteAsync`, then the Required check. A scalar
 Required field is checked after your hook, so a hook can fill it; that is how the slug example below
-works. A list-type Required field is checked before it, and an interceptor cannot fill one.
+works. A list-type Required field is checked before it, and an interceptor cannot fill one. A
+`ReadOnly` field holds the value the class gives it when your hook runs, and the hook can replace
+it.
 
 A value your hook sets is not re-checked for `MaxLength` or by field validators, so the hook must
 produce a valid value; only the scalar Required check sees it.

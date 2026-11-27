@@ -222,8 +222,9 @@ HTTP_STATUS:200
 | `revert<X>` | `(id: ID!, revisionNumber: Int!, version: Long): <X>` |
 
 `locale` 引數只出現在單筆查詢、清單查詢、`create`、`update` 上，`delete`／`restore`／`revert` 都沒有。
-建立輸入帶可寫的自有欄位、多對一外鍵、多對多的 id 陣列，跟型別化的翻譯清單；更新輸入是同一份再加一個
-`version: Long`。`version` 為 `null` 或沒帶時不做比對。GraphQL 的 `Long` 型別會在 resolver 執行前拒
+建立輸入帶可寫的自有欄位、多對一外鍵（唯讀或稽核欄位除外）、多對多的 id 陣列，跟型別化的翻譯清單；
+更新輸入是同一份再加一個 `version: Long`。`version` 為 `null` 或沒帶時不做比對。
+GraphQL 的 `Long` 型別會在 resolver 執行前拒
 絕不是 64 位元整數的值，什麼都不會寫入。以字面值寫在 `version` 輸入欄位或 `revert<X>` 引數上（`1.5`、
 `"abc"`、`true`，或超出 64 位元範圍的整數），回 `INVALID_VERSION`。以變數傳入，或以字面值寫在其他任
 何要 `Int`、`Long` 或 `Float` 的位置（`limit`、`offset`、`revisionNumber`、篩選的運算元、`in` 這類清

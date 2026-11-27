@@ -164,6 +164,8 @@ UTC。
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
 是點名該欄位的啟動期 `MetadataException`。可寫的子欄位要有 public 的 setter（`set` 或 `init`），
 或由 `TChild` 唯一的 public 建構式裡同名、同型別的參數設值；兩者都沒有時啟動就失敗。
+標了 `ReadOnly = true` 的子欄位必須是請求寫不進去的：沒有 public 的 setter、沒有對應的建構式參數、
+也沒有 `[JsonInclude]`。請求仍寫得進去的會在啟動時被擋下，因為送來的值照樣會存進去。
 子欄位不能設為可翻譯，屬性型別照各介面的表檢查，
 也只能用下列介面，範圍比單一值介面窄：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、
 `Url`、`Color`、`Phone`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、
@@ -435,10 +437,10 @@ MariaDB 都一樣；在 PostgreSQL 上篩選也失敗。要明寫型別時，Pos
 
 建立時先報 `Required`；更新時如果 body 同時違反長度或結構驗證，先報的是那些錯誤。
 
-`ReadOnly` 欄位讀得到，更新時寫不進去：更新的欄位覆蓋邏輯會跳過每一個 `ReadOnly` 與
-`IsSystem` 欄位。建立時要真的鎖住，屬性必須可為 `null`——
-`[CmsField(ReadOnly = true)] public int Views` 這種不可為 `null` 的值型別，建立時客戶端傳
-什麼就存什麼，之後才唯讀。後台的輸入框也會停用。
+集合類別的 `ReadOnly` 欄位讀得到、寫不進去：建立、更新與還原時，送給它的鍵都會被丟掉，欄位同時是
+多對一關聯的外鍵時也一樣，GraphQL 的建立與更新 input 也不列這個鍵。建立時存進去的是類別給這個
+屬性的值——`public string Source { get; set; } = "import";` 存的是 `import`，沒有初始值的屬性
+存該型別的預設值——除非寫入攔截器另外設定。後台的輸入框也會停用。
 
 四個稽核欄位由掃描器自動變成唯讀的系統欄位，介面依 CLR 型別挑——時間是 `DateTime`，使用者是
 `Text`。新增時四個都由框架蓋印，更新時只重蓋 `UpdatedAt`／`UpdatedBy`，客戶端傳的值一律無

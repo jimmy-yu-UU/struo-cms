@@ -104,7 +104,7 @@ public sealed class WritableFieldsStartupTests(ITestOutputHelper output)
     public async Task A_Repeater_whose_sub_fields_are_all_ReadOnly_fails_at_host_start()
     {
         var error = await StartAsync(WithRows(
-            "RowsReadOnly", new EmittedProperty("Label", typeof(string), FieldInterface.Text, ReadOnly: true)));
+            "RowsReadOnly", new EmittedProperty("Label", typeof(string), FieldInterface.Text, ReadOnly: true, GetOnly: true)));
 
         error.Should().BeOfType<MetadataException>().Which.Message
             .Should().Contain("Repeater 'rowsReadOnly.rows' has no sub-field GraphQL can write")

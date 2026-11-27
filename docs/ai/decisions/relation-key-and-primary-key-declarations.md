@@ -15,9 +15,15 @@ service cannot serve:
   rule holds whatever `OnDelete` the relation declares.
 - A key property has a column, the two junction keys are two properties, and a relation is a public
   instance property that carries both `[CmsRelation]` and `[Navigate]`.
+- An override, or a `new` member, of a base class navigation property that carries `[CmsRelation]`
+  repeats it (`RelationInheritanceCheck`): the attribute is not inherited.
 - `SortField` is declared on a many-to-many only; its property has a column and a setter, is neither
   junction key nor the junction's primary key, and has one of the types measured to keep the order.
 - `OnDelete` other than the default is declared on a many-to-one only.
+- A many-to-one foreign key that also carries `[CmsField]` is declared once in each GraphQL input
+  type, in the form the field gives it; the relation adds the key only when the field did not
+  (`ForeignKeyOwnFormSchemaTests`, `ForeignKeyOwnFormHostTests`). A `ReadOnly` or audit key is in
+  the filter input and in neither write input.
 - A target or element type is resolved by collection name to the scanned collection class, for the
   key-type comparison and for the one-to-many child key.
 
@@ -112,22 +118,33 @@ name is that collection's:
 | One-to-many, the collection's class declares the child key with another type | expansion and the children write threw; filter matched nothing |
 | One-to-many, the collection's class declares no such key | expansion and filter threw |
 
+An override or a `new` member of a base class navigation property that carries `[CmsRelation]` and
+`[Navigate]`:
+
+| The derived member repeats | Result |
+|---|---|
+| neither, or `[Navigate]` only | scan passed; relation absent from the schema; a write left the key empty; a read that named it threw `Unknown relation` |
+| `[CmsRelation]` only | refused: no `[Navigate]` |
+| both | the relation |
+
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
-- A property hidden with `new` under another type, and a key declared on an interface, were not
+- A relation property hidden by a `new` member of another type, or by a `static new` member, passes
+  the scan and the base declaration is the relation served. A key declared on an interface was not
   measured.
 - `short` and `ushort` sort properties overflow past 32,768 and 65,536 links; a relation write is
   bounded by `Query:MaxRelationLinks`.
-- An override that does not repeat a base declaration's `[SugarColumn]` is refused before these
+- An override that does not repeat a base declaration's `[SugarColumn]` is refused before the key
   checks run, so the row above for a key with `IsIgnore` on a base class does not start:
   `docs/ai/decisions/an-override-repeats-sugarcolumn.md`.
-- `[CmsRelation]` on a class that is not a collection is never scanned, and an override that does
-  not repeat `[CmsRelation]` is not a relation.
+- `[CmsRelation]` on a class that is not a collection is never scanned, and one on an interface
+  member is not read.
 
 ## Referenced from
 
 - `src/Struo.Infrastructure/Metadata/KeyLookup.cs`
 - `src/Struo.Infrastructure/Metadata/NavigateShape.cs`
+- `src/Struo.Infrastructure/Metadata/RelationInheritanceCheck.cs`
 - `tests/Struo.Tests/Metadata/NavigateForeignKeyTests.cs`
 - `docs/ai/conventions.md`

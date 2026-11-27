@@ -38,9 +38,45 @@
   non-public setter with `[JsonInclude]`; a field of a Repeater child type needs a public setter,
   or a parameter of the same name and type on the type's one public constructor; a field of a
   translation class needs a setter. Such a field was listed as writable and the value sent for it
-  was not stored; a translation field with no setter made the write throw. Add a public setter, or
-  declare `[CmsField(ReadOnly = true)]` when the server computes the value
-  ([Chapter 5](05-collections.md)).
+  was not stored; a translation field with no setter made the write throw. Add a public setter, or,
+  outside a translation class, declare `[CmsField(ReadOnly = true)]` when the server computes the
+  value ([Chapter 5](05-collections.md)).
+- A navigation property of a base class that a derived class overrides without repeating
+  `[CmsRelation]`, or hides with a `new` member that carries none, stops the host at start.
+  `[CmsRelation]` is not inherited, so the relation silently did not exist: the schema did not list
+  it, a write did not link it, and a read that named it failed (measured on SQLite below the HTTP
+  layer). Repeat `[CmsRelation(...)]`, `[Navigate(...)]` and `[SugarColumn(IsIgnore = true)]` on the
+  override or the `new` member; a collection that does not want the relation must not inherit the
+  base class that declares it ([Chapter 8](08-relations.md)).
+- `[CmsField(ReadOnly = true)]` on a field of a translation class stops the host at start. A
+  `translations` payload wrote the field on create and on update all the same, and only the GraphQL
+  input type left it out (measured on SQLite below the HTTP layer). Remove `ReadOnly = true`, or
+  declare the property on the parent entity when server code owns the value
+  ([Chapter 7](07-i18n.md)).
+- On create, a `ReadOnly` field of a collection class stores the value the class gives the
+  property: `public string Source { get; set; } = "import";` stores `import`. The value was replaced
+  with `null` whenever the type can hold `null`, and a non-nullable `string` column then failed the
+  create in the database (measured on SQLite below the HTTP layer). A value a write interceptor sets
+  still wins. An interceptor that tests such a field for `null` to decide whether to fill it sees
+  the initial value: test for that value, or remove the initializer
+  ([Chapter 6](06-field-types.md)).
+- A property with `[CmsField(ReadOnly = true)]` that is also the foreign key of a many-to-one
+  relation is not changed by an update or a revert, and the GraphQL create and update inputs do not
+  list the key. An
+  update body that named the key cleared a nullable foreign key to `NULL` and wrote the value sent
+  into one that cannot be `null`; a revert to an earlier revision cleared a nullable foreign key to
+  `NULL` too (measured on SQLite below the HTTP layer). Remove `ReadOnly = true` when clients are
+  meant to set the key; set it in a write interceptor when the server owns the value
+  ([Chapter 6](06-field-types.md)). The same holds for a relation whose foreign key is an audit
+  field such as `CreatedBy`: an update and a revert cleared it to `NULL`. Both kinds of relation
+  are reported as not editable in the schema, so the admin relation picker is disabled
+  ([Chapter 8](08-relations.md)).
+- `[CmsField(ReadOnly = true)]` on a Repeater sub-field that a request body can still set stops the
+  host at start: one with a public setter (`set` or `init`), a matching constructor parameter, or
+  `[JsonInclude]`. A REST create and update stored the value sent for it, while the GraphQL item
+  input left the sub-field out (measured on SQLite below the HTTP layer). Remove `ReadOnly = true`,
+  or make the property get-only when the type computes the value
+  ([Chapter 6](06-field-types.md)).
 - A create or an update that names a link needs a read grant on the collection the link points at:
   a many-to-many relation (an empty `[]` included), a many-to-one foreign key (`null` included),
   either key of a junction row, a `File`, `Image` or `Files` field (inside `translations` too), and
@@ -86,6 +122,10 @@
 
 ### Fixed
 
+- A many-to-one foreign key that also carries a writable `[CmsField]` is listed once in the GraphQL
+  create, update and filter inputs, with the type the field gives it. The key was declared twice and
+  the host failed to start with `The following field ... is declared multiple times`; measured for
+  `Guid?`, `int?`, `long?` and `string?` keys ([Chapter 8](08-relations.md)).
 - With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
   `ValidateOnStart`, the host fails to start before it connects to the database and applies no
   migration. It applied the migrations first and then failed on that value; measured for

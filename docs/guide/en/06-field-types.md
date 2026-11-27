@@ -187,7 +187,10 @@ The rules are in [Declarations rejected at startup](#declarations-rejected-at-st
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
 violating either throws a startup `MetadataException` naming the field. A writable child field
 needs a public setter (`set` or `init`), or a parameter of the same name and type on the one public
-constructor of `TChild`; with neither, startup fails. Child fields can't be set
+constructor of `TChild`; with neither, startup fails. A child field with `ReadOnly = true` must be
+one a request body cannot set: no public setter, no matching constructor parameter and no
+`[JsonInclude]`. One a body can still set is refused at startup, because the value sent would be
+stored all the same. Child fields can't be set
 translatable, their property types are checked against the interface tables, and they can use only
 these interfaces, a narrower set than the single-value interfaces: `Text`, `Textarea`, `Markdown`,
 `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`, `Number`, `Slider`, `Rating`, `Boolean`,
@@ -495,11 +498,13 @@ the required check; `<img>` and `<hr>` both count as content.
 On create, `Required` is reported first. On update, when the body also violates a length or
 structural check, those errors are reported first instead.
 
-A `ReadOnly` field can be read but not written on update — the update field-overlay logic skips
-every `ReadOnly` and `IsSystem` field. Locking it on create as well requires the property to be
-nullable: a non-nullable value type such as `[CmsField(ReadOnly = true)] public int Views` stores
-whatever the client sends on create, and only becomes read-only afterward. The admin input is
-disabled as well.
+A `ReadOnly` field of a collection class can be read but not written: a key sent for it is dropped
+on create, on update and on a revert, also when the field is the foreign key of a many-to-one
+relation, and the GraphQL create and update inputs do not list the key. On create the field stores
+the value the class gives the property —
+`public string Source { get; set; } = "import";` stores `import`, and a property with no
+initializer stores the default of its type — unless a write interceptor sets it. The admin input
+is disabled as well.
 
 The scanner automatically turns the four audit fields into read-only system fields, picking their
 interface by CLR type — `DateTime` for the timestamps, `Text` for the users. The framework stamps

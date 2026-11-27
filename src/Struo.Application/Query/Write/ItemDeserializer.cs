@@ -16,6 +16,8 @@ namespace Struo.Application.Query;
 /// </summary>
 public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSource m2mSource, RichTextCleaner richText)
 {
+    private const string UnparsableBody = "Request body could not be parsed.";
+
     internal static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
     {
         Converters = { new UtcDateTimeJsonConverter() },
@@ -30,7 +32,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     /// per-interface validators still run for every field, so a Required list-type field is checked here.
     /// </summary>
     public object DeserializeForCreate(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, validateAllFields: true, onlyFields: null);
+        DeserializeCore(collection, body, meta, isCreate: true, onlyFields: null);
 
     /// <summary>
     /// Binds a request body for an UPDATE — same allowlist, JSON-field, RichText, MaxLength and
@@ -40,7 +42,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     /// all, once the caller re-runs <see cref="EnforceRequiredFields"/> against the merged entity.
     /// </summary>
     public object DeserializeForUpdate(string collection, JsonElement body, CollectionMetadata meta) =>
-        DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields: null);
+        DeserializeCore(collection, body, meta, isCreate: false, onlyFields: null);
 
     /// <summary>
     /// Binds a partial object — used for M2M junction payload — through the same allowlist, JSON-field,
@@ -52,7 +54,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         string collection, JsonElement body, CollectionMetadata meta, IReadOnlySet<string> onlyFields)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
-        var entity = DeserializeCore(collection, body, meta, validateAllFields: false, onlyFields);
+        var entity = DeserializeCore(collection, body, meta, isCreate: false, onlyFields);
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         if (body.ValueKind != JsonValueKind.Object) return result;
 
@@ -69,7 +71,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     }
 
     private object DeserializeCore(
-        string collection, JsonElement body, CollectionMetadata meta, bool validateAllFields,
+        string collection, JsonElement body, CollectionMetadata meta, bool isCreate,
         IReadOnlySet<string>? onlyFields)
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
@@ -78,7 +80,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         var entity = DeserializeEntity(d, body, stripNames);
 
         SetJsonFieldRawText(meta, body, d, entity);
-        ClearSystemReadOnlyFields(meta, d, entity);
+        ClearSystemReadOnlyFields(meta, d, entity, isCreate);
         SanitizeRichTextFields(meta, d, entity);
 
         // The scalar Required check is not run here: ItemService runs it (create after BeforeWrite,
@@ -86,7 +88,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         // object only sets the fields it names, so absent payload fields keep their stored value.
         EnforceMaxLength(meta, d, entity);
 
-        // For an update or partial bind (validateAllFields: false), gate the per-interface
+        // For an update or partial bind, gate the per-interface
         // validators on body presence too: an omitted field is never overlaid by the caller
         // (ItemService.UpdateCoreAsync's bodyKeys merge, or DeserializePartial's own
         // onlyFields∩presence extraction), so validating/normalizing it here is pointless — and
@@ -95,9 +97,9 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         // the body never mentioned, and each validator's own unconditional Required check would
         // reject that exactly as if the client had explicitly wiped it. A field the body DOES send
         // — including an explicit "[]"/"{}" — still runs its full validator and can still fail
-        // Required; only "never mentioned" is exempt. validateAllFields: true (create) validates every
+        // Required; only "never mentioned" is exempt. A create validates every
         // field regardless of presence, so a Required list-type field is checked here.
-        RunPerInterfaceValidators(meta, d, entity, validateAllFields ? null : PresentNames(body));
+        RunPerInterfaceValidators(meta, d, entity, isCreate ? null : PresentNames(body));
 
         return entity;
     }
@@ -142,25 +144,34 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         return stripNames;
     }
 
-    // Allowlist everything else: only declared, writable [CmsField]s and declared ManyToOne
-    // foreign keys may bind directly into the CLR entity. Without this, deserializing straight
-    // into the whole entity type lets a client set anything the CLR type exposes but metadata
-    // never declared — the primary key, the optimistic-concurrency Version, the soft-delete
-    // markers, or a fork's own undeclared property — none of which carry [CmsField] and so none
-    // of which are covered by the IsSystem/ReadOnly strip loop below. This mirrors the allowlist
-    // ItemService.UpdateCoreAsync already applies on update (fields + M2O FKs actually present in
-    // the body); unknown keys are silently ignored here too, not rejected with a 400.
+    // Allowlist everything else: only declared, writable [CmsField]s and the foreign keys of
+    // declared ManyToOne relations that are not ReadOnly or system fields may bind directly into
+    // the CLR entity. Without this, deserializing straight into the whole entity type lets a
+    // client set anything the CLR type exposes but metadata never declared — the primary key, the
+    // optimistic-concurrency Version, the soft-delete markers, or a fork's own undeclared property —
+    // none of which carry [CmsField] and so none of which are covered by the IsSystem/ReadOnly
+    // strip loop below. This mirrors the allowlist ItemService.UpdateCoreAsync already applies on
+    // update (fields + M2O FKs actually present in the body); unknown keys are silently ignored
+    // here too, not rejected with a 400.
     private static HashSet<string> ComputeAllowedKeys(CollectionMetadata meta, IReadOnlySet<string>? onlyFields)
     {
-        var allowedKeys = meta.Fields.Where(f => !f.IsSystem && !f.ReadOnly)
-            .Select(f => f.Name)
+        var locked = ServerOwnedFieldNames(meta);
+        var allowedKeys = meta.Fields.Select(f => f.Name)
             .Concat(meta.Relations
                 .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
                 .Select(r => r.ForeignKey!))
+            .Where(name => !locked.Contains(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (onlyFields is not null) allowedKeys.IntersectWith(onlyFields);
         return allowedKeys;
     }
+
+    /// <summary>
+    /// The names of the system and <c>ReadOnly</c> fields. A body never sets one, including a field that is
+    /// also the foreign key of a ManyToOne relation: the allow-list and the update overlay both skip them.
+    /// </summary>
+    internal static HashSet<string> ServerOwnedFieldNames(CollectionMetadata meta) =>
+        meta.Fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static object DeserializeEntity(EntityDescriptor d, JsonElement body, HashSet<string> stripNames)
     {
@@ -176,7 +187,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         try
         {
             return element.Deserialize(entityType, JsonOpts)
-                   ?? throw new QueryException("Request body could not be parsed.");
+                   ?? throw new QueryException(UnparsableBody);
         }
         catch (JsonException ex)
         {
@@ -187,7 +198,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
             // errors (truncated body) — keep the generic message there.
             throw new QueryException(FieldFromJsonPath(ex.Path) is { } field
                 ? $"Field '{field}' has an invalid value."
-                : "Request body could not be parsed.");
+                : UnparsableBody);
         }
     }
 
@@ -203,9 +214,10 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
 
     // Set each Json field's string property from the original body's raw text (stripped above).
     // Present + non-null => store the raw JSON text; absent or explicit JSON null => leave null.
+    // System and ReadOnly fields never take body text.
     private static void SetJsonFieldRawText(CollectionMetadata meta, JsonElement body, EntityDescriptor d, object entity)
     {
-        foreach (var fieldName in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable).Select(f => f.Name))
+        foreach (var fieldName in meta.Fields.Where(f => f.Interface == FieldInterface.Json && !f.Translatable && !f.IsSystem && !f.ReadOnly).Select(f => f.Name))
         {
             if (!d.FieldToProperty.TryGetValue(fieldName, out var prop)) continue;
             var pi = d.Properties.GetValueOrDefault(prop);
@@ -219,10 +231,13 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         }
     }
 
-    // strip system/read-only fields (audit columns and identity are owned by AOP); only nullable props can be nulled
-    private static void ClearSystemReadOnlyFields(CollectionMetadata meta, EntityDescriptor d, object entity)
+    // System fields (audit columns and identity are owned by AOP) and, on an update or partial bind, read-only
+    // fields are nulled where the property can hold null. A create never writes a non-system read-only field,
+    // so it keeps the class initial value.
+    private static void ClearSystemReadOnlyFields(
+        CollectionMetadata meta, EntityDescriptor d, object entity, bool isCreate)
     {
-        foreach (var field in meta.Fields.Where(f => f.IsSystem || f.ReadOnly))
+        foreach (var field in meta.Fields.Where(f => f.IsSystem || (f.ReadOnly && !isCreate)))
         {
             if (!d.FieldToProperty.TryGetValue(field.Name, out var prop)) continue;
             var pi = d.Properties.GetValueOrDefault(prop);
