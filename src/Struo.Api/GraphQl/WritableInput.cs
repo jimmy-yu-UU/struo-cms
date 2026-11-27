@@ -77,26 +77,30 @@ internal static class WritableInput
             if (OwnField(meta, f, desc) is { Sdl: { } sdl })
                 yield return new InputField(f.Name, sdl);
 
-        foreach (var rel in meta.Relations)
-        {
-            if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
-            {
-                // A foreign key that is a ReadOnly or audit field is not written, as for the field itself.
-                if (!IsServerOwned(meta, fk))
-                    yield return new InputField(fk, "ID");
-            }
-            else if (rel.Kind == RelationKind.ManyToMany)
-            {
-                yield return new InputField(rel.Name, "[ID!]");
-                if (CollectionSchemaBuilder.DescriptorFor(payloadRelations, rel.Name) is not null)
-                    yield return new InputField(
-                        SchemaTypeMapper.LinksFieldName(rel.Name),
-                        $"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]");
-            }
-        }
+        foreach (var field in meta.Relations.SelectMany(rel => RelationFields(meta, rel, payloadRelations)))
+            yield return field;
 
         if (meta.Translation is not null && Translatable(meta).Any(f => TranslatedField(f, desc).Sdl is not null))
             yield return new InputField("translations", $"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]");
+    }
+
+    private static IEnumerable<InputField> RelationFields(
+        CollectionMetadata meta, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations)
+    {
+        if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
+        {
+            // A foreign key that is a ReadOnly or audit field is not written, as for the field itself.
+            if (!IsServerOwned(meta, fk))
+                yield return new InputField(fk, "ID");
+        }
+        else if (rel.Kind == RelationKind.ManyToMany)
+        {
+            yield return new InputField(rel.Name, "[ID!]");
+            if (CollectionSchemaBuilder.DescriptorFor(payloadRelations, rel.Name) is not null)
+                yield return new InputField(
+                    SchemaTypeMapper.LinksFieldName(rel.Name),
+                    $"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]");
+        }
     }
 
     /// <summary>
