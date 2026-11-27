@@ -15,6 +15,10 @@
 - The admin SPA's `DataTablePagination` component requires its `ready` prop. A fork whose own views
   use the component passes `:ready`: `true` once the total is known, `false` until the first total
   has arrived. Without it, the type check of `pnpm build` fails.
+- A fork that added its own interface-language catalog adds the `core` namespace to it (the labels
+  of the core collections, fields, relations, options and groups), with the key structure of
+  `en.ts`. Without it, the type check of `pnpm build` and the key-symmetry test both fail
+  ([Chapter 19](19-admin-customization.md#ui-language)).
 - An override of a base class property stops the host at start when the base declaration carries
   `[SugarColumn]` and the override does not repeat it; the `MetadataException` names the override
   and the base declaration that carries the attribute. Collection classes, translation classes and
@@ -48,6 +52,13 @@
   ([Chapter 14](14-graphql.md#error-shapes)).
 - A related list in a form shows no range before its first total arrives; when the parent item
   changes, the list is cleared and loaded again.
+- With the admin UI in `zh-TW`, the names of the seven core collections (`file`, `language`,
+  `mediaFolder`, `permission`, `role`, `user`, `userRole`), the labels of their fields and
+  relations, the options of `file.status` and the `System` group name are shown in Chinese, and so
+  are the four audit fields of every collection; they were always shown in the English the server
+  sends. A label the fork changed and the other labels of the fork's own collections are shown as
+  the server sends them. API responses are unchanged
+  ([Chapter 19](19-admin-customization.md#ui-language)).
 
 ### Fixed
 

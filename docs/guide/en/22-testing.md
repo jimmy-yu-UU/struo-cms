@@ -194,12 +194,15 @@ Component- and `lib/`-level `*.test.ts` files sit next to the code they test rat
 collected into a separate directory; the cross-file guard tests mostly live under `frontend/tests/`,
 except the locale one, which sits with `frontend/src/locales/`.
 
-Three guard tests each pin one thing down:
+Four guard tests each pin one thing down:
 
 - `frontend/tests/iconCoverage.test.ts` — scans `frontend/src/` and confirms every `pi-` icon token
   that appears in source has a matching key in `ICON_MAP`.
 - `frontend/src/locales/locales.test.ts` — the `zh-TW` and `en` UI-language directories have exactly
   symmetric key sets.
+- `frontend/tests/coreLabels.test.ts` — compares the `core` namespace of the catalogs with
+  `schema/core-collections.json`: for every core collection, field, relation, option and group,
+  `en` holds the English the server sends and `zh-TW` holds a translation.
 - `frontend/tests/schemaContract.test.ts` — feeds the two JSON files under `schema/` into the real
   field-interface registry, verifying the field types the admin SPA recognizes match what the
   backend declares; covered below under "The schema contract".
