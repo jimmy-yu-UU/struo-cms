@@ -22,6 +22,9 @@ a `Repeater` row type, and the base classes of each.
   - on a translation class, through any setter the class can reach.
 - **`ReadOnly = true` on a translation field** (`TranslationReadOnlyCheck`). A translations payload
   writes every field of a translation class, so the flag is refused there.
+- **`ReadOnly = true` on a `Repeater` sub-field a request body can still set**
+  (`FieldSetterCheck`): one with a public setter, a matching constructor parameter or
+  `[JsonInclude]`. A sub-field no body can set keeps the flag.
 
 ## Why
 
@@ -128,10 +131,18 @@ the entity type comes back as the initial value of the property, so an assertion
 cannot see it (`The_stored_row_reader_shows_a_database_null_as_null`,
 `The_entity_reader_fills_a_database_null_with_the_property_initialiser`).
 
-`ReadOnly = true` on a Repeater sub-field with a setter does not stop a REST write: a create and an
-update store the value sent:
-`A_create_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater` and
-`An_update_stores_the_value_a_body_gives_a_read_only_sub_field_of_a_repeater`.
+`ReadOnly = true` on a Repeater sub-field, by how the property is declared. The body sent a value
+for the sub-field on create and on update.
+
+| Sub-field | Stored | The rule |
+|---|---|---|
+| get-only, computed | the computed value | accepted |
+| non-public setter, no `[JsonInclude]` | the value the type gives | accepted |
+| public `set` or `init` | the value sent | refused |
+| get-only with a matching constructor parameter | the value sent | refused |
+| non-public setter with `[JsonInclude]` | the value sent; a read returns the type's value | refused |
+
+The GraphQL item input leaves a `ReadOnly` sub-field out in every row.
 
 `FieldDeclarationCheckTests`, `FieldInheritanceCheckTests`, `FieldSetterCheckTests` and
 `TranslationReadOnlyCheckTests` pin the refusals and the accepted shapes;

@@ -66,6 +66,12 @@
   field such as `CreatedBy`: an update and a revert cleared it to `NULL`, and the GraphQL inputs
   listed the key. Both kinds of relation are reported as not editable in the schema, so the admin
   relation picker is disabled ([Chapter 8](08-relations.md)).
+- `[CmsField(ReadOnly = true)]` on a Repeater sub-field that a request body can still set stops the
+  host at start: one with a public setter (`set` or `init`), a matching constructor parameter, or
+  `[JsonInclude]`. A REST create and update stored the value sent for it, while the GraphQL item
+  input left the sub-field out (measured on SQLite below the HTTP layer). Remove `ReadOnly = true`,
+  or make the property get-only when the type computes the value
+  ([Chapter 6](06-field-types.md)).
 :::
 
 ### Changed
@@ -80,6 +86,10 @@
 
 ### Fixed
 
+- A many-to-one foreign key that also carries a writable `[CmsField]` is listed once in the GraphQL
+  create, update and filter inputs, with the type the field gives it. The key was declared twice and
+  the host failed to start with `The following field ... is declared multiple times`; measured for
+  `Guid?`, `int?`, `long?` and `string?` keys ([Chapter 8](08-relations.md)).
 - With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
   `ValidateOnStart`, the host fails to start before it connects to the database and applies no
   migration. It applied the migrations first and then failed on that value; measured for

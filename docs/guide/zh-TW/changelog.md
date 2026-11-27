@@ -51,6 +51,10 @@
   （[第 6 章](06-field-types.md)）。拿稽核欄位（例如 `CreatedBy`）當多對一外鍵的關聯也一樣：原本更新
   與還原都把它清成 `NULL`，GraphQL 的 input 列著這個鍵。這兩種關聯在 schema 裡回報為不可編輯，後台
   的關聯選擇器因此停用（[第 8 章](08-relations.md)）。
+- Repeater 子欄位標了 `[CmsField(ReadOnly = true)]`，請求卻仍寫得進去時（有 public 的 `set` 或
+  `init`、有對應的建構式參數，或帶 `[JsonInclude]`），主機在啟動時失敗。原本 REST 的建立與更新照樣
+  把送來的值存進去，GraphQL 的項目輸入卻不列這個子欄位（在 SQLite 上、HTTP 層之下量到的）。拿掉
+  `ReadOnly = true`；值由型別自己算出時，把屬性改成只有 getter（[第 6 章](06-field-types.md)）。
 :::
 
 ### 變更
@@ -63,6 +67,10 @@
 
 ### 修正
 
+- 多對一的外鍵同時帶可寫的 `[CmsField]` 時，GraphQL 的建立、更新與篩選輸入只列這個鍵一次，型別照
+  欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
+  `The following field ... is declared multiple times`；量到的鍵型別是 `Guid?`、`int?`、`long?` 與
+  `string?`（[第 8 章](08-relations.md)）。
 - `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在
   連資料庫之前就啟動失敗，不套用任何 migration。先前是先套用 migration，主機才因為那個設定值
   啟動失敗；量到的鍵是 `RateLimiting:Login:PermitLimit`、

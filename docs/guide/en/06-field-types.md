@@ -187,7 +187,10 @@ The rules are in [Declarations rejected at startup](#declarations-rejected-at-st
 `Repeater`'s `TChild` must be a class, not `string`, and must declare at least one `[CmsField]`;
 violating either throws a startup `MetadataException` naming the field. A writable child field
 needs a public setter (`set` or `init`), or a parameter of the same name and type on the one public
-constructor of `TChild`; with neither, startup fails. Child fields can't be set
+constructor of `TChild`; with neither, startup fails. A child field with `ReadOnly = true` must be
+one a request body cannot set: no public setter, no matching constructor parameter and no
+`[JsonInclude]`. One a body can still set is refused at startup, because the value sent would be
+stored all the same. Child fields can't be set
 translatable, their property types are checked against the interface tables, and they can use only
 these interfaces, a narrower set than the single-value interfaces: `Text`, `Textarea`, `Markdown`,
 `Code`, `Slug`, `Email`, `Url`, `Color`, `Phone`, `Number`, `Slider`, `Rating`, `Boolean`,

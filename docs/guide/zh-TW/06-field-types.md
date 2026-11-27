@@ -164,6 +164,8 @@ UTC。
 `Repeater` 的 `TChild` 必須是類別而不是 `string`，且至少要宣告一個 `[CmsField]`，兩者違反都
 是點名該欄位的啟動期 `MetadataException`。可寫的子欄位要有 public 的 setter（`set` 或 `init`），
 或由 `TChild` 唯一的 public 建構式裡同名、同型別的參數設值；兩者都沒有時啟動就失敗。
+標了 `ReadOnly = true` 的子欄位必須是請求寫不進去的：沒有 public 的 setter、沒有對應的建構式參數、
+也沒有 `[JsonInclude]`。請求仍寫得進去的會在啟動時被擋下，因為送來的值照樣會存進去。
 子欄位不能設為可翻譯，屬性型別照各介面的表檢查，
 也只能用下列介面，範圍比單一值介面窄：`Text`、`Textarea`、`Markdown`、`Code`、`Slug`、`Email`、
 `Url`、`Color`、`Phone`、`Number`、`Slider`、`Rating`、`Boolean`、`Checkbox`、`Date`、`Time`、
