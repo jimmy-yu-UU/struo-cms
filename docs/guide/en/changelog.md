@@ -178,9 +178,10 @@
   as not editable, and the GraphQL inputs do not list the key
   ([Chapter 9](09-revisions-and-trash.md)).
 - A many-to-one foreign key that also carries a writable `[CmsField]` without `Hidden = true` is
-  listed once in the GraphQL create, update and filter inputs, with the type the field gives it. The key was declared twice and
-  the host failed to start with `The following field ... is declared multiple times`; measured for
-  `Guid?`, `int?`, `long?` and `string?` keys ([Chapter 8](08-relations.md)).
+  listed once in the GraphQL create, update and filter inputs, with the type the field gives it. The
+  key was declared twice and the host failed to start with
+  `The following field ... is declared multiple times`; measured for `Guid?`, `int?`, `long?` and
+  `string?` keys ([Chapter 8](08-relations.md)).
 - With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
   `ValidateOnStart`, the host fails to start before it connects to the database and applies no
   migration. It applied the migrations first and then failed on that value; measured for
