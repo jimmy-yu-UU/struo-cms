@@ -422,7 +422,8 @@ internal sealed class CollectionSchemaBuilder(
     }
 
     // Cross-relation filter inputs. M2O contributes its FK column as a filterable IdFilter (parity
-    // with the REST allowlist) unless a filterable own field already declares that name, PLUS a nested
+    // with the REST allowlist) unless a filterable own field already declares that name or that field sets
+    // Hidden = true (CollectionMetadata.OffersForeignKey), PLUS a nested
     // target FilterInput. O2M/M2M carry no FK on this collection, so they contribute only the nested
     // target FilterInput (ANY/EXISTS/predicate via
     // FilterInputTranslator). A ManyToMany relation carrying an exposable junction payload uses the
@@ -436,7 +437,7 @@ internal sealed class CollectionSchemaBuilder(
         string? targetFilter = null;
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
         {
-            if (!declared.Contains(fk))
+            if (meta.OffersForeignKey(rel) && !declared.Contains(fk))
                 config.Fields.Add(new InputFieldConfiguration(fk, null, TypeReference.Parse("IdFilter")));
             targetFilter = SchemaTypeMapper.FilterInputName(rel.TargetCollection);
         }

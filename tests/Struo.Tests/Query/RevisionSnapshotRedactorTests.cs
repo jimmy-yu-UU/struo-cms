@@ -117,4 +117,24 @@ public sealed class RevisionSnapshotRedactorTests
         doc.RootElement.TryGetProperty("translations", out _).Should().BeFalse();
         doc.RootElement.TryGetProperty("internalNote", out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void Removes_the_key_of_a_many_to_one_relation_when_its_field_is_hidden()
+    {
+        var meta = new CollectionMetadata
+        {
+            Name = "note", Label = "Note", FieldGroups = [],
+            Fields =
+            [
+                new FieldMetadata { Name = "status", Label = "Status", Interface = FieldInterface.Text },
+                new FieldMetadata { Name = "ownerId", Label = "Owner", Interface = FieldInterface.Uuid, Hidden = true },
+            ],
+        };
+
+        var redacted = RevisionSnapshotRedactor.RedactHidden("""{"id":"1","status":"draft","ownerId":"o"}""", meta);
+
+        using var doc = JsonDocument.Parse(redacted);
+        doc.RootElement.TryGetProperty("ownerId", out _).Should().BeFalse();
+        doc.RootElement.GetProperty("status").GetString().Should().Be("draft");
+    }
 }

@@ -58,7 +58,7 @@ public static class FacetPathResolver
             RequireFacetable(root, field);
             return new ResolvedFacetPath(raw, FacetPathKind.OwnField, field.Name, null, null);
         }
-        var fk = root.Relations.FirstOrDefault(r => r.Kind == RelationKind.ManyToOne
+        var fk = root.Relations.FirstOrDefault(r => root.OffersForeignKey(r)
             && string.Equals(r.ForeignKey, raw, StringComparison.OrdinalIgnoreCase));
         if (fk is not null) return new ResolvedFacetPath(raw, FacetPathKind.ForeignKey, fk.ForeignKey, fk, null);
         var rel = graph.Resolve(root.Name, raw);

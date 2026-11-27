@@ -1,3 +1,5 @@
+using Struo.Domain.Metadata.Enums;
+
 namespace Struo.Domain.Metadata.Models;
 
 public sealed record CollectionMetadata
@@ -38,6 +40,15 @@ public sealed record CollectionMetadata
     public required IReadOnlyList<FieldGroupMetadata> FieldGroups { get; init; }
     public required IReadOnlyList<FieldMetadata> Fields { get; init; }
     public IReadOnlyList<RelationMetadata> Relations { get; init; } = [];
+
+    /// <summary>
+    /// True when a reader may name the foreign key of <paramref name="relation"/> as a field of this collection:
+    /// the relation is many-to-one with a foreign key, and no field of that name sets <c>Hidden = true</c>. A key
+    /// whose field is hidden is refused by name like any hidden field; the relation object keeps its own name.
+    /// </summary>
+    public bool OffersForeignKey(RelationMetadata relation) =>
+        relation is { Kind: RelationKind.ManyToOne, ForeignKey: { } key }
+        && !Fields.Any(f => f.Hidden && string.Equals(f.Name, key, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Translation sidecar metadata, or null when the collection has no translatable fields.</summary>
     public TranslationMetadata? Translation { get; init; }
