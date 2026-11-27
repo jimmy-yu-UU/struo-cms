@@ -11,9 +11,11 @@ using Xunit;
 namespace Struo.Tests.Query;
 
 /// <summary>
-/// The target-read guard looks only at keys a body can set. Metadata is built by hand here for the kinds of key
-/// the scanner does not let a collection declare: a junction key that is system or <c>ReadOnly</c>, and a
-/// translatable file field that is <c>ReadOnly</c>.
+/// The target-read guard looks only at keys a body can set. Metadata is built by hand here for keys the scanner
+/// does not accept, so the scanner is skipped: a junction key that is system or <c>ReadOnly</c> without being the
+/// foreign key of a many-to-one relation (<c>ValidateOneJunctionCollection</c> refuses it), and a translatable file
+/// field that is <c>ReadOnly</c>. A <c>ReadOnly</c> junction key that is also such a foreign key is scanned, and
+/// <c>RelationWriteServerOwnedJunctionKeyTests</c> runs it through the API.
 /// </summary>
 public sealed class RelationTargetReadGuardServerOwnedTests
 {
