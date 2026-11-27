@@ -27,21 +27,35 @@ export function isFileFieldUnreadable(field: FieldMeta, canRead?: CanReadCollect
   return FILE_INTERFACES.has(field.interface) && !canRead(FILE_COLLECTION)
 }
 
+const SOFT_DELETE_KEYS = ['deletedat', 'deletedby']
+
+// The lower-cased names of the keys a body never sets: the read-only and audit fields, and the soft-delete
+// columns of a soft-deletable collection.
+function serverOwnedKeys(meta: CollectionMeta): Set<string> {
+  const names = meta.fields.filter((f) => f.readOnly || f.isSystem).map((f) => f.name.toLowerCase())
+  return new Set(meta.softDelete ? [...names, ...SOFT_DELETE_KEYS] : names)
+}
+
 // A relation a revert writes and the server checks, whatever interface shows it: a many-to-one with a
-// foreign key, or a many-to-many, that is editable (a read-only or audit key is never written, so a revert
-// leaves it as it is for every caller). Its target is one the caller cannot read.
-export function isRelationLeftByRevert(rel: RelationMeta, canRead?: CanReadCollection): boolean {
+// foreign key that is not a server-owned key, or a many-to-many. A server-owned key is never written, so a
+// revert leaves it as it is for every caller; `editable` only locks the admin picker and is not consulted.
+// Its target is one the caller cannot read.
+export function isRelationLeftByRevert(
+  rel: RelationMeta, serverOwned: ReadonlySet<string>, canRead?: CanReadCollection,
+): boolean {
   if (!canRead) return false
-  const linked = rel.editable !== false && ((rel.kind === 'manyToOne' && !!rel.foreignKey) || rel.kind === 'manyToMany')
-  return linked && !canRead(rel.targetCollection)
+  const written = rel.kind === 'manyToMany' || (rel.kind === 'manyToOne' && !!rel.foreignKey && !serverOwned.has(rel.foreignKey.toLowerCase()))
+  return written && !canRead(rel.targetCollection)
 }
 
 // The labels of the fields a revert writes for other callers and leaves as they are for this one: the
-// file fields (shared and translatable) and the editable relations, chosen by kind as the server chooses
-// them, whose target the caller cannot read. A read-only field or relation is never written, so it is not listed.
+// file fields (shared and translatable) and the relations, chosen by kind as the server chooses them,
+// whose target the caller cannot read. A read-only field, or a relation on a server-owned key, is never
+// written, so it is not listed.
 export function fieldsLeftByRevert(meta: CollectionMeta, canRead?: CanReadCollection): string[] {
   const { shared, translatable } = splitFields(meta)
   const fields = [...shared, ...translatable].filter((f) => !f.readOnly && isFileFieldUnreadable(f, canRead))
-  const relations = (meta.relations ?? []).filter((rel) => isRelationLeftByRevert(rel, canRead))
+  const serverOwned = serverOwnedKeys(meta)
+  const relations = (meta.relations ?? []).filter((rel) => isRelationLeftByRevert(rel, serverOwned, canRead))
   return [...fields.map((f) => f.label), ...relations.map((rel) => rel.label)]
 }

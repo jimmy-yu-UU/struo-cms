@@ -84,13 +84,37 @@ describe('fieldsLeftByRevert', () => {
     ])
     expect(fieldsLeftByRevert(shown, () => false)).toEqual(['Category', 'Tags'])
   })
-  it('leaves out a relation that is not editable, as the server never writes its key', () => {
+  it('lists a many-to-many that is declared not editable, as the server reads no Editable', () => {
     const locked = meta([], [
-      rel({ name: 'owner', label: 'Owner', editable: false }),
       rel({ name: 'tags', label: 'Tags', kind: 'manyToMany', targetCollection: 'tag', foreignKey: null, editable: false }),
-      rel({ name: 'category', label: 'Category' }),
     ])
+    expect(fieldsLeftByRevert(locked, () => false)).toEqual(['Tags'])
+  })
+  it('lists a many-to-one declared not editable whose key field is writable', () => {
+    const picker = meta([field({ name: 'categoryId', label: 'Category key', interface: 'text' })], [
+      rel({ name: 'category', label: 'Category', editable: false }),
+    ])
+    expect(fieldsLeftByRevert(picker, () => false)).toEqual(['Category'])
+  })
+  it('leaves out a many-to-one whose key field is read-only or an audit field, in any case', () => {
+    const locked = meta(
+      [
+        field({ name: 'ownerId', label: 'Owner key', interface: 'text', readOnly: true }),
+        field({ name: 'createdBy', label: 'Created by', interface: 'text', isSystem: true }),
+        field({ name: 'categoryId', label: 'Category key', interface: 'text' }),
+      ],
+      [
+        rel({ name: 'owner', label: 'Owner', foreignKey: 'OwnerId', editable: false }),
+        rel({ name: 'author', label: 'Author', foreignKey: 'CREATEDBY' }),
+        rel({ name: 'category', label: 'Category' }),
+      ],
+    )
     expect(fieldsLeftByRevert(locked, () => false)).toEqual(['Category'])
+  })
+  it('leaves out a many-to-one on a soft-delete column of a soft-deletable collection', () => {
+    const trashed = { ...meta([], [rel({ name: 'remover', label: 'Remover', foreignKey: 'DeletedBy' })]), softDelete: true }
+    expect(fieldsLeftByRevert(trashed, () => false)).toEqual([])
+    expect(fieldsLeftByRevert({ ...trashed, softDelete: false }, () => false)).toEqual(['Remover'])
   })
   it('leaves out a many-to-one without a foreign key and a one-to-many, as the server does', () => {
     const other = meta([], [
