@@ -129,6 +129,14 @@ public sealed class RevisionSnapshotRedactorTests
                 new FieldMetadata { Name = "status", Label = "Status", Interface = FieldInterface.Text },
                 new FieldMetadata { Name = "ownerId", Label = "Owner", Interface = FieldInterface.Uuid, Hidden = true },
             ],
+            Relations =
+            [
+                new RelationMetadata
+                {
+                    Name = "owner", Label = "Owner", Kind = RelationKind.ManyToOne, TargetCollection = "user",
+                    Interface = RelationInterface.Dropdown, ForeignKey = "ownerId",
+                },
+            ],
         };
 
         var redacted = RevisionSnapshotRedactor.RedactHidden("""{"id":"1","status":"draft","ownerId":"o"}""", meta);
