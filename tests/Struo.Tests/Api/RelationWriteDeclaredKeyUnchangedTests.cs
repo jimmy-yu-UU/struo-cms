@@ -14,6 +14,8 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
 {
     private const string Ledger = "fxLedger";
     private const string Glossary = "fxGlossary";
+    private const string PartnerKey = "partnerId";
+    private const string PartnerKeyUpper = "PartnerId";
 
     private static readonly string[] AllTargets = [Ledger, Glossary, "fxTag", "file"];
 
@@ -40,7 +42,7 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var partner = await h.SeedGlossaryAsync();
         var ledger = await LedgerWithPartnerAsync(partner);
 
-        var outcome = await SendAsync(client, channel, Ledger, ledger, new() { ["partnerId"] = partner.ToString() });
+        var outcome = await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = partner.ToString() });
 
         AssertWritten(outcome);
         (await h.StoredLedgerAsync(ledger)).Should().Be(new LedgerKeys(null, partner, null, null));
@@ -54,7 +56,7 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var client = await CallerAsync(readsTarget: false);
         var ledger = await LedgerWithPartnerAsync(null);
 
-        AssertWritten(await SendAsync(client, channel, Ledger, ledger, new() { ["partnerId"] = null }));
+        AssertWritten(await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = null }));
 
         (await h.StoredLedgerAsync(ledger)).Partner.Should().BeNull();
     }
@@ -67,7 +69,7 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var ledger = await LedgerWithPartnerAsync(partner);
 
         var outcome = await SendAsync(
-            client, Rest, Ledger, ledger, new() { ["PartnerId"] = partner.ToString().ToUpperInvariant() });
+            client, Rest, Ledger, ledger, new() { [PartnerKeyUpper] = partner.ToString().ToUpperInvariant() });
 
         AssertWritten(outcome);
         (await h.StoredLedgerAsync(ledger)).Partner.Should().Be(partner);
@@ -84,10 +86,29 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var ledger = await LedgerWithPartnerAsync(partner);
         var outcomes = new List<WriteOutcome>();
         foreach (var kind in IdKinds)
-            outcomes.Add(await SendAsync(client, channel, Ledger, ledger, new() { ["partnerId"] = IdOf(kind, other) }));
-        outcomes.Add(await SendAsync(client, channel, Ledger, ledger, new() { ["partnerId"] = null }));
+            outcomes.Add(await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = IdOf(kind, other) }));
+        outcomes.Add(await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = null }));
 
         AssertRefusedAlike(outcomes, channel, Glossary);
+        (await h.StoredLedgerAsync(ledger)).Partner.Should().Be(partner);
+    }
+
+    // The binder parses a Guid in the hyphenated form only, so the same id in braces or without hyphens is a
+    // value the binder refuses: it is a changed value, refused like any other.
+    [Theory]
+    [InlineData(Rest, "{0:B}")]
+    [InlineData(Rest, "{0:N}")]
+    [InlineData(Gql, "{0:B}")]
+    [InlineData(Gql, "{0:N}")]
+    public async Task The_stored_id_in_a_form_the_binder_does_not_parse_is_a_changed_value(string channel, string format)
+    {
+        var client = await CallerAsync(readsTarget: false);
+        var partner = await h.SeedGlossaryAsync();
+        var ledger = await LedgerWithPartnerAsync(partner);
+
+        var outcome = await SendAsync(client, channel, Ledger, ledger, new() { [PartnerKey] = string.Format(format, partner) });
+
+        AssertRefusedAlike([outcome], channel, Glossary);
         (await h.StoredLedgerAsync(ledger)).Partner.Should().Be(partner);
     }
 
@@ -99,7 +120,7 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var ledger = await LedgerWithPartnerAsync(null);
         var outcomes = new List<WriteOutcome>();
         foreach (var kind in IdKinds)
-            outcomes.Add(await SendAsync(client, Rest, Ledger, ledger, new() { ["partnerId"] = IdOf(kind, partner) }));
+            outcomes.Add(await SendAsync(client, Rest, Ledger, ledger, new() { [PartnerKey] = IdOf(kind, partner) }));
 
         AssertRefusedAlike(outcomes, Rest, Glossary);
         (await h.StoredLedgerAsync(ledger)).Partner.Should().BeNull();
@@ -117,8 +138,8 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         {
             var stored = partner.ToString();
             var changed = IdOf(kind, other);
-            outcomes.Add(await SendAsync(client, Rest, Ledger, ledger, new() { ["partnerId"] = stored, ["PARTNERID"] = changed }));
-            outcomes.Add(await SendAsync(client, Rest, Ledger, ledger, new() { ["PARTNERID"] = changed, ["partnerId"] = stored }));
+            outcomes.Add(await SendAsync(client, Rest, Ledger, ledger, new() { [PartnerKey] = stored, ["PARTNERID"] = changed }));
+            outcomes.Add(await SendAsync(client, Rest, Ledger, ledger, new() { ["PARTNERID"] = changed, [PartnerKey] = stored }));
         }
 
         AssertRefusedAlike(outcomes, Rest, Glossary);
@@ -135,10 +156,10 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var outcomes = new List<WriteOutcome>();
         foreach (var kind in IdKinds)
         {
-            var fields = new Dictionary<string, object?> { ["name"] = $"c-{Guid.NewGuid():N}", ["partnerId"] = IdOf(kind, partner) };
+            var fields = new Dictionary<string, object?> { ["name"] = $"c-{Guid.NewGuid():N}", [PartnerKey] = IdOf(kind, partner) };
             outcomes.Add(await SendAsync(client, channel, Ledger, null, fields));
         }
-        outcomes.Add(await SendAsync(client, channel, Ledger, null, new() { ["name"] = $"c-{Guid.NewGuid():N}", ["partnerId"] = null }));
+        outcomes.Add(await SendAsync(client, channel, Ledger, null, new() { ["name"] = $"c-{Guid.NewGuid():N}", [PartnerKey] = null }));
 
         AssertRefusedAlike(outcomes, channel, Glossary);
     }
@@ -149,7 +170,7 @@ public sealed class RelationWriteDeclaredKeyUnchangedTests : IClassFixture<NoPub
         var client = await CallerAsync(readsTarget: false);
         var partner = await h.SeedGlossaryAsync();
 
-        var outcome = await SendAsync(client, Rest, Ledger, Guid.NewGuid(), new() { ["partnerId"] = partner.ToString() });
+        var outcome = await SendAsync(client, Rest, Ledger, Guid.NewGuid(), new() { [PartnerKey] = partner.ToString() });
 
         outcome.Status.Should().Be(HttpStatusCode.NotFound);
     }

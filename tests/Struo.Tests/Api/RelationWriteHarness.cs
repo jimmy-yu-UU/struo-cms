@@ -68,8 +68,7 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
 
     /// <summary>
     /// A signed-in caller with exactly these read and write grants (order does not matter). One caller is
-    /// created per distinct permission set for the life of the host and handed out again; a test that changes a
-    /// role or a user after this call uses <see cref="FreshCallerAsync"/>.
+    /// created per distinct permission set for the life of the host and handed out again.
     /// </summary>
     public async Task<HttpClient> CallerAsync(string[] read, string[] write) => (await CallerWithIdAsync(read, write)).client;
 
@@ -85,10 +84,6 @@ internal sealed partial class RelationWriteHarness(StruoApiFactory factory)
         }
         return caller;
     }
-
-    /// <summary>A new role, user and login with these grants, never shared: for a test that changes them afterwards.</summary>
-    public Task<(HttpClient client, Guid userId)> FreshCallerAsync(string[] read, string[] write) =>
-        factory.CreateEditorClientAsync(read, write);
 
     private async Task<T> WithDbAsync<T>(Func<ISqlSugarClient, Task<T>> work)
     {

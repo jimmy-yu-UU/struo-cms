@@ -64,9 +64,9 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
 
     /// <summary>
     /// The junction keys and the declared many-to-one keys of an update. A caller who cannot read a key's target
-    /// may send the key back with the value <paramref name="existing"/> stores (nothing new is linked, and the
-    /// item read returns that value to this caller anyway); a <c>Hidden</c> key is never exempt. Any other value
-    /// is refused like on a create.
+    /// may send the key back with the value <paramref name="existing"/> stores (nothing new is linked, and an
+    /// item read or the response of the write returns that value to this caller anyway); a <c>Hidden</c> key is
+    /// never exempt. Any other value is refused like on a create.
     /// </summary>
     internal void RequireStoredKeys(CollectionMetadata meta, EntityDescriptor d, JsonElement body, object existing)
     {
@@ -102,11 +102,12 @@ public sealed class RelationTargetReadGuard(IM2MDescriptorSource m2mSource, IPer
         return spellings.Count > 0 && spellings.All(sent => SameKey(stored, sent));
     }
 
-    // Equal as stored: a Guid by value, a string exactly, a number as written.
+    // Equal as stored: a Guid by value, read the way the binder reads one (JsonElement.TryGetGuid, the hyphenated
+    // form only), a string exactly, a number as written.
     private static bool SameKey(object? stored, JsonElement sent) => stored switch
     {
         null => sent.ValueKind == JsonValueKind.Null,
-        Guid id => sent.ValueKind == JsonValueKind.String && Guid.TryParse(sent.GetString(), out var parsed) && parsed == id,
+        Guid id => sent.ValueKind == JsonValueKind.String && sent.TryGetGuid(out var parsed) && parsed == id,
         string text => sent.ValueKind == JsonValueKind.String
                        && string.Equals(text, sent.GetString(), StringComparison.Ordinal),
         _ => sent.ValueKind == JsonValueKind.Number

@@ -138,18 +138,26 @@ public sealed class JunctionServerOwnedKeyTests
         public Guid TargetId { get; set; }
     }
 
-    public static TheoryData<Type[], string, string> Refused => new()
+    // A case name, the junction collection and the key the refusal names.
+    public static TheoryData<string, string, string> Refused => new()
     {
-        { [typeof(ReadOnlyKeyOwner), typeof(Target), typeof(ReadOnlyKeyLink)], "jskReadOnlyLink", "OwnerId" },
-        { [typeof(AuditKeyOwner), typeof(Target), typeof(AuditKeyLink)], "jskAuditLink", "CreatedBy" },
-        { [typeof(SoftDeleteKeyOwner), typeof(Target), typeof(SoftDeleteKeyLink)], "jskSoftDeleteLink", "DeletedBy" },
+        { nameof(ReadOnlyKeyLink), "jskReadOnlyLink", "OwnerId" },
+        { nameof(AuditKeyLink), "jskAuditLink", "CreatedBy" },
+        { nameof(SoftDeleteKeyLink), "jskSoftDeleteLink", "DeletedBy" },
+    };
+
+    private static Type[] TypesOf(string junctionClass) => junctionClass switch
+    {
+        nameof(ReadOnlyKeyLink) => [typeof(ReadOnlyKeyOwner), typeof(Target), typeof(ReadOnlyKeyLink)],
+        nameof(AuditKeyLink) => [typeof(AuditKeyOwner), typeof(Target), typeof(AuditKeyLink)],
+        _ => [typeof(SoftDeleteKeyOwner), typeof(Target), typeof(SoftDeleteKeyLink)],
     };
 
     [Theory]
     [MemberData(nameof(Refused))]
-    public void A_junction_key_the_body_never_sets_is_refused_at_startup(Type[] types, string junction, string key)
+    public void A_junction_key_the_body_never_sets_is_refused_at_startup(string junctionClass, string junction, string key)
     {
-        var scan = () => MetadataScanner.ScanTypes(types);
+        var scan = () => MetadataScanner.ScanTypes(TypesOf(junctionClass));
 
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain($"Junction collection '{junction}'").And.Contain($"'{key}'")

@@ -125,13 +125,21 @@ public sealed class ForeignKeyNoValueHostTests(ForeignKeyNoValueHostTests.HostFi
 
     private static string Tag() => "t" + Guid.NewGuid().ToString("N");
 
-    // A collection, the "no value" spelling of its key, and the value the table then holds.
-    public static TheoryData<string, string, object> NoValues() => new()
+    // A collection and the "no value" spelling of its key; NoValueStored gives the value the table then holds.
+    public static TheoryData<string, string> NoValues() => new()
     {
-        { Uuid, $"\"{EmptyGuid}\"", Guid.Empty },
-        { Int, "0", 0 },
-        { Long, "0", 0L },
-        { Text, "\"\"", "" },
+        { Uuid, $"\"{EmptyGuid}\"" },
+        { Int, "0" },
+        { Long, "0" },
+        { Text, "\"\"" },
+    };
+
+    private static object NoValueStored(string collection) => collection switch
+    {
+        Uuid => Guid.Empty,
+        Int => 0,
+        Long => 0L,
+        _ => "",
     };
 
     // The key of a row of the collection's target, and the value the table then holds.
@@ -153,19 +161,19 @@ public sealed class ForeignKeyNoValueHostTests(ForeignKeyNoValueHostTests.HostFi
 
     [Theory]
     [MemberData(nameof(NoValues))]
-    public async Task A_create_with_the_no_value_spelling_is_accepted_and_stores_it(string collection, string json, object expected)
+    public async Task A_create_with_the_no_value_spelling_is_accepted_and_stores_it(string collection, string json)
     {
         var body = new JsonObject { ["name"] = Tag(), [OwnerId] = JsonNode.Parse(json) };
 
         var (status, text) = await SendAsync(HttpMethod.Post, $"/api/items/{collection}", body);
 
         status.Should().Be(HttpStatusCode.Created, text);
-        (await StoredAsync(collection, JsonNode.Parse(text)!["data"]!["id"]!.GetValue<string>())).Should().Be(expected);
+        (await StoredAsync(collection, JsonNode.Parse(text)!["data"]!["id"]!.GetValue<string>())).Should().Be(NoValueStored(collection));
     }
 
     [Theory]
     [MemberData(nameof(NoValues))]
-    public async Task An_update_with_the_no_value_spelling_is_accepted_and_stores_it(string collection, string json, object expected)
+    public async Task An_update_with_the_no_value_spelling_is_accepted_and_stores_it(string collection, string json)
     {
         var id = await CreateAsync(collection);
 
@@ -173,7 +181,7 @@ public sealed class ForeignKeyNoValueHostTests(ForeignKeyNoValueHostTests.HostFi
             HttpMethod.Put, $"/api/items/{collection}/{id}", new JsonObject { [OwnerId] = JsonNode.Parse(json) });
 
         status.Should().Be(HttpStatusCode.OK, text);
-        (await StoredAsync(collection, id)).Should().Be(expected);
+        (await StoredAsync(collection, id)).Should().Be(NoValueStored(collection));
     }
 
     [Fact]
