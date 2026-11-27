@@ -47,10 +47,10 @@
 - 帶 `[CmsField(ReadOnly = true)]`、同時又是多對一關聯外鍵的屬性，更新與還原都不會改到它，GraphQL
   的建立與更新 input 也不列這個鍵。原本更新時 body 送這個鍵，可為 `null` 的外鍵被清成 `NULL`，
   不可為 `null` 的被寫成送來的值；還原到舊版本時，可為 `null` 的外鍵也被清成 `NULL`（在 SQLite 上、
-  HTTP 層之下量到的）。要讓用戶端設定這個外鍵，拿掉 `ReadOnly = true`；值由伺服器掌管時，在寫入攔截器裡設定
-  （[第 6 章](06-field-types.md)）。拿稽核欄位（例如 `CreatedBy`）當多對一外鍵的關聯也一樣：原本更新
-  與還原都把它清成 `NULL`。這兩種關聯在 schema 裡回報為不可編輯，後台的關聯選擇器因此停用
-  （[第 8 章](08-relations.md)）。
+  HTTP 層之下量到的）。要讓用戶端設定這個外鍵，拿掉 `ReadOnly = true`；值由伺服器掌管時，在寫入
+  攔截器裡設定（[第 6 章](06-field-types.md)）。拿稽核欄位（例如 `CreatedBy`）當多對一外鍵的關聯
+  也一樣：原本更新與還原都把它清成 `NULL`。這兩種關聯在 schema 裡回報為不可編輯，後台的關聯選擇器
+  因此停用（[第 8 章](08-relations.md)）。
 - Repeater 子欄位標了 `[CmsField(ReadOnly = true)]`，請求卻仍寫得進去時（有 public 的 `set` 或
   `init`、有對應的建構式參數，或帶 `[JsonInclude]`），主機在啟動時失敗。原本 REST 的建立與更新照樣
   把送來的值存進去，GraphQL 的項目輸入卻不列這個子欄位（在 SQLite 上、HTTP 層之下量到的）。拿掉
