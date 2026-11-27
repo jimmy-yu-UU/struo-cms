@@ -490,4 +490,89 @@ export default {
     opNeq: '不等於',
     opContains: '包含',
   },
+  core: {
+    groups: { System: '系統' },
+    audit: {
+      createdAt: '建立時間',
+      createdBy: '建立者',
+      updatedAt: '更新時間',
+      updatedBy: '更新者',
+    },
+    collections: {
+      file: {
+        label: '檔案',
+        fields: {
+          fileName: '檔名',
+          title: '標題',
+          contentType: '內容類型',
+          alt: '替代文字',
+          size: '大小',
+          width: '寬度',
+          height: '高度',
+          status: '狀態',
+        },
+        relations: {
+          folder: '資料夾',
+        },
+        options: {
+          status: { draft: '草稿', published: '已發布' },
+        },
+      },
+      language: {
+        label: '語言',
+        fields: {
+          code: '代碼',
+          name: '名稱',
+          isDefault: '預設',
+          enabled: '啟用',
+          sort: '排序',
+        },
+      },
+      mediaFolder: {
+        label: '媒體資料夾',
+        fields: {
+          name: '名稱',
+        },
+        relations: {
+          parent: '上層資料夾',
+        },
+      },
+      permission: {
+        label: '權限',
+        fields: {
+          roleId: '角色',
+          collection: '集合',
+          canRead: '可讀取',
+          canWrite: '可寫入',
+          canDelete: '可刪除',
+        },
+      },
+      role: {
+        label: '角色',
+        fields: {
+          name: '名稱',
+          isSuperAdmin: '超級管理員',
+          description: '說明',
+        },
+      },
+      user: {
+        label: '使用者',
+        fields: {
+          email: '電子郵件',
+          name: '名稱',
+          isActive: '啟用',
+        },
+        relations: {
+          roles: '角色',
+        },
+      },
+      userRole: {
+        label: '使用者角色',
+        fields: {
+          userId: '使用者',
+          roleId: '角色',
+        },
+      },
+    },
+  },
 }

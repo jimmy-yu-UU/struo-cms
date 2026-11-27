@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useSchemaStore } from './schemaStore'
 import { schemaApi } from '../api/schemaApi'
+import { useUiLocaleStore } from './uiLocaleStore'
 
 vi.mock('../api/schemaApi', () => ({ schemaApi: { getAll: vi.fn() } }))
 
@@ -60,5 +61,62 @@ describe('schemaStore', () => {
     await p
     expect(store.loadError).toBe('')
     expect(store.loadPromise).toBeNull()
+  })
+})
+
+describe('schemaStore localisation', () => {
+  beforeEach(() => { setActivePinia(createPinia()); vi.clearAllMocks() })
+  afterEach(() => { useUiLocaleStore().apply('en') })
+
+  const server = [{ name: 'role', label: 'Role', group: 'System', fields: [], relations: [] }]
+
+  it('exposes core labels in the UI locale and follows a locale switch', async () => {
+    vi.mocked(schemaApi.getAll).mockResolvedValue(server)
+    const store = useSchemaStore()
+    await store.load()
+    expect(store.get('role')?.label).toBe('Role')
+    useUiLocaleStore().apply('zh-TW')
+    expect(store.get('role')?.label).toBe('角色')
+    expect(store.collections[0].group).toBe('系統')
+    useUiLocaleStore().apply('en')
+    expect(store.collections[0].label).toBe('Role')
+  })
+
+  it('keeps the raw server data', async () => {
+    vi.mocked(schemaApi.getAll).mockResolvedValue(server)
+    const store = useSchemaStore()
+    await store.load()
+    useUiLocaleStore().apply('zh-TW')
+    expect(store.get('role')?.label).toBe('角色')
+    expect(store.raw).toEqual(server)
+  })
+
+  it('shows a fork collection as the server sends it', async () => {
+    vi.mocked(schemaApi.getAll).mockResolvedValue([{ name: 'article', label: 'Role', fields: [], relations: [] }])
+    const store = useSchemaStore()
+    await store.load()
+    useUiLocaleStore().apply('zh-TW')
+    expect(store.get('article')?.label).toBe('Role')
+  })
+
+  it('translates the audit fields of a fork collection', async () => {
+    const audit = { interface: 'text', required: false, searchable: false, sortable: false, readOnly: true, hidden: false, translatable: false, sort: 1000, isSystem: true }
+    vi.mocked(schemaApi.getAll).mockResolvedValue([
+      { name: 'article', label: 'Article', fields: [{ ...audit, name: 'createdAt', label: 'CreatedAt' }], relations: [] },
+    ])
+    const store = useSchemaStore()
+    await store.load()
+    useUiLocaleStore().apply('zh-TW')
+    expect(store.get('article')?.label).toBe('Article')
+    expect(store.get('article')?.fields[0].label).toBe('建立時間')
+  })
+
+  it('accepts an assigned collections list and clears it on reset', () => {
+    const store = useSchemaStore()
+    store.collections = [{ name: 'role', label: 'Role', fields: [], relations: [] }]
+    expect(store.get('role')).toBeDefined()
+    store.reset()
+    expect(store.collections).toEqual([])
+    expect(store.raw).toEqual([])
   })
 })
