@@ -8,7 +8,9 @@ namespace Struo.Infrastructure.Metadata;
 /// <summary>
 /// The scan-time checks of what a <c>[CmsRelation]</c> property declares: each key property must exist,
 /// spelled exactly, and have a column; a many-to-many names two different key properties; <c>OnDelete</c>
-/// belongs to a relation held by a many-to-one key; the junction <c>SortField</c> follows
+/// belongs to a relation held by a many-to-one key; that key is not a <c>File</c> or <c>Image</c> field
+/// (<see cref="FileFieldRelationKeyCheck"/>); the child key of a one-to-many relation is nameable by a reader
+/// (<see cref="HiddenChildKeyCheck"/>); the junction <c>SortField</c> follows
 /// <see cref="SortFieldCheck"/>; and the relation is a public instance property. The relation is named by
 /// the class that declares the property.
 /// </summary>
@@ -97,8 +99,10 @@ internal static class RelationDeclarationCheck
         foreach (var (description, holder, key, resolution) in KeyHolders(prop, nav, collections))
         {
             var declaration = $"the {description} '{key}' in [Navigate]";
-            RequireColumn(
+            var keyProperty = RequireColumn(
                 prop, holder, declaration, key, "key", "the relation cannot read or store the key", resolution);
+            if (!NavigateShape.IsListProperty(prop)) FileFieldRelationKeyCheck.Require(prop, keyProperty);
+            else if (!nav.IsJunction) HiddenChildKeyCheck.Require(prop, keyProperty, holder, prop.ReflectedType!, collections);
         }
         if (nav.IsJunction) RequireDistinctJunctionKeys(prop, nav);
         RequireOnDeleteOnManyToOne(prop, nav, attribute, collections);

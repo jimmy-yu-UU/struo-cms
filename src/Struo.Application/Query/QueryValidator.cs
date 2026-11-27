@@ -273,7 +273,8 @@ public static class QueryValidator
         // Allowlist: a collection's own fields, plus its declared many-to-one relation foreign keys
         // (e.g. "categoryId" on article) so callers (incl. the frontend RelatedList) can filter/sort
         // by the FK column even though it carries no [CmsField]. Never widened to arbitrary
-        // non-relation columns.
+        // non-relation columns. A key whose own field sets Hidden = true is left out like any hidden field
+        // (CollectionMetadata.OffersForeignKey).
         //
         // Hidden fields are excluded on purpose: they hold credentials (User.Password /
         // User.AccessToken) that projection already refuses to serialize. If they stayed
@@ -289,9 +290,7 @@ public static class QueryValidator
             var key = selection ? "select:" + meta.Name : meta.Name;
             if (knownCache.TryGetValue(key, out var cached)) return cached;
             var known = meta.Fields.Where(f => !f.Hidden && (selection || !f.Ignored)).Select(f => f.Name)
-                .Concat(meta.Relations
-                    .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
-                    .Select(r => r.ForeignKey!))
+                .Concat(meta.Relations.Where(meta.OffersForeignKey).Select(r => r.ForeignKey!))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             knownCache[key] = known;
             return known;

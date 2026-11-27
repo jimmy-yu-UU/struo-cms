@@ -39,7 +39,10 @@ when their generated names meet, for example `article` and `articleList` (both p
 collection collides with the built-in names when it generates one of them, for example `revision`
 (type `Revision`), `query`, `mutation`, `string` or `tagItem`. The comparison of generated names is exact (GraphQL names are
 case-sensitive), and collection names themselves must already differ ignoring case. Rename one of
-the collections; see
+the collections. Inside one collection, a field name declared twice in the same type stops startup
+too, with a message that names the collection, the type, the field and both declarations — for
+example a property named `Translations` on a collection with a translation sidecar, a
+`[CmsField]` on `Id`, or a relation named like an `Image` field without its `Id` suffix. See
 [Chapter 5: Defining Collections](05-collections.md) for the `Name` rules.
 
 An object type always carries `id: ID!` and `version: Long`, one field for every non-hidden,
@@ -207,7 +210,8 @@ Each takes its own scalar, so a `Long` operand may exceed 2^31 − 1 where an `I
 A many-to-one relation contributes two fields to the filter input: its own foreign key as an
 `IdFilter` (one of the generated scalar filter input types, dedicated to id-typed fields), plus the
 target type's own nested filter input; a one-to-many or many-to-many relation contributes only the
-nested filter input.
+nested filter input. A key that also carries `[CmsField]` takes the field's own filter type, and a
+key whose field is `Hidden = true` is left out ([Chapter 8](08-relations.md)).
 
 Cross-relation nested filtering flattens down to the same dotted path REST uses, and both converge
 on the same filter tree. GraphQL has no sort grammar of its own — `sort: [String!]` takes the same

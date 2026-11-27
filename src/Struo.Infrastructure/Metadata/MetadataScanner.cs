@@ -111,7 +111,8 @@ public static class MetadataScanner
     /// Fail-fast: a M2M junction that is itself a [CmsCollection] must expose both of its foreign keys
     /// as keys a request body sets (<see cref="CollectionMetadata.ServerOwnedKeyNames()"/> lists the ones it
     /// never sets: <c>ReadOnly</c> and audit fields, soft-delete columns), as [CmsField]s or as the FK of a
-    /// many-to-one relation, or items created through the generic-CRUD API would store empty junction keys. Runs for both <see cref="ScanTypes"/> and the
+    /// many-to-one relation, or items created through the generic-CRUD API would store empty junction keys.
+    /// A key whose field sets <c>Hidden = true</c> is refused too: the GraphQL inputs do not list it. Runs for both <see cref="ScanTypes"/> and the
     /// assembly-based <see cref="Scan"/> (which delegates to it).
     /// </summary>
     private static void ValidateJunctionCollections(List<CollectionMetadata> collections, IEnumerable<Type> types)
@@ -143,26 +144,41 @@ public static class MetadataScanner
             .Concat(junction.Relations.Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null).Select(r => r.ForeignKey!))
             .Where(name => !serverOwned.Contains(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hidden = junction.Fields.Where(f => f.Hidden).Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var fkA = nav.ParentKey;
         var fkB = nav.TargetKey;
-        if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB))) return;
+        var keys = new[] { fkA, fkB };
+        if (writable.Contains(Camel(fkA)) && writable.Contains(Camel(fkB)) && !keys.Any(key => hidden.Contains(Camel(key)))) return;
 
-        var owned = new[] { fkA, fkB }.Where(key => serverOwned.Contains(Camel(key))).ToList();
+        var owned = keys.Where(key => serverOwned.Contains(Camel(key))).ToList();
+        var listed = keys.Where(key => hidden.Contains(Camel(key)) && !serverOwned.Contains(Camel(key))).ToList();
         throw new MetadataException(
             $"Junction collection '{junction.Name}' (used by '{owner.Name}.{Camel(prop.Name)}') must declare its foreign keys " +
             $"'{fkA}' and '{fkB}' as writable [CmsField]s (e.g. Interface = FieldInterface.Uuid); otherwise items created " +
-            "through the API store empty keys." + ServerOwnedKeyReason(junctionType, owned));
+            "through the API store empty keys." + ServerOwnedKeyReason(junctionType, owned) + HiddenKeyReason(junctionType, listed));
     }
 
     // Names the junction keys a request body never sets; empty when the keys are only undeclared.
     private static string ServerOwnedKeyReason(Type junctionType, List<string> owned)
     {
         if (owned.Count == 0) return "";
-        var names = string.Join(" and ", owned.Select(key => $"'{junctionType.Name}.{key}'"));
         var verb = owned.Count == 1 ? "is" : "are";
-        return $" {names} {verb} ReadOnly, an audit field or a soft-delete column, which a request body never sets; " +
+        return $" {KeyNames(junctionType, owned)} {verb} ReadOnly, an audit field or a soft-delete column, which a request body never sets; " +
                "use a property a body can set as the key.";
     }
+
+    // Names the junction keys whose field sets Hidden = true, which the GraphQL inputs do not list.
+    private static string HiddenKeyReason(Type junctionType, List<string> hidden)
+    {
+        if (hidden.Count == 0) return "";
+        var verb = hidden.Count == 1 ? "is" : "are";
+        return $" {KeyNames(junctionType, hidden)} {verb} Hidden = true, so the GraphQL inputs do not list {(hidden.Count == 1 ? "it" : "them")} " +
+               "and a GraphQL create stores an empty key; remove Hidden = true from the key " +
+               "(a junction collection is hidden from the sidebar with [CmsCollection(Hidden = true)]).";
+    }
+
+    private static string KeyNames(Type junctionType, List<string> keys) =>
+        string.Join(" and ", keys.Select(key => $"'{junctionType.Name}.{key}'"));
 
     /// <summary>
     /// Fail-fast: every M2M junction type — whether it is itself a <c>[CmsCollection]</c> (an exposed

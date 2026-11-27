@@ -15,7 +15,8 @@ namespace Struo.Api.GraphQl;
 /// </summary>
 internal static class WritableInput
 {
-    internal sealed record InputField(string Name, string Sdl);
+    /// <summary>An input field with the declaration it stands for (see <see cref="FieldOrigin"/>).</summary>
+    internal sealed record InputField(string Name, string Sdl, string Origin);
 
     /// <summary>The input type of a field, or why the field is not in the input type.</summary>
     internal readonly record struct Decision(string? Sdl, string? Skip);
@@ -77,11 +78,12 @@ internal static class WritableInput
             yield return field;
 
         var declared = own.Select(f => f.Name).ToHashSet(StringComparer.Ordinal);
-        foreach (var field in meta.Relations.SelectMany(rel => RelationFields(meta, rel, payloadRelations, declared)))
+        foreach (var field in meta.Relations.SelectMany(rel => RelationFields(meta, desc, rel, payloadRelations, declared)))
             yield return field;
 
         if (meta.Translation is not null && Translatable(meta).Any(f => TranslatedField(f, desc).Sdl is not null))
-            yield return new InputField("translations", $"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]");
+            yield return new InputField(
+                "translations", $"[{SchemaTypeMapper.TranslationInputName(meta.Name)}!]", FieldOrigin.Translations(meta));
     }
 
     private static List<InputField> OwnFields(CollectionMetadata meta, EntityDescriptor? desc)
@@ -89,28 +91,30 @@ internal static class WritableInput
         var own = new List<InputField>();
         foreach (var f in meta.Fields)
             if (OwnField(meta, f, desc) is { Sdl: { } sdl })
-                own.Add(new InputField(f.Name, sdl));
+                own.Add(new InputField(f.Name, sdl, FieldOrigin.Field(meta, desc, f)));
         return own;
     }
 
     // A foreign key that is also a writable [CmsField] is already in the input as that field, in the form the
-    // field declares; a ReadOnly or audit key is not written, as for the field itself.
+    // field declares; a ReadOnly or audit key is not written, as for the field itself, and a key whose field sets
+    // Hidden = true is not offered by name.
     private static IEnumerable<InputField> RelationFields(
-        CollectionMetadata meta, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations,
+        CollectionMetadata meta, EntityDescriptor? desc, RelationMetadata rel, IReadOnlyList<M2MDescriptor> payloadRelations,
         HashSet<string> declared)
     {
         if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
         {
-            if (!declared.Contains(fk) && !IsServerOwned(meta, fk))
-                yield return new InputField(fk, "ID");
+            if (meta.OffersForeignKey(rel) && !declared.Contains(fk) && !IsServerOwned(meta, fk))
+                yield return new InputField(fk, "ID", FieldOrigin.ForeignKey(meta, desc, rel));
         }
         else if (rel.Kind == RelationKind.ManyToMany)
         {
-            yield return new InputField(rel.Name, "[ID!]");
+            yield return new InputField(rel.Name, "[ID!]", FieldOrigin.Relation(meta, desc, rel));
             if (CollectionSchemaBuilder.DescriptorFor(payloadRelations, rel.Name) is not null)
                 yield return new InputField(
                     SchemaTypeMapper.LinksFieldName(rel.Name),
-                    $"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]");
+                    $"[{SchemaTypeMapper.LinkInputName(meta.Name, rel.Name)}!]",
+                    FieldOrigin.Links(meta, desc, rel));
         }
     }
 
@@ -136,7 +140,7 @@ internal static class WritableInput
             $"schema cannot be built. {listed} " +
             "Add a [CmsField] property that GraphQL can write: it must not set Hidden = true or ReadOnly = true, and its " +
             "interface must not be Hidden, Divider or Password. A many-to-many relation, or a many-to-one relation " +
-            "whose foreign key is neither ReadOnly nor an audit field, also counts.");
+            "whose foreign key is not Hidden = true, not ReadOnly = true and not an audit field, also counts.");
     }
 
     private static void RequireTranslatedField(CollectionMetadata meta, EntityDescriptor? desc)

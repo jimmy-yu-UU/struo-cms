@@ -305,12 +305,21 @@ public sealed partial class ForeignKeyOwnFormSchemaTests
     [Theory]
     [InlineData("FkSchemaPlainOwner")]
     [InlineData("FkSchemaHiddenOwner")]
-    [InlineData("FkSchemaFlagHiddenOwner")]
     public async Task A_key_that_is_not_a_writable_field_keeps_the_relation_form(string owner)
     {
         (await InputAsync($"{owner}CreateInput")).Should().Contain("ownerId", "ID");
         (await InputAsync($"{owner}UpdateInput")).Should().Contain("ownerId", "ID");
         (await InputAsync($"{owner}FilterInput")).Should().Contain("ownerId", "IdFilter");
+    }
+
+    [Fact]
+    public async Task A_key_whose_field_sets_Hidden_is_in_no_input_by_name_and_its_relation_stays_in_the_filter_input()
+    {
+        (await InputAsync("FkSchemaFlagHiddenOwnerCreateInput")).Should().NotContainKey("ownerId");
+        (await InputAsync("FkSchemaFlagHiddenOwnerUpdateInput")).Should().NotContainKey("ownerId");
+        var filter = await InputAsync("FkSchemaFlagHiddenOwnerFilterInput");
+        filter.Should().NotContainKey("ownerId");
+        filter.Should().ContainKey("owner");
     }
 
     [Fact]

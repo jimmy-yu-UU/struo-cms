@@ -451,7 +451,14 @@ MariaDB 都一樣；在 PostgreSQL 上篩選也失敗。要明寫型別時，Pos
 
 它會讓欄位從 `GET /api/schema`、GraphQL schema、項目回應、查詢語法的已知欄位允許清單與可搜尋白名單，
 以及對外回傳的版本快照裡消失，連帶把它從集合的 `translation.fields` 清單裡也拿掉，原始快照列仍保留這
-個值。它不是一個 RBAC 邊界：更新的欄位覆蓋邏輯完全不檢查 `Hidden`，已經知道欄位名稱的呼叫端仍能正常
+個值。
+
+隱藏欄位同時是多對一關聯的外鍵時，也不能用名稱指到它：GraphQL 的建立、更新與篩選輸入不列它，
+`filter`、`sort`、`fields`、`facets`、`aggregate` 對它回 `Unknown field`。關聯本身不受影響
+（`deep`、經 `relation.field` 的篩選與排序、對關聯做 facet），`GET /api/schema` 的關聯資訊裡
+`foreignKey` 仍寫著這個鍵的名稱。
+
+它不是一個 RBAC 邊界：更新的欄位覆蓋邏輯完全不檢查 `Hidden`，已經知道欄位名稱的呼叫端仍能正常
 寫入；要讓欄位真的不能寫，得跟 `ReadOnly` 搭配。
 
 ### 寫入時的整理

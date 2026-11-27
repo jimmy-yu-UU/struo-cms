@@ -197,7 +197,7 @@ public sealed class DeepExpansionCoordinator(
     {
         bool Same(string name) => string.Equals(name, field, StringComparison.OrdinalIgnoreCase);
         return meta.Fields.FirstOrDefault(f => !f.Hidden && !f.Ignored && Same(f.Name))?.Name
-               ?? meta.Relations.FirstOrDefault(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null && Same(r.ForeignKey))?.ForeignKey
+               ?? meta.Relations.FirstOrDefault(r => meta.OffersForeignKey(r) && Same(r.ForeignKey!))?.ForeignKey
                ?? (Same("id") ? "id" : throw new QueryException($"Unknown field '{field}' on collection '{meta.Name}'."));
     }
 

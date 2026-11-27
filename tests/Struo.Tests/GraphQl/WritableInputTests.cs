@@ -121,8 +121,8 @@ public sealed class WritableInputTests
             "cannot be built. None of its fields counts: 'secret' (Interface = Hidden, which is never written), " +
             "'hiddenText' (Hidden = true). Add a [CmsField] property that GraphQL can write: it must not set Hidden = true " +
             "or ReadOnly = true, and its interface must not be Hidden, Divider or Password. " +
-            "A many-to-many relation, or a many-to-one relation whose foreign key is neither ReadOnly nor an audit field, " +
-            "also counts.");
+            "A many-to-many relation, or a many-to-one relation whose foreign key is not Hidden = true, not ReadOnly = true " +
+            "and not an audit field, also counts.");
     }
 
     private static CollectionMetadata WithOwner(FieldMetadata ownerId, params FieldMetadata[] others) =>
@@ -159,6 +159,23 @@ public sealed class WritableInputTests
 
             WritableInput.Fields(collection, null, []).Select(f => f.Name).Should().Equal("name");
         }
+    }
+
+    [Fact]
+    public void A_foreign_key_whose_field_sets_Hidden_is_not_an_input_field()
+    {
+        var collection = WithOwner(Field("ownerId", FieldInterface.Uuid) with { Hidden = true }, Field("name", FieldInterface.Text));
+
+        WritableInput.Fields(collection, null, []).Select(f => f.Name).Should().Equal("name");
+    }
+
+    [Fact]
+    public void A_collection_whose_only_input_is_a_Hidden_foreign_key_is_rejected()
+    {
+        var collection = WithOwner(Field("ownerId", FieldInterface.Uuid) with { Hidden = true });
+
+        FluentActions.Invoking(() => WritableInput.RequireAny(collection, null, []))
+            .Should().Throw<MetadataException>().Which.Message.Should().Contain("None of its fields counts: 'ownerId' (Hidden = true).");
     }
 
     [Fact]

@@ -81,6 +81,23 @@
   這個呼叫端的多：呼叫端讀不到目標時，多對多關聯與不是宣告欄位的多對一外鍵不在回應裡；讀不到
   junction 集合時，帶 payload 的關聯縮成純 id。原本快照整份回傳。會檢視版本紀錄的角色要補上目標的
   讀取授權（[第 9 章](09-revisions-and-trash.md)）。
+- 欄位標了 `[CmsField(Hidden = true)]` 的外鍵，讀取端不能用名稱指到它：`filter`、`sort`、`fields`、
+  `facets`、`aggregate` 回 `400` `Unknown field '{key}' on collection '{collection}'.`，GraphQL 的
+  建立、更新與篩選輸入也不列它。原本這些地方都接受它，跟不是外鍵的隱藏欄位不一樣（在 SQLite 上、經
+  HTTP 管線量到的）。唯一的 GraphQL 輸入就是這種鍵的集合，主機會啟動失敗。改成經關聯查詢
+  （`filter[relation.field]`、`facets=relation`），或拿掉 `Hidden = true`
+  （[第 6 章](06-field-types.md)）。
+- 一對多關聯的子項外鍵欄位標了 `Hidden = true`，而子集合沒有在這個鍵上宣告指回父集合的多對一關聯時，
+  主機在啟動時失敗：後台的關聯清單沒辦法用隱藏的鍵篩選。在子集合宣告那個關聯，或拿掉
+  `Hidden = true`（[第 8 章](08-relations.md)）。
+- junction 集合的鍵欄位標了 `Hidden = true` 時，主機在啟動時失敗。原本 GraphQL 的輸入不列這種鍵，
+  經 GraphQL 建立的列存進空的鍵（在 SQLite 上量到的）。拿掉鍵上的 `Hidden = true`；要讓 junction 不
+  出現在側邊欄，用集合層的 `Hidden`（[第 8 章](08-relations.md)）。
+- `File` 或 `Image` 欄位同時又是關聯的鍵時，主機在啟動時失敗，丟出 `MetadataException`，訊息點名
+  那個關聯與鍵。原本關聯的名稱等於欄位名去掉 `Id` 時，主機就已經因為 GraphQL 函式庫的
+  `The following field ... is declared multiple times` 而停下；關聯用別的名稱、或欄位標了
+  `Hidden = true` 時，主機起得來（在 SQLite 上量到的）。拿掉關聯（這種欄位本身就會解析成檔案），
+  或把鍵改成非檔案的介面（[第 8 章](08-relations.md)）。
 :::
 
 ### 新增
@@ -91,6 +108,8 @@
   集合的兩個鍵，以及各自所指的集合。介面成員有預設實作，回傳空清單。
 - `RelationTargetReadGuard`（`Require`、`ReadDenied`）：連結寫入要通過的讀取檢查
   （[第 8 章](08-relations.md#連結的寫入要求)），以及常數 `FileCollection.FolderName`。
+- `CollectionMetadata.OffersForeignKey(relation)`：讀取端能不能用名稱指到多對一關聯的外鍵；有
+  `Hidden = true` 的欄位用這個名稱時不能。
 
 ### 變更
 
@@ -105,6 +124,10 @@
   自己集合的其他標籤，照伺服器送來的文字顯示。API 的回應不變
   （[第 19 章](19-admin-customization.md#ui-語言)）。
 - 項目表單遇到登入者讀不到目標的關聯或檔案欄位，顯示停用的輸入框與一句說明，存檔時不送出這個欄位。
+- 集合的同一個 GraphQL 型別裡，欄位名稱宣告了兩次時，主機在啟動時失敗，丟出 `MetadataException`，
+  訊息點名集合、型別、欄位名稱與兩個宣告。原本主機是因為 GraphQL 函式庫的
+  `The following field ... is declared multiple times` 而停下（[第 14 章](14-graphql.md)）。
+- 後台的一對多關聯清單，在子集合宣告了指回父集合的多對一關聯時透過它篩選，沒有就依子項的外鍵篩選。
 
 ### 修正
 
@@ -112,8 +135,8 @@
   為外鍵的多對一關聯，建立或更新時送來的值會被存進去（在 SQLite 上、經 HTTP 管線量到的）。這種關聯
   在 schema 裡回報為不可編輯，GraphQL 的 input 也不列這個鍵
   （[第 9 章](09-revisions-and-trash.md)）。
-- 多對一的外鍵同時帶可寫的 `[CmsField]` 時，GraphQL 的建立、更新與篩選輸入只列這個鍵一次，型別照
-  欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
+- 多對一的外鍵同時帶可寫、且沒有標 `Hidden = true` 的 `[CmsField]` 時，GraphQL 的建立、更新與篩選
+  輸入只列這個鍵一次，型別照欄位的宣告。原本這個鍵被宣告兩次，主機啟動失敗，錯誤是
   `The following field ... is declared multiple times`；量到的鍵型別是 `Guid?`、`int?`、`long?` 與
   `string?`（[第 8 章](08-relations.md)）。
 - `Database:MigrateOnStartup` 為 `true`、而以 `ValidateOnStart` 綁定的設定有無效值時，主機在

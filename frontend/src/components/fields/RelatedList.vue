@@ -7,12 +7,15 @@ import { useSchemaStore } from '../../stores/schemaStore'
 import { useLanguageStore } from '../../stores/languageStore'
 import { resolveDisplayLabel } from '../../lib/resolveDisplayLabel'
 import { createLatestWins } from '../../lib/latestWins'
+import { relatedListFilterField } from '../../lib/relatedListFilter'
 import DataTable, { type DataTableColumn, type DataTableState } from '@/components/data/DataTable.vue'
 import DataTablePagination from '@/components/data/DataTablePagination.vue'
 import { Button } from '@/components/ui/button'
 import type { RelationMeta } from '../../types/schema'
 
-const props = defineProps<{ relation: RelationMeta; parentId?: string }>()
+// parentCollection is the collection whose form shows the list: a child key that is hidden is read through the
+// child's relation back to it.
+const props = defineProps<{ relation: RelationMeta; parentId?: string; parentCollection?: string }>()
 const router = useRouter()
 const schema = useSchemaStore()
 const langStore = useLanguageStore()
@@ -31,9 +34,8 @@ const totalKnown = ref(false)
 
 const targetMeta = computed(() => schema.get(props.relation.targetCollection))
 
-function camel(s: string): string {
-  return s.length ? s[0].toLowerCase() + s.slice(1) : s
-}
+// The field the child collection is filtered on: the relation back to the parent when there is one, else the key.
+const filterField = computed(() => relatedListFilterField(props.relation, targetMeta.value, props.parentCollection))
 
 const loadGuard = createLatestWins()
 async function load(): Promise<void> {
@@ -46,7 +48,7 @@ async function load(): Promise<void> {
       page: page.value,
       rows: perPage.value,
       locale: langStore.defaultCode || undefined,
-      filter: { [camel(props.relation.foreignKey)]: { op: '_eq', value: props.parentId } },
+      filter: { [filterField.value]: { op: '_eq', value: props.parentId } },
     })
     if (!loadGuard.isCurrent(token)) return
     const tm = targetMeta.value
@@ -111,7 +113,7 @@ const columns = computed<DataTableColumn<Row>[]>(() => [{
 
 // A different parent or relation is a different list: its total is unknown until it loads.
 // A response still in flight for the previous list is dropped, and its rows are not shown meanwhile.
-watch([() => props.parentId, () => props.relation.targetCollection, () => props.relation.foreignKey], () => {
+watch([() => props.parentId, () => props.relation.targetCollection, () => props.relation.foreignKey, filterField], () => {
   loadGuard.next()
   rows.value = []
   total.value = 0

@@ -138,6 +138,88 @@ public sealed class JunctionServerOwnedKeyTests
         public Guid TargetId { get; set; }
     }
 
+    [SugarTable("jsk_hidden_owner")]
+    [CmsCollection("Hidden owner", Name = "jskHiddenOwner")]
+    private sealed class HiddenKeyOwner : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [Navigate(typeof(HiddenKeyLink), nameof(HiddenKeyLink.OwnerId), nameof(HiddenKeyLink.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)]
+        public List<Target> Tags { get; set; } = [];
+    }
+
+    [SugarTable("jsk_hidden_link")]
+    [CmsCollection("Hidden link", Name = "jskHiddenLink", Hidden = true)]
+    private sealed class HiddenKeyLink
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [CmsField(Label = "Owner", Interface = FieldInterface.Uuid, Hidden = true)]
+        public Guid OwnerId { get; set; }
+
+        [CmsField(Label = "Target", Interface = FieldInterface.Uuid, Hidden = true)]
+        public Guid TargetId { get; set; }
+    }
+
+    [SugarTable("jsk_hidden_one_owner")]
+    [CmsCollection("Hidden one owner", Name = "jskHiddenOneOwner")]
+    private sealed class HiddenOneKeyOwner : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [Navigate(typeof(HiddenOneKeyLink), nameof(HiddenOneKeyLink.OwnerId), nameof(HiddenOneKeyLink.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)]
+        public List<Target> Tags { get; set; } = [];
+    }
+
+    // The owner key is also named by a many-to-one relation; its field is hidden.
+    [SugarTable("jsk_hidden_one_link")]
+    [CmsCollection("Hidden one link", Name = "jskHiddenOneLink")]
+    private sealed class HiddenOneKeyLink
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [CmsField(Label = "Owner", Interface = FieldInterface.Uuid, Hidden = true)]
+        public Guid OwnerId { get; set; }
+
+        [Navigate(NavigateType.ManyToOne, nameof(OwnerId))]
+        [CmsRelation(Interface = RelationInterface.Dropdown)]
+        [SugarColumn(IsIgnore = true)]
+        public HiddenOneKeyOwner? Owner { get; set; }
+
+        [CmsField(Label = "Target", Interface = FieldInterface.Uuid)]
+        public Guid TargetId { get; set; }
+    }
+
+    [SugarTable("jsk_face_owner")]
+    [CmsCollection("Face owner", Name = "jskFaceOwner")]
+    private sealed class HiddenInterfaceOwner : AuditableEntity
+    {
+        [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
+
+        [Navigate(typeof(HiddenInterfaceLink), nameof(HiddenInterfaceLink.OwnerId), nameof(HiddenInterfaceLink.TargetId))]
+        [CmsRelation(Interface = RelationInterface.TagSelect)]
+        [SugarColumn(IsIgnore = true)]
+        public List<Target> Tags { get; set; } = [];
+    }
+
+    // The flag is unset: a key whose interface is Hidden stays nameable, so the junction is accepted.
+    [SugarTable("jsk_face_link")]
+    [CmsCollection("Face link", Name = "jskFaceLink")]
+    private sealed class HiddenInterfaceLink
+    {
+        [SugarColumn(IsPrimaryKey = true)] public Guid Id { get; set; }
+
+        [CmsField(Label = "Owner", Interface = FieldInterface.Hidden)]
+        public Guid OwnerId { get; set; }
+
+        [CmsField(Label = "Target", Interface = FieldInterface.Uuid)]
+        public Guid TargetId { get; set; }
+    }
+
     // A case name, the junction collection and the key the refusal names.
     public static TheoryData<string, string, string> Refused => new()
     {
@@ -162,6 +244,36 @@ public sealed class JunctionServerOwnedKeyTests
         var message = scan.Should().Throw<MetadataException>().Which.Message;
         message.Should().Contain($"Junction collection '{junction}'").And.Contain($"'{junctionClass}.{key}'")
             .And.Contain("a request body never sets").And.Contain("writable [CmsField]");
+    }
+
+    [Fact]
+    public void A_junction_collection_with_both_keys_Hidden_is_refused_naming_both_and_the_way_out()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(HiddenKeyOwner), typeof(Target), typeof(HiddenKeyLink)]);
+
+        var message = scan.Should().Throw<MetadataException>().Which.Message;
+        message.Should().Contain("Junction collection 'jskHiddenLink' (used by 'jskHiddenOwner.tags')")
+            .And.Contain("'HiddenKeyLink.OwnerId' and 'HiddenKeyLink.TargetId' are Hidden = true")
+            .And.Contain("the GraphQL inputs do not list")
+            .And.Contain("remove Hidden = true")
+            .And.Contain("[CmsCollection(Hidden = true)]");
+    }
+
+    [Fact]
+    public void A_junction_key_that_a_many_to_one_relation_also_names_is_refused_when_its_field_is_Hidden()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(HiddenOneKeyOwner), typeof(Target), typeof(HiddenOneKeyLink)]);
+
+        scan.Should().Throw<MetadataException>().Which.Message
+            .Should().Contain("'HiddenOneKeyLink.OwnerId' is Hidden = true").And.NotContain("TargetId' is");
+    }
+
+    [Fact]
+    public void A_junction_key_whose_interface_is_Hidden_with_the_flag_unset_is_accepted()
+    {
+        var scan = () => MetadataScanner.ScanTypes([typeof(HiddenInterfaceOwner), typeof(Target), typeof(HiddenInterfaceLink)]);
+
+        scan.Should().NotThrow();
     }
 
     [Fact]

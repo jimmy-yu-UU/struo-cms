@@ -24,6 +24,17 @@ service cannot serve:
   type, in the form the field gives it; the relation adds the key only when the field did not
   (`ForeignKeyOwnFormSchemaTests`, `ForeignKeyOwnFormHostTests`). A `ReadOnly` or audit key is in
   the filter input and in neither write input.
+- A foreign key whose field is `Hidden = true` is not offered to a reader by name
+  (`CollectionMetadata.OffersForeignKey`): not in the GraphQL create, update and filter inputs, and
+  not as a filter, sort, field, facet or aggregate name. The relation object, a write that names the
+  key, and `Interface = Hidden` without the flag are unaffected
+  (`ForeignKeyHiddenFlagHostTests`).
+- A `File` or `Image` field is not the key of a relation (`FileFieldRelationKeyCheck`): the field
+  already resolves to the file, so the relation declares the same link a second time.
+- A one-to-many relation whose child key field is `Hidden = true` needs a many-to-one relation back
+  to the parent on that key (`HiddenChildKeyCheck`): the admin list of the relation filters through
+  it, and cannot filter by a hidden key.
+- A junction collection key is not `Hidden = true`: the GraphQL inputs would not list it.
 - A target or element type is resolved by collection name to the scanned collection class, for the
   key-type comparison and for the one-to-many child key.
 
@@ -127,6 +138,32 @@ An override or a `new` member of a base class navigation property that carries `
 | `[CmsRelation]` only | refused: no `[Navigate]` |
 | both | the relation |
 
+A `Hidden = true` foreign key `ownerId` next to a hidden field `secret` that is not a key, measured
+on SQLite through the HTTP pipeline on 2026-11-27, at the commit before the rule:
+
+| Surface | `secret` | `ownerId` |
+|---|---|---|
+| GraphQL create, update and filter inputs | absent | `ID`, `ID`, `IdFilter` |
+| REST `filter`, `sort`, `fields`, `facets`, `aggregate` | `400` `Unknown field` | `200` |
+| item read, revision read | not returned | not returned |
+| `GET /api/schema` | not in `fields` | not in `fields`; the relation's `foreignKey` names it |
+| REST write that names it | stored | stored |
+
+A file field that is also a relation key, at the commit before the rule:
+
+| Declaration | Host | GraphQL output type |
+|---|---|---|
+| `Image` `CoverId` + relation `Cover` on it | did not start: `'cover' is declared multiple times` | not built |
+| `Image` `CoverId` + relation `Picture` on it | started | `coverId`, `cover: File`, `picture` |
+| `Hidden = true` `Image` `CoverId` + relation `Cover` | started | `cover` (the relation) only |
+| `File` `Attachment` + relation `Doc` on it | started | `attachment`, `attachmentFile`, `doc` |
+
+A one-to-many whose child key is `Hidden = true`: `deep` on the parent and the nested GraphQL field
+returned the children; `filter[<key>][_eq]` on the child answered `400` `Unknown field`, and
+`filter[<backRelation>.id][_eq]` returned them (`HiddenChildKeyHostTests`). A collection with two
+`Hidden = true` keys: the GraphQL create, update and filter inputs listed neither, and a GraphQL
+create stored all-zero keys.
+
 ## Unknowns
 
 - Measured on SQLite only, below the HTTP layer.
@@ -146,5 +183,7 @@ An override or a `new` member of a base class navigation property that carries `
 - `src/Struo.Infrastructure/Metadata/KeyLookup.cs`
 - `src/Struo.Infrastructure/Metadata/NavigateShape.cs`
 - `src/Struo.Infrastructure/Metadata/RelationInheritanceCheck.cs`
+- `src/Struo.Infrastructure/Metadata/FileFieldRelationKeyCheck.cs`
+- `src/Struo.Infrastructure/Metadata/HiddenChildKeyCheck.cs`
 - `tests/Struo.Tests/Metadata/NavigateForeignKeyTests.cs`
 - `docs/ai/conventions.md`

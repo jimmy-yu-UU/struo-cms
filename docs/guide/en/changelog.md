@@ -109,6 +109,27 @@
   relation is reduced to ids when the caller cannot read the junction collection. The snapshot was
   returned whole. Give read on the target to a role that reviews revisions
   ([Chapter 9](09-revisions-and-trash.md)).
+- A foreign key whose field is `[CmsField(Hidden = true)]` cannot be named by a reader: `filter`,
+  `sort`, `fields`, `facets` and `aggregate` answer `400` `Unknown field '{key}' on collection
+  '{collection}'.`, and the GraphQL create, update and filter inputs do not list it. It was accepted
+  everywhere, unlike a hidden field that is not a key (measured on SQLite through the HTTP
+  pipeline). A collection whose only GraphQL input was such a key does not start. Query through the
+  relation (`filter[relation.field]`, `facets=relation`), or remove `Hidden = true`
+  ([Chapter 6](06-field-types.md)).
+- A one-to-many relation whose child key field is `Hidden = true` stops the host at start unless
+  the child collection declares a many-to-one relation back to the parent on that key: the admin
+  list of the relation cannot filter by a hidden key. Declare the relation on the child, or remove
+  `Hidden = true` ([Chapter 8](08-relations.md)).
+- A junction collection key whose field is `Hidden = true` stops the host at start. The GraphQL
+  inputs did not list such a key, and a row created through GraphQL stored an empty key (measured
+  on SQLite). Remove `Hidden = true` from the key; the collection-level `Hidden` takes the junction
+  out of the sidebar ([Chapter 8](08-relations.md)).
+- A `File` or `Image` field that is also the key of a relation stops the host at start with a
+  `MetadataException` that names the relation and the key. A relation named like the field without
+  its `Id` suffix already stopped the host, with the GraphQL library's
+  `The following field ... is declared multiple times`; under another name, or with `Hidden = true`
+  on the field, the host started (measured on SQLite). Remove the relation, since the field already
+  resolves to the file, or give the key a non-file interface ([Chapter 8](08-relations.md)).
 :::
 
 ### Added
@@ -121,6 +142,8 @@
 - `RelationTargetReadGuard` (`Require`, `ReadDenied`), the read check a link write goes through
   ([Chapter 8](08-relations.md#what-a-link-write-requires)), and the constant
   `FileCollection.FolderName`.
+- `CollectionMetadata.OffersForeignKey(relation)`: whether a reader may name the foreign key of a
+  many-to-one relation, which is not the case when a `Hidden = true` field carries that name.
 
 ### Changed
 
@@ -140,6 +163,12 @@
   ([Chapter 19](19-admin-customization.md#ui-language)).
 - The item form shows a relation or file field whose target the signed-in user cannot read as a
   disabled input with a note, and leaves it out of what it saves.
+- A field name declared twice in one GraphQL type of a collection stops the host at start with a
+  `MetadataException` that names the collection, the type, the field and both declarations. The
+  host stopped with the GraphQL library's `The following field ... is declared multiple times`
+  ([Chapter 14](14-graphql.md)).
+- The admin list of a one-to-many relation filters through the child collection's many-to-one
+  relation back to the parent when it declares one, and by the child key otherwise.
 
 ### Fixed
 
@@ -148,10 +177,11 @@
   the value sent for it (measured on SQLite through the HTTP pipeline). Such a relation is reported
   as not editable, and the GraphQL inputs do not list the key
   ([Chapter 9](09-revisions-and-trash.md)).
-- A many-to-one foreign key that also carries a writable `[CmsField]` is listed once in the GraphQL
-  create, update and filter inputs, with the type the field gives it. The key was declared twice and
-  the host failed to start with `The following field ... is declared multiple times`; measured for
-  `Guid?`, `int?`, `long?` and `string?` keys ([Chapter 8](08-relations.md)).
+- A many-to-one foreign key that also carries a writable `[CmsField]` without `Hidden = true` is
+  listed once in the GraphQL create, update and filter inputs, with the type the field gives it. The
+  key was declared twice and the host failed to start with
+  `The following field ... is declared multiple times`; measured for `Guid?`, `int?`, `long?` and
+  `string?` keys ([Chapter 8](08-relations.md)).
 - With `Database:MigrateOnStartup` set to `true` and an invalid value in a setting bound with
   `ValidateOnStart`, the host fails to start before it connects to the database and applies no
   migration. It applied the migrations first and then failed on that value; measured for

@@ -301,7 +301,7 @@ each one's empty result:
 
 `sum` keeps the field's own numeric type family — an integer widens to a bigger type, `decimal`
 stays `decimal`, and `double`/`float` become `double`; `avg` is always `double`, regardless of the
-field's type. A many-to-one foreign key only supports `count`: it has no `[CmsField]`, so the
+field's type. A many-to-one foreign key without a `[CmsField]` only supports `count`: the
 validator falls back to the `Uuid` interface, which lands on neither the numeric nor the date side —
 deliberately, since summing or averaging a foreign key means nothing.
 
