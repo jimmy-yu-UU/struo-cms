@@ -310,10 +310,12 @@ public sealed class ItemService(
     private static void OverlayManyToOneKeys(
         CollectionMetadata meta, EntityDescriptor d, HashSet<string> bodyKeys, object existing, object incoming)
     {
+        var serverOwned = ItemDeserializer.ServerOwnedFieldNames(meta);
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind != RelationKind.ManyToOne || rel.ForeignKey is null) continue;
             if (!bodyKeys.Contains(rel.ForeignKey)) continue;  // only overlay when the client sent this FK
+            if (serverOwned.Contains(rel.ForeignKey)) continue; // a ReadOnly or system key is never overlaid
             // ForeignKey is stored camelCase (e.g. "categoryId") but the CLR property is PascalCase
             // (e.g. CategoryId), so the lookup must be case-insensitive.
             var pi = d.Properties.GetValueOrDefault(rel.ForeignKey);

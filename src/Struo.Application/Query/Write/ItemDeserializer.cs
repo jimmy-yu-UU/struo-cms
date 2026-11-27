@@ -76,7 +76,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     {
         var d = registry.Get(collection) ?? throw new CollectionNotFoundException(collection);
 
-        var stripNames = ComputeStripNames(collection, meta, body, onlyFields, isCreate);
+        var stripNames = ComputeStripNames(collection, meta, body, onlyFields);
         var entity = DeserializeEntity(d, body, stripNames);
 
         SetJsonFieldRawText(meta, body, d, entity);
@@ -120,7 +120,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // sidecar payload, Json-interface fields (bound from raw text below instead), and — via the
     // allowlist — any key metadata never declared as writable.
     private HashSet<string> ComputeStripNames(
-        string collection, CollectionMetadata meta, JsonElement body, IReadOnlySet<string>? onlyFields, bool isCreate)
+        string collection, CollectionMetadata meta, JsonElement body, IReadOnlySet<string>? onlyFields)
     {
         var stripNames = m2mSource.M2MDescriptors(collection)
             .Select(r => r.RelationName)
@@ -135,7 +135,7 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
         foreach (var jsonField in meta.Fields.Where(f => f.Interface == FieldInterface.Json))
             stripNames.Add(jsonField.Name);
 
-        var allowedKeys = ComputeAllowedKeys(meta, onlyFields, isCreate);
+        var allowedKeys = ComputeAllowedKeys(meta, onlyFields);
         if (body.ValueKind == JsonValueKind.Object)
         {
             foreach (var name in body.EnumerateObject().Select(p => p.Name).Where(n => !allowedKeys.Contains(n)))
@@ -152,20 +152,25 @@ public sealed class ItemDeserializer(IEntityRegistry registry, IM2MDescriptorSou
     // of which are covered by the IsSystem/ReadOnly strip loop below. This mirrors the allowlist
     // ItemService.UpdateCoreAsync already applies on update (fields + M2O FKs actually present in
     // the body); unknown keys are silently ignored here too, not rejected with a 400.
-    private static HashSet<string> ComputeAllowedKeys(CollectionMetadata meta, IReadOnlySet<string>? onlyFields, bool isCreate)
+    private static HashSet<string> ComputeAllowedKeys(CollectionMetadata meta, IReadOnlySet<string>? onlyFields)
     {
-        var allowedKeys = meta.Fields.Where(f => !f.IsSystem && !f.ReadOnly)
-            .Select(f => f.Name)
+        var locked = ServerOwnedFieldNames(meta);
+        var allowedKeys = meta.Fields.Select(f => f.Name)
             .Concat(meta.Relations
                 .Where(r => r.Kind == RelationKind.ManyToOne && r.ForeignKey is not null)
                 .Select(r => r.ForeignKey!))
+            .Where(name => !locked.Contains(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // A create leaves a ReadOnly field at its class initial value, including one that is also a
-        // ManyToOne foreign key.
-        if (isCreate) allowedKeys.ExceptWith(meta.Fields.Where(f => !f.IsSystem && f.ReadOnly).Select(f => f.Name));
         if (onlyFields is not null) allowedKeys.IntersectWith(onlyFields);
         return allowedKeys;
     }
+
+    /// <summary>
+    /// The names of the system and <c>ReadOnly</c> fields. A body never sets one, including a field that is
+    /// also the foreign key of a ManyToOne relation: the allow-list and the update overlay both skip them.
+    /// </summary>
+    internal static HashSet<string> ServerOwnedFieldNames(CollectionMetadata meta) =>
+        meta.Fields.Where(f => f.IsSystem || f.ReadOnly).Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static object DeserializeEntity(EntityDescriptor d, JsonElement body, HashSet<string> stripNames)
     {

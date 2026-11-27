@@ -28,9 +28,11 @@ namespace Struo.Tests.Query;
 public sealed class ReadOnlyCreateValueTests : IDisposable
 {
     private static readonly Guid InitialGuid = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid InterceptorGuid = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid OtherGuid = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     [SugarTable("ro_create_item")]
-    [CmsCollection("RoCreateItem", Name = "roCreateItem")]
+    [CmsCollection("RoCreateItem", Name = "roCreateItem", Revisions = true)]
     public sealed class Item : AuditableEntity
     {
         [SugarColumn(IsPrimaryKey = true)] public override Guid Id { get; set; }
@@ -140,6 +142,8 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
             item.NullableText = "interceptor";
             item.Text = "interceptor";
             item.Items = ["interceptor"];
+            item.OwnerId = InterceptorGuid;
+            item.RequiredOwnerId = InterceptorGuid;
             return Task.CompletedTask;
         }
     }
@@ -331,6 +335,57 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
         stored.Text.Should().Be("interceptor");
         stored.Items.Should().Be("[\"interceptor\"]");
         stored.Number.Should().Be(5);
+        stored.OwnerId.Should().Be(InterceptorGuid);
+        stored.RequiredOwnerId.Should().Be(InterceptorGuid);
+    }
+
+    [Fact]
+    public async Task A_before_write_interceptor_that_sets_a_read_only_foreign_key_wins_on_update()
+    {
+        var created = await _service(null).CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var id = created["id"]!.ToString()!;
+
+        await _service([new SetsReadOnlyFields()]).UpdateAsync("roCreateItem", id, Body(HostileBody));
+
+        var stored = await StoredAsync(created);
+        stored.OwnerId.Should().Be(InterceptorGuid);
+        stored.RequiredOwnerId.Should().Be(InterceptorGuid);
+    }
+
+    [Theory]
+    [InlineData("ownerId")]
+    [InlineData("OWNERID")]
+    [InlineData("requiredOwnerId")]
+    [InlineData("REQUIREDOWNERID")]
+    public async Task An_update_body_cannot_change_a_read_only_foreign_key(string key)
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+
+        await svc.UpdateAsync("roCreateItem", created["id"]!.ToString()!, Body("{\"" + key + "\":\"" + OtherGuid + "\"}"));
+
+        AssertInitialKeys(await StoredAsync(created));
+    }
+
+    [Fact]
+    public async Task A_revert_does_not_change_a_read_only_foreign_key()
+    {
+        var svc = _service(null);
+        var created = await svc.CreateAsync("roCreateItem", Body("""{"name":"n"}"""));
+        var id = Guid.Parse(created["id"]!.ToString()!);
+        var other = OtherGuid;
+        await _db.Updateable<Item>()
+            .SetColumns(i => i.OwnerId == other)
+            .SetColumns(i => i.RequiredOwnerId == other)
+            .Where(i => i.Id == id)
+            .ExecuteCommandAsync();
+
+        var reverted = await svc.RevertAsync("roCreateItem", id.ToString(), 1);
+
+        reverted.Should().NotBeNull();
+        var stored = await StoredAsync(created);
+        stored.OwnerId.Should().Be(OtherGuid);
+        stored.RequiredOwnerId.Should().Be(OtherGuid);
     }
 
     [Fact]
@@ -342,7 +397,9 @@ public sealed class ReadOnlyCreateValueTests : IDisposable
 
         await svc.UpdateAsync("roCreateItem", id, Body(HostileBody));
 
-        AssertInitialColumns(await StoredAsync(created));
+        var stored = await StoredAsync(created);
+        AssertInitialColumns(stored);
+        AssertInitialKeys(stored);
     }
 
     [Fact]

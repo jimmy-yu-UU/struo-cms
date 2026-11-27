@@ -67,6 +67,9 @@ internal static class WritableInput
     private static List<FieldMetadata> Translatable(CollectionMetadata meta) =>
         meta.Fields.Where(f => f.Translatable && !f.IsSystem).ToList();
 
+    private static bool IsServerOwned(CollectionMetadata meta, string name) =>
+        meta.Fields.Any(f => (f.IsSystem || f.ReadOnly) && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase));
+
     internal static IEnumerable<InputField> Fields(
         CollectionMetadata meta, EntityDescriptor? desc, IReadOnlyList<M2MDescriptor> payloadRelations)
     {
@@ -77,7 +80,11 @@ internal static class WritableInput
         foreach (var rel in meta.Relations)
         {
             if (rel.Kind == RelationKind.ManyToOne && rel.ForeignKey is { } fk)
-                yield return new InputField(fk, "ID");
+            {
+                // A foreign key that is a ReadOnly or audit field is not written, as for the field itself.
+                if (!IsServerOwned(meta, fk))
+                    yield return new InputField(fk, "ID");
+            }
             else if (rel.Kind == RelationKind.ManyToMany)
             {
                 yield return new InputField(rel.Name, "[ID!]");
@@ -113,7 +120,7 @@ internal static class WritableInput
             $"Collection '{meta.Name}' has nothing GraphQL can write, so its create input type would be empty and the " +
             $"schema cannot be built. {listed} " +
             "Add a [CmsField] property that GraphQL can write: it must not set Hidden = true or ReadOnly = true, and its " +
-            "interface must not be Hidden, Divider or Password. A many-to-one or many-to-many relation also counts.");
+            "interface must not be Hidden, Divider or Password. A many-to-many relation, or a many-to-one relation whose foreign key is not ReadOnly, also counts.");
     }
 
     private static void RequireTranslatedField(CollectionMetadata meta, EntityDescriptor? desc)
