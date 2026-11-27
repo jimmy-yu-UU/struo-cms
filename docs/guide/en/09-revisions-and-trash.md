@@ -203,7 +203,8 @@ locale's translation are left as they are. The delete goes through the `null` lo
 on `file`.
 
 A revert reads the current row the way an ordinary update does, so reverting an item that is
-currently in the trash gets a plain 404 — that read already excludes trashed data. The right order is restore first, then revert; the reverse does not work.
+currently in the trash gets a plain 404 — that read already excludes trashed data. The right order
+is restore first, then revert; the reverse does not work.
 
 ## Soft delete: `ISoftDeletable`
 
